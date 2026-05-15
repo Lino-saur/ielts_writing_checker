@@ -1,4 +1,14 @@
-import { AiProvider, Locale, TaskType, WritingCheckResult } from "./types";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import {
+  AiProvider,
+  CorrectionNote,
+  HighlightedSentence,
+  Locale,
+  TargetBand,
+  TaskType,
+  WritingCheckResult
+} from "./types";
 
 type CheckInput = {
   taskType: TaskType;
@@ -6,6 +16,7 @@ type CheckInput = {
   essay: string;
   provider?: AiProvider;
   locale?: Locale;
+  targetBand?: TargetBand;
 };
 
 type ChatCompletionsPayload = {
@@ -22,6 +33,11 @@ type ProviderConfig = {
   endpoint: string;
   model: string;
   extraBody?: Record<string, unknown>;
+};
+
+type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
 };
 
 const BAND_LABELS = [
@@ -55,6 +71,11 @@ function average(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function getTargetBand(value?: TargetBand): TargetBand {
+  const allowed: TargetBand[] = [5, 5.5, 6, 6.5, 7, 7.5, 8];
+  return value && allowed.includes(value) ? value : 6.5;
+}
+
 function getDeepSeekConfig(): ProviderConfig {
   return {
     name: "deepseek",
@@ -62,6 +83,9 @@ function getDeepSeekConfig(): ProviderConfig {
     endpoint: "https://api.deepseek.com/chat/completions",
     model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
     extraBody: {
+      thinking: {
+        type: "disabled"
+      },
       temperature: 0.3,
       max_tokens: 1600,
       response_format: {
@@ -71,8 +95,110 @@ function getDeepSeekConfig(): ProviderConfig {
   };
 }
 
+const PROMPTS_DIR = path.join(process.cwd(), "prompts");
+
+async function readPromptFile(filename: string) {
+  return readFile(path.join(PROMPTS_DIR, filename), "utf8");
+}
+
+function applyTemplate(template: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce((output, [key, value]) => {
+    return output.replaceAll(`{{${key}}}`, String(value));
+  }, template);
+}
+
+function getEssaySentences(text: string) {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function buildHeuristicCorrectionNotes(essay: string, locale: Locale): CorrectionNote[] {
+  const sentences = getEssaySentences(essay);
+  const firstSentence =
+    sentences[0] ||
+    "This essay discusses the issue and attempts to present a clear position on the topic.";
+  const secondSentence =
+    sentences[1] ||
+    "The main argument can be improved by making the explanation more precise and more logically connected.";
+
+  return [
+    {
+      original: firstSentence,
+      corrected:
+        "This essay addresses the issue directly and presents a clearer position on the topic.",
+      reason:
+        locale === "zh-CN"
+          ? "把开头改得更直接，减少空泛表达，让立场更清楚。"
+          : "Makes the opening more direct and clarifies the writer's position."
+    },
+    {
+      original: secondSentence,
+      corrected:
+        "The main argument would be stronger if each point were explained more precisely and linked more logically.",
+      reason:
+        locale === "zh-CN"
+          ? "把比较笼统的句子改得更准确，同时强调逻辑衔接。"
+          : "Improves precision and makes the logical connection more explicit."
+    }
+  ];
+}
+
+function buildAnnotatedEssayFromNotes(essay: string, notes: CorrectionNote[]) {
+  let annotatedEssay = essay;
+
+  for (const note of notes) {
+    if (!annotatedEssay.includes(note.original)) {
+      continue;
+    }
+
+    const replacement = `[del]${note.original}[/del][add]${note.corrected}[/add]`;
+    annotatedEssay = annotatedEssay.replace(note.original, replacement);
+  }
+
+  return annotatedEssay;
+}
+
+function buildHeuristicHighlightedSentences(
+  essay: string,
+  locale: Locale,
+  taskType: TaskType
+): HighlightedSentence[] {
+  const sentences = getEssaySentences(essay);
+  const selected = sentences.filter((sentence) => sentence.split(/\s+/).length >= 10).slice(0, 2);
+
+  if (selected.length === 0) {
+    return [
+      {
+        sentence:
+          taskType === "task1"
+            ? "Overall, all three sources became more common over the period."
+            : "I largely agree that unpaid community service should be included in high school education.",
+        reason:
+          locale === "zh-CN"
+            ? "这句话能够直接概括核心观点，表达清楚，适合作为文章中的亮点句。"
+            : "This sentence works well because it expresses a central idea clearly and directly."
+      }
+    ];
+  }
+
+  return selected.map((sentence, index) => ({
+    sentence,
+    reason:
+      locale === "zh-CN"
+        ? index === 0
+          ? "这句话较精彩，因为信息明确，表达自然，而且能有效支撑文章主旨。"
+          : "这句话值得肯定，因为它兼顾了内容展开和语言控制。"
+        : index === 0
+          ? "This sentence stands out because it is clear, informative, and supports the main point effectively."
+          : "This sentence is effective because it combines idea development with reasonably controlled language."
+  }));
+}
+
 function buildHeuristicFeedback({ taskType, prompt, essay, locale }: CheckInput): WritingCheckResult {
   const resolvedLocale = getLocale(locale);
+  const targetBand = getTargetBand(arguments[0].targetBand);
   const wordCount = countWords(essay);
   const sentences = countSentences(essay);
   const paragraphs = essay
@@ -209,13 +335,21 @@ function buildHeuristicFeedback({ taskType, prompt, essay, locale }: CheckInput)
 
   const sampleRewrite =
     taskType === "task1"
-      ? "Overall, the chart shows a clear upward trend in the later period, while the earlier figures remain comparatively stable. The most notable change is the sharp rise in the final category, which overtakes the others by the end of the timeline."
-      : "I largely agree with the statement because long-term progress usually depends on disciplined habits rather than short bursts of motivation. In particular, consistent effort helps people build skill, while repeated practice makes good decisions easier to maintain.";
+      ? targetBand >= 7
+        ? "Overall, all three energy sources became more widely used over the period, but solar recorded by far the most dramatic growth. While hydro increased only modestly and remained the least common source throughout, solar rose sharply after 2010 and finished as the dominant form of renewable household energy. Wind also followed an upward trend, although its increase was steadier and less pronounced than that of solar."
+        : "Overall, the chart shows a clear upward trend in the later period, while the earlier figures remain comparatively stable. The most notable change is the sharp rise in the final category, which overtakes the others by the end of the timeline."
+      : targetBand >= 7
+        ? "I strongly agree that unpaid community service should be a compulsory element of high school education because it develops both civic awareness and practical capability. By working with charities, environmental projects, or community programmes, students learn to cooperate with others, understand real social needs, and apply classroom knowledge in meaningful situations. However, schools should ensure that such programmes are well supervised and flexible enough to avoid placing excessive pressure on students with heavy academic responsibilities."
+        : "I largely agree with the statement because long-term progress usually depends on disciplined habits rather than short bursts of motivation. In particular, consistent effort helps people build skill, while repeated practice makes good decisions easier to maintain.";
+  const correctionNotes = buildHeuristicCorrectionNotes(essay, resolvedLocale);
+  const annotatedEssay = buildAnnotatedEssayFromNotes(essay, correctionNotes);
+  const highlightedSentences = buildHeuristicHighlightedSentences(essay, resolvedLocale, taskType);
 
   return {
     taskType,
     wordCount,
     estimatedBand,
+    targetBand,
     bandBreakdown: {
       taskAchievement: {
         score: taskAchievement,
@@ -251,17 +385,33 @@ function buildHeuristicFeedback({ taskType, prompt, essay, locale }: CheckInput)
       }
     },
     strengths,
+    highlightedSentences,
     priorityFixes,
+    annotatedEssay,
+    correctionNotes,
     sampleRewrite,
     feedbackMode: "heuristic",
     providerUsed: "heuristic"
   };
 }
 
+function cleanModelText(text: string) {
+  return text
+    .replace(/```json/gi, "```")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim();
+}
+
+function previewText(text: string, maxLength = 400) {
+  return text.slice(0, maxLength).replace(/\s+/g, " ");
+}
+
 function extractJsonObject(text: string) {
-  const match = text.match(/\{[\s\S]*\}/);
+  const cleanedText = cleanModelText(text);
+  const match = cleanedText.match(/\{[\s\S]*\}/);
   if (!match) {
-    throw new Error("Model response did not include a JSON object.");
+    const preview = previewText(cleanedText);
+    throw new Error(`Model response did not include a JSON object. Raw preview: ${preview}`);
   }
 
   return JSON.parse(match[0]) as WritingCheckResult;
@@ -272,6 +422,8 @@ function normalizeParsedResult(parsed: WritingCheckResult, input: CheckInput, pr
   parsed.providerUsed = providerName;
   parsed.wordCount = countWords(input.essay);
   parsed.taskType = input.taskType;
+  parsed.targetBand = getTargetBand(input.targetBand);
+  parsed.highlightedSentences = parsed.highlightedSentences || [];
 
   for (const label of BAND_LABELS) {
     parsed.bandBreakdown[label].score = clampBand(parsed.bandBreakdown[label].score);
@@ -282,53 +434,33 @@ function normalizeParsedResult(parsed: WritingCheckResult, input: CheckInput, pr
   return parsed;
 }
 
-function buildScoringPrompt(input: CheckInput, minimumWords: number, providerName: ProviderConfig["name"]) {
+async function buildScoringPrompt(input: CheckInput, minimumWords: number, providerName: ProviderConfig["name"]) {
   const locale = getLocale(input.locale);
+  const targetBand = getTargetBand(input.targetBand);
   const outputLanguageInstruction =
     locale === "zh-CN"
       ? "Write rationale, strengths, and priorityFixes in Simplified Chinese. sampleRewrite must remain in natural English."
       : "Write rationale, strengths, priorityFixes, and sampleRewrite in English.";
-  const task2LogicInstruction =
-    input.taskType === "task2"
-      ? `
-- When judging idea development for body paragraphs, explicitly evaluate whether the argument can be logically developed as a clear causal chain in the form "A inevitably leads to B, B inevitably leads to C, and C inevitably leads to D".
-- Use the IELTS writing criteria to judge whether that causal chain is clear, relevant, sufficiently explained, and well connected to the question.
-- If the essay does not follow that logic chain well, reflect the weakness in task achievement/task response and coherence/cohesion comments, and suggest how the chain could be made tighter.`
-      : "";
+  const [basePrompt, taskPrompt] = await Promise.all([
+    readPromptFile("base.md"),
+    readPromptFile(input.taskType === "task1" ? "task1.md" : "task2.md")
+  ]);
+
+  const rules = applyTemplate(basePrompt, {
+    providerName,
+    minimumWords,
+    outputLanguageInstruction
+  });
 
   return `
-You are an IELTS writing examiner.
-Evaluate the user's response for ${input.taskType === "task1" ? "IELTS Academic Writing Task 1" : "IELTS Writing Task 2"}.
-Return JSON only.
+${rules}
 
-Required JSON shape:
-{
-  "taskType": "task1" | "task2",
-  "wordCount": number,
-  "estimatedBand": number,
-  "bandBreakdown": {
-    "taskAchievement": { "score": number, "rationale": string },
-    "coherenceAndCohesion": { "score": number, "rationale": string },
-    "lexicalResource": { "score": number, "rationale": string },
-    "grammaticalRangeAndAccuracy": { "score": number, "rationale": string }
-  },
-  "strengths": string[],
-  "priorityFixes": [{ "title": string, "detail": string }],
-  "sampleRewrite": string,
-  "feedbackMode": "ai",
-  "providerUsed": "${providerName}"
-}
+${taskPrompt}
 
-Constraints:
-- Use band scores from 0 to 9 in 0.5 increments.
-- Keep rationales concise and specific to the essay.
-- Include exactly 3 strengths.
-- Include exactly 3 priority fixes.
-- Keep sampleRewrite between 60 and 110 words.
-- Consider the minimum word expectation of ${minimumWords}.
-- The output must be valid json.
-- ${outputLanguageInstruction}
-${task2LogicInstruction}
+Target band:
+${targetBand}
+
+The sampleRewrite must be written to match the quality, sophistication, and control expected around IELTS band ${targetBand}. It should not be generic. It should reflect the target score level the user wants to reach.
 
 Prompt:
 ${input.prompt}
@@ -346,44 +478,130 @@ async function runChatCompletion(input: CheckInput, config: ProviderConfig): Pro
   }
 
   const minimumWords = input.taskType === "task1" ? 150 : 250;
-  const prompt = buildScoringPrompt(input, minimumWords, config.name);
-
-  const response = await fetch(config.endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`
+  const prompt = await buildScoringPrompt(input, minimumWords, config.name);
+  const wordCount = countWords(input.essay);
+  const baseMessages: ChatMessage[] = [
+    {
+      role: "system",
+      content: "You are a precise IELTS writing evaluator. Always respond with valid json."
     },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [
-        {
-          role: "system",
-          content: "You are a precise IELTS writing evaluator. Always respond with valid json."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      ...config.extraBody
-    })
+    {
+      role: "user",
+      content: prompt
+    }
+  ];
+
+  console.log("[IELTS_CHECK][REQUEST]", {
+    provider: config.name,
+    model: config.model,
+    taskType: input.taskType,
+    locale: input.locale,
+    wordCount,
+    promptLength: prompt.length,
+    essayLength: input.essay.length
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`${config.name} request failed: ${response.status} ${errorText}`);
+  async function requestCompletion(messages: ChatMessage[], phase: "first" | "retry") {
+    const response = await fetch(config.endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        ...config.extraBody
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[IELTS_CHECK][HTTP_ERROR]", {
+        provider: config.name,
+        phase,
+        status: response.status,
+        bodyPreview: previewText(errorText)
+      });
+      throw new Error(`${config.name} request failed: ${response.status} ${errorText}`);
+    }
+
+    const payload = (await response.json()) as ChatCompletionsPayload;
+    const text = payload.choices?.[0]?.message?.content;
+
+    if (!text) {
+      console.error("[IELTS_CHECK][EMPTY_RESPONSE]", {
+        provider: config.name,
+        phase,
+        payloadPreview: previewText(JSON.stringify(payload))
+      });
+      throw new Error(`${config.name} response was empty.`);
+    }
+
+    console.log("[IELTS_CHECK][RAW_RESPONSE]", {
+      provider: config.name,
+      phase,
+      rawLength: text.length,
+      rawPreview: previewText(text),
+      cleanedPreview: previewText(cleanModelText(text))
+    });
+
+    return text;
   }
 
-  const payload = (await response.json()) as ChatCompletionsPayload;
-  const text = payload.choices?.[0]?.message?.content;
+  const firstText = await requestCompletion(baseMessages, "first");
 
-  if (!text) {
-    throw new Error(`${config.name} response was empty.`);
+  try {
+    const parsed = extractJsonObject(firstText);
+    console.log("[IELTS_CHECK][PARSE_SUCCESS]", {
+      provider: config.name,
+      phase: "first",
+      estimatedBand: parsed.estimatedBand,
+      correctionNoteCount: parsed.correctionNotes?.length
+    });
+    return normalizeParsedResult(parsed, input, config.name);
+  } catch (firstError) {
+    console.error("[IELTS_CHECK][PARSE_FAIL]", {
+      provider: config.name,
+      phase: "first",
+      error: firstError instanceof Error ? firstError.message : String(firstError),
+      rawPreview: previewText(firstText),
+      cleanedPreview: previewText(cleanModelText(firstText))
+    });
+
+    const retryText = await requestCompletion([
+      ...baseMessages,
+      {
+        role: "assistant",
+        content: firstText
+      },
+      {
+        role: "user",
+        content:
+          "Your previous reply was invalid. Return ONLY one valid JSON object matching the required schema. No markdown, no explanation, no prose, no code fences."
+      }
+    ], "retry");
+
+    try {
+      const parsed = extractJsonObject(retryText);
+      console.log("[IELTS_CHECK][PARSE_SUCCESS]", {
+        provider: config.name,
+        phase: "retry",
+        estimatedBand: parsed.estimatedBand,
+        correctionNoteCount: parsed.correctionNotes?.length
+      });
+      return normalizeParsedResult(parsed, input, config.name);
+    } catch (retryError) {
+      console.error("[IELTS_CHECK][PARSE_FAIL]", {
+        provider: config.name,
+        phase: "retry",
+        error: retryError instanceof Error ? retryError.message : String(retryError),
+        rawPreview: previewText(retryText),
+        cleanedPreview: previewText(cleanModelText(retryText))
+      });
+      throw retryError instanceof Error ? retryError : firstError;
+    }
   }
-
-  const parsed = extractJsonObject(text);
-  return normalizeParsedResult(parsed, input, config.name);
 }
 
 async function buildAiFeedback(input: CheckInput): Promise<WritingCheckResult> {
@@ -396,7 +614,8 @@ export async function evaluateWriting(input: CheckInput): Promise<WritingCheckRe
     prompt: input.prompt.trim(),
     essay: input.essay.trim(),
     provider: input.provider,
-    locale: getLocale(input.locale)
+    locale: getLocale(input.locale),
+    targetBand: getTargetBand(input.targetBand)
   };
 
   if (!cleanInput.prompt) {
@@ -410,7 +629,12 @@ export async function evaluateWriting(input: CheckInput): Promise<WritingCheckRe
   try {
     return await buildAiFeedback(cleanInput);
   } catch (error) {
-    console.error("Falling back to heuristic scoring:", error);
+    console.error("[IELTS_CHECK][FALLBACK_TO_HEURISTIC]", {
+      taskType: cleanInput.taskType,
+      locale: cleanInput.locale,
+      wordCount: countWords(cleanInput.essay),
+      error: error instanceof Error ? error.message : String(error)
+    });
     return buildHeuristicFeedback(cleanInput);
   }
 }

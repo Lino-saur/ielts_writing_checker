@@ -6,6 +6,8 @@ export type ActiveProvider = "deepseek" | "heuristic";
 
 export type Locale = "en" | "zh-CN";
 
+export type TargetBand = 5 | 5.5 | 6 | 6.5 | 7 | 7.5 | 8;
+
 export type BandBreakdown = {
   score: number;
   rationale: string;
@@ -16,10 +18,22 @@ export type ImprovementItem = {
   detail: string;
 };
 
+export type CorrectionNote = {
+  original: string;
+  corrected: string;
+  reason: string;
+};
+
+export type HighlightedSentence = {
+  sentence: string;
+  reason: string;
+};
+
 export type WritingCheckResult = {
   taskType: TaskType;
   wordCount: number;
   estimatedBand: number;
+  targetBand: TargetBand;
   bandBreakdown: {
     taskAchievement: BandBreakdown;
     coherenceAndCohesion: BandBreakdown;
@@ -27,7 +41,10 @@ export type WritingCheckResult = {
     grammaticalRangeAndAccuracy: BandBreakdown;
   };
   strengths: string[];
+  highlightedSentences: HighlightedSentence[];
   priorityFixes: ImprovementItem[];
+  annotatedEssay: string;
+  correctionNotes: CorrectionNote[];
   sampleRewrite: string;
   feedbackMode: "ai" | "heuristic";
   providerUsed: ActiveProvider;

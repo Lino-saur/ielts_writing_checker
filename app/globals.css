@@ -330,6 +330,53 @@ select {
   padding-left: 20px;
 }
 
+.annotatedEssay {
+  white-space: pre-wrap;
+  line-height: 1.9;
+  color: var(--ink);
+}
+
+.essayDel {
+  background: rgba(180, 52, 37, 0.14);
+  color: #8b2d20;
+  text-decoration-thickness: 2px;
+}
+
+.essayAdd {
+  background: rgba(69, 145, 93, 0.16);
+  color: #1d5b32;
+  text-decoration: none;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.essayHighlight {
+  background: linear-gradient(180deg, rgba(245, 208, 92, 0.18), rgba(245, 208, 92, 0.48));
+  color: #5a4300;
+  padding: 0 3px;
+  border-radius: 4px;
+}
+
+.correctionList {
+  display: grid;
+  gap: 12px;
+}
+
+.correctionCard {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.52);
+  padding: 14px 16px;
+}
+
+.correctionCard p {
+  margin: 0 0 10px;
+}
+
+.correctionCard p:last-child {
+  margin-bottom: 0;
+}
+
 .emptyState {
   min-height: 100%;
   display: flex;

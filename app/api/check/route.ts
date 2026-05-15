@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { evaluateWriting } from "@/lib/ielts";
-import { AiProvider, Locale, TaskType } from "@/lib/types";
+import { AiProvider, Locale, TargetBand, TaskType } from "@/lib/types";
 
 type RequestBody = {
   taskType?: TaskType;
@@ -8,6 +8,7 @@ type RequestBody = {
   essay?: string;
   provider?: AiProvider;
   locale?: Locale;
+  targetBand?: TargetBand;
 };
 
 export async function POST(request: Request) {
@@ -23,7 +24,8 @@ export async function POST(request: Request) {
       prompt: body.prompt || "",
       essay: body.essay || "",
       provider: body.provider,
-      locale: body.locale
+      locale: body.locale,
+      targetBand: body.targetBand
     });
 
     return NextResponse.json(result);

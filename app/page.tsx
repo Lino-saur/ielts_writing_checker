@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { AiProvider, Locale, TaskType, WritingCheckResult } from "@/lib/types";
+import { AiProvider, Locale, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
 
 const TASK_PLACEHOLDERS: Record<TaskType, { prompt: string; essay: string }> = {
   task1: {
@@ -33,6 +33,7 @@ const UI_COPY = {
     task1: "Task 1",
     task2: "Task 2",
     providerDeepSeek: "DeepSeek",
+    targetBand: "Target Band",
     prompt: "Prompt",
     essay: "Essay",
     wordCount: "Word count",
@@ -47,7 +48,15 @@ const UI_COPY = {
     lexical: "Lexical Resource",
     grammar: "Grammar Range & Accuracy",
     strengths: "Strengths",
+    highlightedSentences: "Highlighted Sentences",
+    highlightedSentence: "Sentence",
+    highlightedReason: "Why It Works",
     priorityFixes: "Priority Fixes",
+    annotatedEssay: "Marked Corrections",
+    correctionNotes: "Correction Notes",
+    correctionOriginal: "Original",
+    correctionCorrected: "Corrected",
+    correctionReason: "Reason",
     sampleRewrite: "Sample Rewrite",
     ready: "Ready",
     emptyTitle: "Run the first review",
@@ -69,6 +78,7 @@ const UI_COPY = {
     task1: "Task 1",
     task2: "Task 2",
     providerDeepSeek: "DeepSeek",
+    targetBand: "目标分数",
     prompt: "题目",
     essay: "作文",
     wordCount: "词数",
@@ -83,7 +93,15 @@ const UI_COPY = {
     lexical: "词汇资源",
     grammar: "语法范围与准确性",
     strengths: "优点",
+    highlightedSentences: "精彩句子",
+    highlightedSentence: "原句",
+    highlightedReason: "精彩原因",
     priorityFixes: "优先修改点",
+    annotatedEssay: "原文批改痕迹",
+    correctionNotes: "逐条批改说明",
+    correctionOriginal: "原句",
+    correctionCorrected: "修改后",
+    correctionReason: "修改原因",
     sampleRewrite: "示范改写",
     ready: "已就绪",
     emptyTitle: "开始第一次批改",
@@ -112,10 +130,106 @@ function ScoreCard({
   );
 }
 
+function renderAnnotatedEssay(text: string, highlightedSentences: string[]) {
+  const parts: Array<{ type: "plain" | "del" | "add"; text: string }> = [];
+  const pattern = /\[del\]([\s\S]*?)\[\/del\]|\[add\]([\s\S]*?)\[\/add\]/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: "plain", text: text.slice(lastIndex, match.index) });
+    }
+
+    if (match[1] !== undefined) {
+      parts.push({ type: "del", text: match[1] });
+    } else if (match[2] !== undefined) {
+      parts.push({ type: "add", text: match[2] });
+    }
+
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push({ type: "plain", text: text.slice(lastIndex) });
+  }
+
+  function renderPlainTextSegment(segment: string, keyPrefix: string) {
+    if (!highlightedSentences.length) {
+      return <span key={keyPrefix}>{segment}</span>;
+    }
+
+    const normalizedCandidates = highlightedSentences.filter(Boolean);
+    if (!normalizedCandidates.length) {
+      return <span key={keyPrefix}>{segment}</span>;
+    }
+
+    const subparts: React.ReactNode[] = [];
+    let remaining = segment;
+    let cursor = 0;
+
+    while (remaining.length > 0) {
+      let matchedSentence = "";
+      let matchedIndex = -1;
+
+      for (const candidate of normalizedCandidates) {
+        const index = remaining.indexOf(candidate);
+        if (index !== -1 && (matchedIndex === -1 || index < matchedIndex)) {
+          matchedSentence = candidate;
+          matchedIndex = index;
+        }
+      }
+
+      if (matchedIndex === -1) {
+        subparts.push(<span key={`${keyPrefix}-tail-${cursor}`}>{remaining}</span>);
+        break;
+      }
+
+      if (matchedIndex > 0) {
+        subparts.push(
+          <span key={`${keyPrefix}-plain-${cursor}`}>{remaining.slice(0, matchedIndex)}</span>
+        );
+      }
+
+      subparts.push(
+        <mark key={`${keyPrefix}-highlight-${cursor}`} className="essayHighlight">
+          {matchedSentence}
+        </mark>
+      );
+
+      remaining = remaining.slice(matchedIndex + matchedSentence.length);
+      cursor += 1;
+    }
+
+    return <span key={keyPrefix}>{subparts}</span>;
+  }
+
+  return parts.map((part, index) => {
+    if (part.type === "del") {
+      return (
+        <del key={index} className="essayDel">
+          {part.text}
+        </del>
+      );
+    }
+
+    if (part.type === "add") {
+      return (
+        <ins key={index} className="essayAdd">
+          {part.text}
+        </ins>
+      );
+    }
+
+    return renderPlainTextSegment(part.text, `plain-${index}`);
+  });
+}
+
 export default function HomePage() {
   const [locale, setLocale] = useState<Locale>("zh-CN");
   const [taskType, setTaskType] = useState<TaskType>("task2");
   const provider: AiProvider = "deepseek";
+  const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
   const [prompt, setPrompt] = useState(TASK_PLACEHOLDERS.task2.prompt);
   const [essay, setEssay] = useState(TASK_PLACEHOLDERS.task2.essay);
   const [result, setResult] = useState<WritingCheckResult | null>(null);
@@ -147,6 +261,7 @@ export default function HomePage() {
           taskType,
           provider,
           locale,
+          targetBand,
           prompt,
           essay
         })
@@ -213,6 +328,19 @@ export default function HomePage() {
           </div>
 
           <label>
+            <span>{t.targetBand}</span>
+            <select value={targetBand} onChange={(event) => setTargetBand(Number(event.target.value) as TargetBand)}>
+              <option value={5}>5.0</option>
+              <option value={5.5}>5.5</option>
+              <option value={6}>6.0</option>
+              <option value={6.5}>6.5</option>
+              <option value={7}>7.0</option>
+              <option value={7.5}>7.5</option>
+              <option value={8}>8.0</option>
+            </select>
+          </label>
+
+          <label>
             <span>{t.prompt}</span>
             <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} />
           </label>
@@ -247,6 +375,7 @@ export default function HomePage() {
                   <span>
                     {result.wordCount} {locale === "zh-CN" ? "词" : "words"}
                   </span>
+                  <span>{t.targetBand}: {result.targetBand.toFixed(1)}</span>
                   <span>{result.feedbackMode === "ai" ? t.aiMode : t.heuristicMode}</span>
                   <span>
                     {locale === "zh-CN" ? "当前平台" : "Provider"}: {result.providerUsed}
@@ -287,6 +416,22 @@ export default function HomePage() {
               </article>
 
               <article className="feedbackSection">
+                <h3>{t.highlightedSentences}</h3>
+                <div className="correctionList">
+                  {result.highlightedSentences.map((item, index) => (
+                    <article key={`${item.sentence}-${index}`} className="correctionCard">
+                      <p>
+                        <strong>{t.highlightedSentence}:</strong> {item.sentence}
+                      </p>
+                      <p>
+                        <strong>{t.highlightedReason}:</strong> {item.reason}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </article>
+
+              <article className="feedbackSection">
                 <h3>{t.priorityFixes}</h3>
                 <ul>
                   {result.priorityFixes.map((item) => (
@@ -295,6 +440,35 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
+              </article>
+
+              <article className="feedbackSection">
+                <h3>{t.annotatedEssay}</h3>
+                <div className="annotatedEssay">
+                  {renderAnnotatedEssay(
+                    result.annotatedEssay,
+                    result.highlightedSentences.map((item) => item.sentence)
+                  )}
+                </div>
+              </article>
+
+              <article className="feedbackSection">
+                <h3>{t.correctionNotes}</h3>
+                <div className="correctionList">
+                  {result.correctionNotes.map((item, index) => (
+                    <article key={`${item.original}-${index}`} className="correctionCard">
+                      <p>
+                        <strong>{t.correctionOriginal}:</strong> {item.original}
+                      </p>
+                      <p>
+                        <strong>{t.correctionCorrected}:</strong> {item.corrected}
+                      </p>
+                      <p>
+                        <strong>{t.correctionReason}:</strong> {item.reason}
+                      </p>
+                    </article>
+                  ))}
+                </div>
               </article>
 
               <article className="feedbackSection">
