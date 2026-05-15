@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { evaluateWriting } from "@/lib/ielts";
-import { TaskType } from "@/lib/types";
+import { AiProvider, Locale, TaskType } from "@/lib/types";
 
 type RequestBody = {
   taskType?: TaskType;
   prompt?: string;
   essay?: string;
+  provider?: AiProvider;
+  locale?: Locale;
 };
 
 export async function POST(request: Request) {
@@ -19,7 +21,9 @@ export async function POST(request: Request) {
     const result = await evaluateWriting({
       taskType: body.taskType,
       prompt: body.prompt || "",
-      essay: body.essay || ""
+      essay: body.essay || "",
+      provider: body.provider,
+      locale: body.locale
     });
 
     return NextResponse.json(result);

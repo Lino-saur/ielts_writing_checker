@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { TaskType, WritingCheckResult } from "@/lib/types";
+import { AiProvider, Locale, TaskType, WritingCheckResult } from "@/lib/types";
 
 const TASK_PLACEHOLDERS: Record<TaskType, { prompt: string; essay: string }> = {
   task1: {
@@ -17,6 +17,80 @@ const TASK_PLACEHOLDERS: Record<TaskType, { prompt: string; essay: string }> = {
       "I largely agree that unpaid community service should be included in high school education because it can help students develop practical skills and a stronger sense of social responsibility. However, schools should design these programmes carefully so that they support learning rather than becoming an unfair burden.\n\nOne major benefit of community service is that it exposes students to real social problems. For example, teenagers who help in care homes or environmental projects can see that many issues require patience, teamwork and long-term commitment. These experiences are difficult to gain through textbooks alone, and they may encourage students to become more active citizens in adulthood.\n\nCommunity service can also build useful transferable skills. When students organise donations, support younger children or participate in local campaigns, they learn how to communicate with different people and manage their time. Such abilities are valuable both in higher education and in future employment.\n\nThat said, compulsory service should not ignore students' academic workload or personal circumstances. If schools require excessive hours, some pupils may feel stressed or resentful. A better approach would be to offer flexible options and ensure that activities are safe, meaningful and closely supervised.\n\nIn conclusion, community service should be a required part of high school programmes, but it must be implemented in a balanced and practical way."
   }
 };
+
+const UI_COPY = {
+  en: {
+    languageLabel: "Language",
+    heroEyebrow: "AI Writing Review",
+    heroTitle: "IELTS Writing Checker for Task 1 and Task 2",
+    heroDescription:
+      "Check a response against the four IELTS writing criteria and get targeted feedback with a sample rewrite.",
+    modesLabel: "Modes",
+    aiReview: "AI Review",
+    heuristicReady: "Fallback Review",
+    coverage: "Task 1 + Task 2",
+    taskSwitcherAria: "Task type",
+    task1: "Task 1",
+    task2: "Task 2",
+    providerDeepSeek: "DeepSeek",
+    prompt: "Prompt",
+    essay: "Essay",
+    wordCount: "Word count",
+    checking: "Checking...",
+    checkWriting: "Check Writing",
+    estimatedBand: "Estimated Band",
+    aiMode: "AI mode",
+    heuristicMode: "Heuristic mode",
+    providerUsed: "Provider",
+    taskAchievement: "Task Achievement",
+    coherence: "Coherence & Cohesion",
+    lexical: "Lexical Resource",
+    grammar: "Grammar Range & Accuracy",
+    strengths: "Strengths",
+    priorityFixes: "Priority Fixes",
+    sampleRewrite: "Sample Rewrite",
+    ready: "Ready",
+    emptyTitle: "Run the first review",
+    emptyDescription:
+      "Choose Task 1 or Task 2, paste the prompt and essay, then run the checker to get rubric-based feedback.",
+    genericError: "Something went wrong."
+  },
+  "zh-CN": {
+    languageLabel: "语言",
+    heroEyebrow: "AI 写作评估",
+    heroTitle: "IELTS 写作批改器（Task 1 / Task 2）",
+    heroDescription:
+      "根据 IELTS 写作四项评分标准检查作文，并返回重点修改建议和示范改写。",
+    modesLabel: "模式",
+    aiReview: "AI 评分",
+    heuristicReady: "本地评分",
+    coverage: "覆盖 Task 1 + Task 2",
+    taskSwitcherAria: "题型选择",
+    task1: "Task 1",
+    task2: "Task 2",
+    providerDeepSeek: "DeepSeek",
+    prompt: "题目",
+    essay: "作文",
+    wordCount: "词数",
+    checking: "评分中...",
+    checkWriting: "开始批改",
+    estimatedBand: "预估分数",
+    aiMode: "AI 模式",
+    heuristicMode: "本地启发式模式",
+    providerUsed: "当前平台",
+    taskAchievement: "任务回应",
+    coherence: "连贯与衔接",
+    lexical: "词汇资源",
+    grammar: "语法范围与准确性",
+    strengths: "优点",
+    priorityFixes: "优先修改点",
+    sampleRewrite: "示范改写",
+    ready: "已就绪",
+    emptyTitle: "开始第一次批改",
+    emptyDescription: "选择 Task 1 或 Task 2，粘贴题目和作文，然后运行批改以获取按评分标准生成的反馈。",
+    genericError: "发生了一些问题。"
+  }
+} as const;
 
 function ScoreCard({
   label,
@@ -39,12 +113,16 @@ function ScoreCard({
 }
 
 export default function HomePage() {
+  const [locale, setLocale] = useState<Locale>("zh-CN");
   const [taskType, setTaskType] = useState<TaskType>("task2");
+  const provider: AiProvider = "deepseek";
   const [prompt, setPrompt] = useState(TASK_PLACEHOLDERS.task2.prompt);
   const [essay, setEssay] = useState(TASK_PLACEHOLDERS.task2.essay);
   const [result, setResult] = useState<WritingCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const t = UI_COPY[locale];
 
   function onTaskTypeChange(nextType: TaskType) {
     setTaskType(nextType);
@@ -67,6 +145,8 @@ export default function HomePage() {
         },
         body: JSON.stringify({
           taskType,
+          provider,
+          locale,
           prompt,
           essay
         })
@@ -81,7 +161,7 @@ export default function HomePage() {
       setResult(data);
     } catch (submissionError) {
       setResult(null);
-      setError(submissionError instanceof Error ? submissionError.message : "Something went wrong.");
+      setError(submissionError instanceof Error ? submissionError.message : t.genericError);
     } finally {
       setLoading(false);
     }
@@ -91,56 +171,63 @@ export default function HomePage() {
     <main className="pageShell">
       <section className="hero">
         <div className="heroCopy">
-          <p className="eyebrow">AI Powered MVP</p>
-          <h1>IELTS Writing Checker for Task 1 and Task 2</h1>
-          <p className="lede">
-            Check a response against the four IELTS writing criteria, get band estimates, targeted fixes, and a short
-            rewrite example. If `OPENAI_API_KEY` is configured the app uses AI feedback; otherwise it falls back to a
-            deterministic local scorer.
-          </p>
+          <div className="heroTopbar">
+            <div>
+              <p className="eyebrow">{t.heroEyebrow}</p>
+            </div>
+            <label className="localeControl">
+              <span>{t.languageLabel}</span>
+              <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
+                <option value="zh-CN">简体中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+          </div>
+          <h1>{t.heroTitle}</h1>
+          <p className="lede">{t.heroDescription}</p>
         </div>
         <div className="heroStat">
-          <span>Modes</span>
-          <strong>{result?.feedbackMode === "ai" ? "AI Review" : "MVP Ready"}</strong>
-          <small>Task 1 + Task 2</small>
+          <span>{t.modesLabel}</span>
+          <strong>{result?.feedbackMode === "ai" ? t.aiReview : t.heuristicReady}</strong>
+          <small>{t.coverage}</small>
         </div>
       </section>
 
       <section className="workspace">
         <form className="editorPanel" onSubmit={handleSubmit}>
-          <div className="segmentedControl" role="tablist" aria-label="Task type">
+          <div className="segmentedControl" role="tablist" aria-label={t.taskSwitcherAria}>
             <button
               type="button"
               className={taskType === "task1" ? "active" : ""}
               onClick={() => onTaskTypeChange("task1")}
             >
-              Task 1
+              {t.task1}
             </button>
             <button
               type="button"
               className={taskType === "task2" ? "active" : ""}
               onClick={() => onTaskTypeChange("task2")}
             >
-              Task 2
+              {t.task2}
             </button>
           </div>
 
           <label>
-            <span>Prompt</span>
+            <span>{t.prompt}</span>
             <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} />
           </label>
 
           <label>
-            <span>Essay</span>
+            <span>{t.essay}</span>
             <textarea value={essay} onChange={(event) => setEssay(event.target.value)} rows={16} />
           </label>
 
           <div className="editorFooter">
             <p>
-              Word count: <strong>{essay.trim() ? essay.trim().split(/\s+/).length : 0}</strong>
+              {t.wordCount}: <strong>{essay.trim() ? essay.trim().split(/\s+/).length : 0}</strong>
             </p>
             <button type="submit" disabled={loading}>
-              {loading ? "Checking..." : "Check Writing"}
+              {loading ? t.checking : t.checkWriting}
             </button>
           </div>
 
@@ -152,41 +239,46 @@ export default function HomePage() {
             <>
               <div className="resultHero">
                 <div>
-                  <p className="eyebrow">Estimated Band</p>
+                  <p className="eyebrow">{t.estimatedBand}</p>
                   <h2>{result.estimatedBand.toFixed(1)}</h2>
                 </div>
                 <div className="resultMeta">
-                  <span>{result.taskType === "task1" ? "Task 1" : "Task 2"}</span>
-                  <span>{result.wordCount} words</span>
-                  <span>{result.feedbackMode === "ai" ? "AI mode" : "Heuristic mode"}</span>
+                  <span>{result.taskType === "task1" ? t.task1 : t.task2}</span>
+                  <span>
+                    {result.wordCount} {locale === "zh-CN" ? "词" : "words"}
+                  </span>
+                  <span>{result.feedbackMode === "ai" ? t.aiMode : t.heuristicMode}</span>
+                  <span>
+                    {locale === "zh-CN" ? "当前平台" : "Provider"}: {result.providerUsed}
+                  </span>
                 </div>
               </div>
 
               <div className="scoreGrid">
                 <ScoreCard
-                  label="Task Achievement"
+                  label={t.taskAchievement}
                   score={result.bandBreakdown.taskAchievement.score}
                   rationale={result.bandBreakdown.taskAchievement.rationale}
                 />
                 <ScoreCard
-                  label="Coherence & Cohesion"
+                  label={t.coherence}
                   score={result.bandBreakdown.coherenceAndCohesion.score}
                   rationale={result.bandBreakdown.coherenceAndCohesion.rationale}
                 />
                 <ScoreCard
-                  label="Lexical Resource"
+                  label={t.lexical}
                   score={result.bandBreakdown.lexicalResource.score}
                   rationale={result.bandBreakdown.lexicalResource.rationale}
                 />
                 <ScoreCard
-                  label="Grammar Range & Accuracy"
+                  label={t.grammar}
                   score={result.bandBreakdown.grammaticalRangeAndAccuracy.score}
                   rationale={result.bandBreakdown.grammaticalRangeAndAccuracy.rationale}
                 />
               </div>
 
               <article className="feedbackSection">
-                <h3>Strengths</h3>
+                <h3>{t.strengths}</h3>
                 <ul>
                   {result.strengths.map((item) => (
                     <li key={item}>{item}</li>
@@ -195,7 +287,7 @@ export default function HomePage() {
               </article>
 
               <article className="feedbackSection">
-                <h3>Priority Fixes</h3>
+                <h3>{t.priorityFixes}</h3>
                 <ul>
                   {result.priorityFixes.map((item) => (
                     <li key={item.title}>
@@ -206,17 +298,15 @@ export default function HomePage() {
               </article>
 
               <article className="feedbackSection">
-                <h3>Sample Rewrite</h3>
+                <h3>{t.sampleRewrite}</h3>
                 <p>{result.sampleRewrite}</p>
               </article>
             </>
           ) : (
             <div className="emptyState">
-              <p className="eyebrow">Ready</p>
-              <h2>Run the first review</h2>
-              <p>
-                Choose Task 1 or Task 2, paste the prompt and essay, then run the checker to get rubric-based feedback.
-              </p>
+              <p className="eyebrow">{t.ready}</p>
+              <h2>{t.emptyTitle}</h2>
+              <p>{t.emptyDescription}</p>
             </div>
           )}
         </section>

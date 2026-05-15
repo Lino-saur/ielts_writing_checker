@@ -31,7 +31,8 @@ body {
 }
 
 button,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -62,6 +63,33 @@ textarea {
 
 .heroCopy {
   padding: 32px;
+}
+
+.heroTopbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.localeControl {
+  min-width: 148px;
+}
+
+.localeControl span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.localeControl select {
+  width: 100%;
+  border: 1px solid rgba(69, 56, 43, 0.14);
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: var(--panel-strong);
+  color: var(--ink);
 }
 
 .heroCopy h1,
@@ -180,7 +208,22 @@ textarea {
   line-height: 1.6;
 }
 
+.editorPanel select {
+  width: 100%;
+  border: 1px solid rgba(69, 56, 43, 0.14);
+  border-radius: 18px;
+  padding: 14px 18px;
+  background: var(--panel-strong);
+  color: var(--ink);
+  line-height: 1.4;
+}
+
 .editorPanel textarea:focus {
+  outline: 2px solid rgba(212, 91, 49, 0.28);
+  border-color: rgba(212, 91, 49, 0.42);
+}
+
+.editorPanel select:focus {
   outline: 2px solid rgba(212, 91, 49, 0.28);
   border-color: rgba(212, 91, 49, 0.42);
 }
@@ -300,6 +343,11 @@ textarea {
   .workspace,
   .scoreGrid {
     grid-template-columns: 1fr;
+  }
+
+  .heroTopbar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .resultMeta {
