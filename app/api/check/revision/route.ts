@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireSession } from "@/lib/auth-session";
 import { evaluateWritingRevision } from "@/lib/ielts";
 import { AiProvider, Locale, TargetBand, TaskType } from "@/lib/types";
 
@@ -13,6 +14,7 @@ type RequestBody = {
 
 export async function POST(request: Request) {
   try {
+    await requireSession();
     const body = (await request.json()) as RequestBody;
 
     if (body.taskType !== "task1" && body.taskType !== "task2") {
@@ -31,6 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = message === "UNAUTHORIZED" ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

@@ -76,6 +76,148 @@ select {
   min-width: 156px;
 }
 
+.authActionGroup {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.authDialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.34);
+  backdrop-filter: blur(6px);
+}
+
+.authDialog {
+  width: min(100%, 420px);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  padding: 18px;
+}
+
+.authDialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.authTabs {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper-soft);
+}
+
+.authTabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.authTabs button.active {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+}
+
+.authHint {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.authForm {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.authForm label span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.authForm input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 12px 13px;
+  font: inherit;
+}
+
+.authSubmitButton {
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--blue);
+  color:  rgba(29, 78, 216, 0.06);
+  font: inherit;
+  font-weight: 600;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+.authSubmitButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.ghostAction {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 7px 11px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
+}
+
+.ghostAction:hover:not(:disabled) {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.ghostAction.primary {
+  border-color: rgba(29, 78, 216, 0.18);
+  background: rgba(29, 78, 216, 0.06);
+  color: var(--blue);
+}
+
+.ghostAction.primary:hover:not(:disabled) {
+  border-color: var(--blue);
+  background: rgba(29, 78, 216, 0.12);
+}
+
+.ghostAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .metaPills {
   display: flex;
   flex-wrap: wrap;
@@ -570,6 +712,33 @@ select {
   .resultMeta {
     align-items: flex-start;
     justify-content: flex-start;
+  }
+/* 
+  .authActionGroup {
+    justify-content: flex-start;
+  }
+
+  .authDialog {
+    padding: 16px;
+  }
+
+  .authDialogHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  } */
+
+  /* TODO: ? */
+  .authSubmitButton {
+    color: #007AFF;
+    /* background: #111827; */
+    border: 1px solid #111827;
+    border-radius: 999px;
+    padding: 0.85rem 1.25rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 0.5rem;
   }
 
   .scoreGrid {

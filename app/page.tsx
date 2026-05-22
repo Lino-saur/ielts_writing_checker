@@ -1,15 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { authClient } from "@/lib/auth-client";
 import {
   AiProvider,
   CorrectionNote,
   Locale,
   TargetBand,
   TaskType,
-  WritingCheckResult,
-  WritingRevisionResult,
-  WritingScoreResult
+  WritingCheckResult
 } from "@/lib/types";
 
 const TASK_PLACEHOLDERS: Record<TaskType, { prompt: string; essay: string }> = {
@@ -33,6 +32,25 @@ const UI_COPY = {
     heroEyebrow: "AI Writing Review",
     heroTitle: "IELTS Writing Checker",
     heroDescription: "Rubric-based feedback with inline revision reasons.",
+    userLabel: "User",
+    guestUser: "Guest",
+    login: "Log In",
+    signInTab: "Sign In",
+    signUpTab: "Sign Up",
+    authName: "Name",
+    authEmail: "Email",
+    authPassword: "Password",
+    authSubmitSignIn: "Continue",
+    authSubmitSignUp: "Create Account",
+    authHintSignIn: "Sign in to upgrade from a guest session.",
+    authHintSignUp: "Create a formal account for your reviews and energy.",
+    authClose: "Close",
+    authSignOut: "Sign Out",
+    resetGuest: "Reset Guest",
+    resettingGuest: "Resetting...",
+    energy: "Energy",
+    energyCost: "Cost",
+    insufficientEnergy: "Not enough energy for a review.",
     modesLabel: "Modes",
     aiReview: "AI Review",
     heuristicReady: "Fallback Review",
@@ -77,6 +95,25 @@ const UI_COPY = {
     heroEyebrow: "AI 写作评估",
     heroTitle: "IELTS 写作批改器",
     heroDescription: "按评分标准返回反馈，并在文中直接说明修改原因。",
+    userLabel: "用户",
+    guestUser: "访客",
+    login: "登录",
+    signInTab: "登录",
+    signUpTab: "注册",
+    authName: "昵称",
+    authEmail: "邮箱",
+    authPassword: "密码",
+    authSubmitSignIn: "继续登录",
+    authSubmitSignUp: "创建账号",
+    authHintSignIn: "登录后即可从访客会话升级为正式账号。",
+    authHintSignUp: "创建正式账号，用于绑定批改记录和能量。",
+    authClose: "关闭",
+    authSignOut: "退出登录",
+    resetGuest: "重置访客",
+    resettingGuest: "重置中...",
+    energy: "能量",
+    energyCost: "消耗",
+    insufficientEnergy: "当前能量不足，无法继续批阅。",
     modesLabel: "模式",
     aiReview: "AI 评分",
     heuristicReady: "本地评分",
@@ -120,6 +157,44 @@ const UI_COPY = {
 function isErrorPayload(value: unknown): value is { error?: string } {
   return typeof value === "object" && value !== null && "error" in value;
 }
+
+type EnergyState = {
+  balance: number;
+  totalConsumed: number;
+  totalRecharged: number;
+  updatedAt: string;
+};
+
+type EnergyPayload = {
+  energy: EnergyState;
+  cost: number;
+};
+
+type SessionPayload = {
+  user: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    isAnonymous: boolean;
+  };
+};
+
+function formatUserPill(
+  user: SessionPayload["user"] | null,
+  t: (typeof UI_COPY)["en"] | (typeof UI_COPY)["zh-CN"]
+) {
+  if (!user) {
+    return `${t.userLabel}: --`;
+  }
+
+  const identity = user.isAnonymous
+    ? t.guestUser
+    : user.name?.trim() || user.email?.trim() || t.userLabel;
+
+  return `${t.userLabel}: ${identity} · ${user.id.slice(0, 8)}`;
+}
+
+type AuthMode = "signIn" | "signUp";
 
 function ScoreCard({
   label,
@@ -295,6 +370,17 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeEditIndex, setActiveEditIndex] = useState<number | null>(null);
+  const [energy, setEnergy] = useState<EnergyState | null>(null);
+  const [reviewCost, setReviewCost] = useState(1);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [currentUser, setCurrentUser] = useState<SessionPayload["user"] | null>(null);
+  const [resettingGuest, setResettingGuest] = useState(false);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("signIn");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
 
   const t = UI_COPY[locale];
 
@@ -323,6 +409,176 @@ export default function HomePage() {
     };
   }, [activeEditIndex]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    async function ensureAnonymousSession() {
+      const sessionResult = await authClient.getSession();
+
+      if (sessionResult.data) {
+        return;
+      }
+
+      const anonymousResult = await authClient.signIn.anonymous();
+      if (anonymousResult.error) {
+        throw new Error(anonymousResult.error.message || "AUTH_INIT_FAILED");
+      }
+    }
+
+    async function loadSessionContext() {
+      try {
+        await ensureAnonymousSession();
+        const [sessionResponse, energyResponse] = await Promise.all([
+          fetch("/api/session"),
+          fetch("/api/energy")
+        ]);
+
+        const sessionData = (await sessionResponse.json()) as SessionPayload | { error?: string };
+        const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
+
+        if (!sessionResponse.ok || isErrorPayload(sessionData)) {
+          return;
+        }
+
+        if (!energyResponse.ok || isErrorPayload(energyData)) {
+          return;
+        }
+
+        if (mounted) {
+          setCurrentUser(sessionData.user);
+          setEnergy(energyData.energy);
+          setReviewCost(energyData.cost);
+        }
+      } catch {
+        // Ignore preload failures.
+      } finally {
+        if (mounted) {
+          setSessionReady(true);
+        }
+      }
+    }
+
+    loadSessionContext();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  async function refreshSessionContext() {
+    const [sessionResponse, energyResponse] = await Promise.all([fetch("/api/session"), fetch("/api/energy")]);
+    const sessionData = (await sessionResponse.json()) as SessionPayload | { error?: string };
+    const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
+
+    if (!sessionResponse.ok || isErrorPayload(sessionData)) {
+      throw new Error(t.genericError);
+    }
+
+    if (!energyResponse.ok || isErrorPayload(energyData)) {
+      throw new Error(t.genericError);
+    }
+
+    setCurrentUser(sessionData.user);
+    setEnergy(energyData.energy);
+    setReviewCost(energyData.cost);
+  }
+
+  async function handleResetGuest() {
+    if (!currentUser?.isAnonymous || resettingGuest) {
+      return;
+    }
+
+    setResettingGuest(true);
+    setError(null);
+
+    try {
+      const signOutResult = await authClient.signOut();
+      if (signOutResult.error) {
+        throw new Error(signOutResult.error.message || t.genericError);
+      }
+
+      const anonymousResult = await authClient.signIn.anonymous();
+      if (anonymousResult.error) {
+        throw new Error(anonymousResult.error.message || t.genericError);
+      }
+
+      await refreshSessionContext();
+      setResult(null);
+      setActiveEditIndex(null);
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : t.genericError);
+    } finally {
+      setResettingGuest(false);
+    }
+  }
+
+  function handleLoginPlaceholder() {
+    setError(null);
+    setAuthDialogOpen(true);
+    setAuthMode("signIn");
+  }
+
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthSubmitting(true);
+    setError(null);
+
+    try {
+      if (authMode === "signIn") {
+        const result = await authClient.signIn.email({
+          email: authEmail.trim(),
+          password: authPassword
+        });
+
+        if (result.error) {
+          throw new Error(result.error.message || t.genericError);
+        }
+      } else {
+        const result = await authClient.signUp.email({
+          name: authName.trim(),
+          email: authEmail.trim(),
+          password: authPassword
+        });
+
+        if (result.error) {
+          throw new Error(result.error.message || t.genericError);
+        }
+      }
+
+      await refreshSessionContext();
+      setAuthDialogOpen(false);
+      setAuthPassword("");
+      setResult(null);
+      setActiveEditIndex(null);
+    } catch (authError) {
+      setError(authError instanceof Error ? authError.message : t.genericError);
+    } finally {
+      setAuthSubmitting(false);
+    }
+  }
+
+  async function handleSignOut() {
+    setError(null);
+
+    try {
+      const signOutResult = await authClient.signOut();
+      if (signOutResult.error) {
+        throw new Error(signOutResult.error.message || t.genericError);
+      }
+
+      const anonymousResult = await authClient.signIn.anonymous();
+      if (anonymousResult.error) {
+        throw new Error(anonymousResult.error.message || t.genericError);
+      }
+
+      await refreshSessionContext();
+      setResult(null);
+      setActiveEditIndex(null);
+    } catch (signOutError) {
+      setError(signOutError instanceof Error ? signOutError.message : t.genericError);
+    }
+  }
+
   function onTaskTypeChange(nextType: TaskType) {
     setTaskType(nextType);
     setPrompt(TASK_PLACEHOLDERS[nextType].prompt);
@@ -334,72 +590,60 @@ export default function HomePage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!sessionReady) {
+      return;
+    }
     setLoading(true);
     setError(null);
 
     try {
-      const requestBody = {
-        taskType,
-        provider,
-        locale,
-        targetBand,
-        prompt,
-        essay
-      };
-
-      const [scoreResponse, revisionResponse] = await Promise.all([
-        fetch("/api/check/score", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(requestBody)
-        }),
-        fetch("/api/check/revision", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(requestBody)
+      const response = await fetch("/api/check", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          taskType,
+          provider,
+          locale,
+          targetBand,
+          prompt,
+          essay
         })
-      ]);
+      });
 
-      const [scoreData, revisionData] = await Promise.all([
-        scoreResponse.json() as Promise<WritingScoreResult | { error?: string }>,
-        revisionResponse.json() as Promise<WritingRevisionResult | { error?: string }>
-      ]);
+      const data = (await response.json()) as
+        | {
+            result: WritingCheckResult;
+            energy: EnergyState;
+            cost: number;
+          }
+        | { error?: string; energy?: EnergyState; cost?: number };
 
-      if (!scoreResponse.ok) {
-        throw new Error(isErrorPayload(scoreData) ? scoreData.error || "Score request failed." : "Score request failed.");
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError(t.genericError);
+          return;
+        }
+
+        if (isErrorPayload(data) && data.error === "INSUFFICIENT_ENERGY") {
+          if ("energy" in data && data.energy) {
+            setEnergy(data.energy);
+          }
+          setError(t.insufficientEnergy);
+          return;
+        }
+
+        throw new Error(isErrorPayload(data) ? data.error || "Request failed." : "Request failed.");
       }
 
-      if (!revisionResponse.ok) {
-        throw new Error(
-          isErrorPayload(revisionData) ? revisionData.error || "Revision request failed." : "Revision request failed."
-        );
-      }
-
-      if (isErrorPayload(scoreData) || isErrorPayload(revisionData)) {
+      if (!("result" in data)) {
         throw new Error(t.genericError);
       }
 
-      const mergedResult: WritingCheckResult = {
-        taskType: scoreData.taskType,
-        wordCount: scoreData.wordCount,
-        estimatedBand: scoreData.estimatedBand,
-        targetBand: scoreData.targetBand,
-        bandBreakdown: scoreData.bandBreakdown,
-        strengths: scoreData.strengths,
-        highlightedSentences: scoreData.highlightedSentences,
-        priorityFixes: scoreData.priorityFixes,
-        annotatedEssay: revisionData.annotatedEssay,
-        correctionNotes: revisionData.correctionNotes,
-        feedbackMode:
-          scoreData.feedbackMode === "ai" && revisionData.feedbackMode === "ai" ? "ai" : "heuristic",
-        providerUsed: scoreData.feedbackMode === "ai" ? scoreData.providerUsed : revisionData.providerUsed
-      };
-
-      setResult(mergedResult);
+      setResult(data.result);
+      setEnergy(data.energy);
+      setReviewCost(data.cost);
       setActiveEditIndex(null);
     } catch (submissionError) {
       setResult(null);
@@ -420,7 +664,45 @@ export default function HomePage() {
         <div className="headerControls">
           <div className="metaPills">
             <span>{result?.feedbackMode === "ai" ? t.aiReview : t.heuristicReady}</span>
+            <span>{formatUserPill(currentUser, t)}</span>
+            <span>
+              {t.energy}: {energy?.balance ?? "--"}
+            </span>
+            <span>
+              {t.energyCost}: {reviewCost}
+            </span>
           </div>
+          {currentUser?.isAnonymous ? (
+            <div className="authActionGroup">
+              <button
+                type="button"
+                className="ghostAction primary"
+                onClick={handleLoginPlaceholder}
+                disabled={loading || !sessionReady}
+              >
+                {t.login}
+              </button>
+              <button
+                type="button"
+                className="ghostAction"
+                onClick={handleResetGuest}
+                disabled={resettingGuest || loading || !sessionReady}
+              >
+                {resettingGuest ? t.resettingGuest : t.resetGuest}
+              </button>
+            </div>
+          ) : currentUser ? (
+            <div className="authActionGroup">
+              <button
+                type="button"
+                className="ghostAction"
+                onClick={handleSignOut}
+                disabled={loading || !sessionReady}
+              >
+                {t.authSignOut}
+              </button>
+            </div>
+          ) : null}
           <label className="localeControl">
             <span>{t.languageLabel}</span>
             <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
@@ -490,7 +772,7 @@ export default function HomePage() {
             <p>
               {t.wordCount}: <strong>{essay.trim() ? essay.trim().split(/\s+/).length : 0}</strong>
             </p>
-            <button type="submit" disabled={loading}>
+            <button type="submit" disabled={loading || !sessionReady}>
               {loading ? t.checking : t.checkWriting}
             </button>
           </div>
@@ -608,6 +890,95 @@ export default function HomePage() {
           )}
         </section>
       </section>
+
+      {authDialogOpen ? (
+        <div className="authDialogBackdrop" onClick={() => !authSubmitting && setAuthDialogOpen(false)}>
+          <div
+            className="authDialog"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="authDialogHeader">
+              <div className="authTabs" role="tablist" aria-label="Authentication mode">
+                <button
+                  type="button"
+                  className={authMode === "signIn" ? "active" : ""}
+                  onClick={() => setAuthMode("signIn")}
+                  disabled={authSubmitting}
+                >
+                  {t.signInTab}
+                </button>
+                <button
+                  type="button"
+                  className={authMode === "signUp" ? "active" : ""}
+                  onClick={() => setAuthMode("signUp")}
+                  disabled={authSubmitting}
+                >
+                  {t.signUpTab}
+                </button>
+              </div>
+              <button
+                type="button"
+                className="ghostAction"
+                onClick={() => setAuthDialogOpen(false)}
+                disabled={authSubmitting}
+              >
+                {t.authClose}
+              </button>
+            </div>
+
+            <p className="authHint">{authMode === "signIn" ? t.authHintSignIn : t.authHintSignUp}</p>
+
+            <form className="authForm" onSubmit={handleAuthSubmit}>
+              {authMode === "signUp" ? (
+                <label>
+                  <span>{t.authName}</span>
+                  <input
+                    type="text"
+                    value={authName}
+                    onChange={(event) => setAuthName(event.target.value)}
+                    required
+                    minLength={2}
+                  />
+                </label>
+              ) : null}
+
+              <label>
+                <span>{t.authEmail}</span>
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(event) => setAuthEmail(event.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </label>
+
+              <label>
+                <span>{t.authPassword}</span>
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(event) => setAuthPassword(event.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete={authMode === "signIn" ? "current-password" : "new-password"}
+                />
+              </label>
+              <div className="editorFooter">
+                <button type="submit" disabled={authSubmitting}>
+                  {authSubmitting
+                    ? "Submitting..."
+                    : authMode === "signIn"
+                      ? t.authSubmitSignIn
+                      : t.authSubmitSignUp}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

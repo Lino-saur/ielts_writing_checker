@@ -1,28 +1,28 @@
 # IELTS Writing Checker
 
-AI-powered IELTS writing checker for Task 1 and Task 2 with selectable model providers.
+AI-powered IELTS writing checker for Task 1 and Task 2 with rubric-based scoring, inline revisions, user-bound energy, and Better Auth sessions.
 
 ## What It Does
 
-- Accepts an IELTS prompt and writing response.
+- Accepts an IELTS prompt and essay response.
 - Supports both `Task 1` and `Task 2`.
-- Returns an estimated overall band score.
-- Breaks feedback into the four IELTS criteria:
+- Returns an estimated band score with the four IELTS criteria:
   - Task Achievement
   - Coherence and Cohesion
   - Lexical Resource
   - Grammatical Range and Accuracy
-- Highlights strengths, priority fixes, and a sample rewrite.
-- Supports provider selection between `OpenAI`, `DeepSeek`, and `Auto`.
-- Uses OpenAI when `OPENAI_API_KEY` is configured.
-- Uses DeepSeek when `DEEPSEEK_API_KEY` is configured.
-- Falls back to a local heuristic scorer when no API key is present or the API call fails.
+- Shows strengths, highlighted sentences, priority fixes, and inline revisions.
+- Binds review energy to a Better Auth user session.
+- Uses `DeepSeek` for AI feedback.
+- Falls back to a local heuristic scorer when the AI call fails.
 
 ## Stack
 
 - Next.js 15
 - React 19
 - TypeScript
+- Better Auth
+- PostgreSQL
 
 ## Local Setup
 
@@ -32,39 +32,69 @@ AI-powered IELTS writing checker for Task 1 and Task 2 with selectable model pro
 npm install
 ```
 
-2. Optional: configure one or both AI providers:
+2. Configure environment variables in `.env.local`:
 
-```bash
-cp .env.example .env.local
-```
-
-Then set:
-
-```bash
-AI_PROVIDER=auto
-
+```env
 OPENAI_API_KEY=your_openai_key_here
 OPENAI_MODEL=gpt-5.4
+OPENAI_REASONING_EFFORT=medium
 
 DEEPSEEK_API_KEY=your_deepseek_key_here
-DEEPSEEK_MODEL=deepseek-v4-flash
+
+BETTER_AUTH_SECRET=your_long_random_secret
+BETTER_AUTH_URL=http://localhost:3000
+
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
 ```
 
-3. Start the app:
+For local development against a local Postgres instance, you can also set:
+
+```env
+POSTGRES_SSL=false
+```
+
+3. Run the Better Auth migration:
+
+```bash
+npx auth@latest migrate --config ./lib/auth.ts --yes
+```
+
+4. Start the app:
 
 ```bash
 npm run dev
 ```
 
-4. Open:
+5. Open:
 
 ```text
 http://localhost:3000
 ```
 
+## Vercel + Neon
+
+This app is designed to run on Vercel with an external PostgreSQL database such as Neon.
+
+Set these environment variables in Vercel:
+
+- `DATABASE_URL`
+- `BETTER_AUTH_SECRET`
+- `BETTER_AUTH_URL`
+- `OPENAI_API_KEY`
+- `DEEPSEEK_API_KEY`
+
+Recommended production setup:
+
+- Host the app on Vercel.
+- Host Postgres on Neon.
+- Use `BETTER_AUTH_URL=https://your-app.vercel.app`.
+- Use a Neon connection string with `sslmode=require`.
+
 ## API
 
-`POST /api/check`
+### `POST /api/check`
+
+Runs a full review and consumes one unit of energy.
 
 Request body:
 
@@ -76,8 +106,12 @@ Request body:
 }
 ```
 
+### `GET /api/energy`
+
+Returns the current user session's energy balance and review cost.
+
 ## Notes
 
-- The heuristic mode is intentionally simple. It keeps the MVP usable without external dependencies, but it is not a substitute for a real IELTS examiner.
-- In `auto` mode, the backend tries the preferred provider first and falls back to the other configured provider before using heuristic mode.
-- DeepSeek integration uses the official OpenAI-compatible chat completions endpoint with JSON output enabled.
+- The heuristic mode is intentionally simple. It keeps the app usable when AI output fails, but it is not a substitute for a real IELTS examiner.
+- Review energy is tied to the Better Auth session user, including anonymous users.
+- PostgreSQL is required for deployment. Local file-based SQLite is no longer used.
