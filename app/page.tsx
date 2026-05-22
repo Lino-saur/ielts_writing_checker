@@ -1,7 +1,16 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { AiProvider, Locale, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import {
+  AiProvider,
+  CorrectionNote,
+  Locale,
+  TargetBand,
+  TaskType,
+  WritingCheckResult,
+  WritingRevisionResult,
+  WritingScoreResult
+} from "@/lib/types";
 
 const TASK_PLACEHOLDERS: Record<TaskType, { prompt: string; essay: string }> = {
   task1: {
@@ -14,7 +23,7 @@ const TASK_PLACEHOLDERS: Record<TaskType, { prompt: string; essay: string }> = {
     prompt:
       "Some people believe that unpaid community service should be a compulsory part of high school programmes. To what extent do you agree or disagree?",
     essay:
-      "I largely agree that unpaid community service should be included in high school education because it can help students develop practical skills and a stronger sense of social responsibility. However, schools should design these programmes carefully so that they support learning rather than becoming an unfair burden.\n\nOne major benefit of community service is that it exposes students to real social problems. For example, teenagers who help in care homes or environmental projects can see that many issues require patience, teamwork and long-term commitment. These experiences are difficult to gain through textbooks alone, and they may encourage students to become more active citizens in adulthood.\n\nCommunity service can also build useful transferable skills. When students organise donations, support younger children or participate in local campaigns, they learn how to communicate with different people and manage their time. Such abilities are valuable both in higher education and in future employment.\n\nThat said, compulsory service should not ignore students' academic workload or personal circumstances. If schools require excessive hours, some pupils may feel stressed or resentful. A better approach would be to offer flexible options and ensure that activities are safe, meaningful and closely supervised.\n\nIn conclusion, community service should be a required part of high school programmes, but it must be implemented in a balanced and practical way."
+      "Some people thinks unpaid community service should be compulsory in high school programmes, I am agree with this opinion because it can helps students become more responsibility and know the society better.\n\nFirstly, students nowadays is always study in classroom and they dont have many chance to touch real life, so community service are a good ways for them to learning how other people live. For example help old peoples in a care home or cleaning the streets can let student understand the value of hard working. This kind of activity also make them more kindness, and they will not only thinking about themself.\n\nSecondly, unpaid work can improving many useful skills, such as communicate with others, teamwork and solve problems. When students join in a charity event, they need talk with different people and maybe organize some small things, these experience is very helpful for their future job. Also, if they only focus on exam, they may becomes selfish and lack of social ability.\n\nHowever some people may said compulsory community service is not good because students already have many homework and exams. This is true in some ways, but I think school can just ask them do few hours every month, it will not be too much pressure. If the activity is designed good, student will feel interesting and meaningful, not just a boring task.\n\nIn conclusion, I strongly agree unpaid community service should be a compulsory part of high school, because it teach students responsibility, kindness and useful skills. But school should not make it too heavy, otherwise students will hate it and the purpose will lost."
   }
 };
 
@@ -22,9 +31,8 @@ const UI_COPY = {
   en: {
     languageLabel: "Language",
     heroEyebrow: "AI Writing Review",
-    heroTitle: "IELTS Writing Checker for Task 1 and Task 2",
-    heroDescription:
-      "Check a response against the four IELTS writing criteria and get targeted feedback with a sample rewrite.",
+    heroTitle: "IELTS Writing Checker",
+    heroDescription: "Rubric-based feedback with inline revision reasons.",
     modesLabel: "Modes",
     aiReview: "AI Review",
     heuristicReady: "Fallback Review",
@@ -52,12 +60,12 @@ const UI_COPY = {
     highlightedSentence: "Sentence",
     highlightedReason: "Why It Works",
     priorityFixes: "Priority Fixes",
-    annotatedEssay: "Marked Corrections",
-    correctionNotes: "Correction Notes",
+    annotatedEssay: "Revision",
     correctionOriginal: "Original",
     correctionCorrected: "Corrected",
     correctionReason: "Reason",
-    sampleRewrite: "Sample Rewrite",
+    revisionBundle: "Inline Revision",
+    tapForReason: "Click a revision to see why it was changed.",
     ready: "Ready",
     emptyTitle: "Run the first review",
     emptyDescription:
@@ -67,9 +75,8 @@ const UI_COPY = {
   "zh-CN": {
     languageLabel: "语言",
     heroEyebrow: "AI 写作评估",
-    heroTitle: "IELTS 写作批改器（Task 1 / Task 2）",
-    heroDescription:
-      "根据 IELTS 写作四项评分标准检查作文，并返回重点修改建议和示范改写。",
+    heroTitle: "IELTS 写作批改器",
+    heroDescription: "按评分标准返回反馈，并在文中直接说明修改原因。",
     modesLabel: "模式",
     aiReview: "AI 评分",
     heuristicReady: "本地评分",
@@ -97,18 +104,22 @@ const UI_COPY = {
     highlightedSentence: "原句",
     highlightedReason: "精彩原因",
     priorityFixes: "优先修改点",
-    annotatedEssay: "原文批改痕迹",
-    correctionNotes: "逐条批改说明",
+    annotatedEssay: "批改痕迹",
     correctionOriginal: "原句",
     correctionCorrected: "修改后",
     correctionReason: "修改原因",
-    sampleRewrite: "示范改写",
+    revisionBundle: "文中批改",
+    tapForReason: "点击文中的修改处，可查看原因。",
     ready: "已就绪",
     emptyTitle: "开始第一次批改",
     emptyDescription: "选择 Task 1 或 Task 2，粘贴题目和作文，然后运行批改以获取按评分标准生成的反馈。",
     genericError: "发生了一些问题。"
   }
 } as const;
+
+function isErrorPayload(value: unknown): value is { error?: string } {
+  return typeof value === "object" && value !== null && "error" in value;
+}
 
 function ScoreCard({
   label,
@@ -122,32 +133,51 @@ function ScoreCard({
   return (
     <article className="scoreCard">
       <div className="scoreHeader">
-        <h3>{label}</h3>
-        <span>{score.toFixed(1)}</span>
+        <div>
+          <p className="sectionLabel">{label}</p>
+          <h3>{score.toFixed(1)}</h3>
+        </div>
       </div>
       <p>{rationale}</p>
     </article>
   );
 }
 
-function renderAnnotatedEssay(text: string, highlightedSentences: string[]) {
-  const parts: Array<{ type: "plain" | "del" | "add"; text: string }> = [];
-  const pattern = /\[del\]([\s\S]*?)\[\/del\]|\[add\]([\s\S]*?)\[\/add\]/g;
+function renderAnnotatedEssay(
+  text: string,
+  highlightedSentences: string[],
+  correctionNotes: CorrectionNote[],
+  activeEditIndex: number | null,
+  onToggleEdit: (index: number) => void,
+  t: (typeof UI_COPY)["en"] | (typeof UI_COPY)["zh-CN"]
+) {
+  const notesById = new Map(correctionNotes.map((note) => [note.id, note]));
+  const parts: Array<
+    | { type: "plain"; text: string }
+    | { type: "edit"; id: string; original: string; corrected: string; note?: CorrectionNote; index: number }
+    | { type: "del" | "add"; text: string }
+  > = [];
+  const pairPattern = /\[del#([A-Za-z0-9_-]+)\]([\s\S]*?)\[\/del#\1\]\[add#\1\]([\s\S]*?)\[\/add#\1\]/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
+  let editIndex = 0;
 
-  while ((match = pattern.exec(text)) !== null) {
+  while ((match = pairPattern.exec(text)) !== null) {
     if (match.index > lastIndex) {
       parts.push({ type: "plain", text: text.slice(lastIndex, match.index) });
     }
 
-    if (match[1] !== undefined) {
-      parts.push({ type: "del", text: match[1] });
-    } else if (match[2] !== undefined) {
-      parts.push({ type: "add", text: match[2] });
-    }
+    parts.push({
+      type: "edit",
+      id: match[1],
+      original: match[2],
+      corrected: match[3],
+      note: notesById.get(match[1]),
+      index: editIndex
+    });
+    editIndex += 1;
 
-    lastIndex = pattern.lastIndex;
+    lastIndex = pairPattern.lastIndex;
   }
 
   if (lastIndex < text.length) {
@@ -205,6 +235,34 @@ function renderAnnotatedEssay(text: string, highlightedSentences: string[]) {
   }
 
   return parts.map((part, index) => {
+    if (part.type === "edit") {
+      const isActive = activeEditIndex === part.index;
+
+      return (
+        <span
+          key={`edit-${part.index}-${index}`}
+          className={`editChip${isActive ? " active" : ""}`}
+          role="button"
+          tabIndex={0}
+          onClick={() => onToggleEdit(part.index)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onToggleEdit(part.index);
+            }
+          }}
+        >
+          <del className="essayDel">{part.original}</del>
+          <ins className="essayAdd">{part.corrected}</ins>
+          {part.note ? (
+            <span className={`editTooltip${isActive ? " visible" : ""}`}>
+              <strong>{t.correctionReason}:</strong> {part.note.reason}
+            </span>
+          ) : null}
+        </span>
+      );
+    }
+
     if (part.type === "del") {
       return (
         <del key={index} className="essayDel">
@@ -226,6 +284,7 @@ function renderAnnotatedEssay(text: string, highlightedSentences: string[]) {
 }
 
 export default function HomePage() {
+  const activeEditRef = useRef<HTMLDivElement | null>(null);
   const [locale, setLocale] = useState<Locale>("zh-CN");
   const [taskType, setTaskType] = useState<TaskType>("task2");
   const provider: AiProvider = "deepseek";
@@ -235,8 +294,34 @@ export default function HomePage() {
   const [result, setResult] = useState<WritingCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [activeEditIndex, setActiveEditIndex] = useState<number | null>(null);
 
   const t = UI_COPY[locale];
+
+  useEffect(() => {
+    if (activeEditIndex === null) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      if (!activeEditRef.current) {
+        return;
+      }
+
+      const target = event.target;
+      if (target instanceof Node && !activeEditRef.current.contains(target)) {
+        setActiveEditIndex(null);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [activeEditIndex]);
 
   function onTaskTypeChange(nextType: TaskType) {
     setTaskType(nextType);
@@ -244,6 +329,7 @@ export default function HomePage() {
     setEssay(TASK_PLACEHOLDERS[nextType].essay);
     setResult(null);
     setError(null);
+    setActiveEditIndex(null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -252,28 +338,69 @@ export default function HomePage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/check", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          taskType,
-          provider,
-          locale,
-          targetBand,
-          prompt,
-          essay
+      const requestBody = {
+        taskType,
+        provider,
+        locale,
+        targetBand,
+        prompt,
+        essay
+      };
+
+      const [scoreResponse, revisionResponse] = await Promise.all([
+        fetch("/api/check/score", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(requestBody)
+        }),
+        fetch("/api/check/revision", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(requestBody)
         })
-      });
+      ]);
 
-      const data = await response.json();
+      const [scoreData, revisionData] = await Promise.all([
+        scoreResponse.json() as Promise<WritingScoreResult | { error?: string }>,
+        revisionResponse.json() as Promise<WritingRevisionResult | { error?: string }>
+      ]);
 
-      if (!response.ok) {
-        throw new Error(data.error || "Request failed.");
+      if (!scoreResponse.ok) {
+        throw new Error(isErrorPayload(scoreData) ? scoreData.error || "Score request failed." : "Score request failed.");
       }
 
-      setResult(data);
+      if (!revisionResponse.ok) {
+        throw new Error(
+          isErrorPayload(revisionData) ? revisionData.error || "Revision request failed." : "Revision request failed."
+        );
+      }
+
+      if (isErrorPayload(scoreData) || isErrorPayload(revisionData)) {
+        throw new Error(t.genericError);
+      }
+
+      const mergedResult: WritingCheckResult = {
+        taskType: scoreData.taskType,
+        wordCount: scoreData.wordCount,
+        estimatedBand: scoreData.estimatedBand,
+        targetBand: scoreData.targetBand,
+        bandBreakdown: scoreData.bandBreakdown,
+        strengths: scoreData.strengths,
+        highlightedSentences: scoreData.highlightedSentences,
+        priorityFixes: scoreData.priorityFixes,
+        annotatedEssay: revisionData.annotatedEssay,
+        correctionNotes: revisionData.correctionNotes,
+        feedbackMode:
+          scoreData.feedbackMode === "ai" && revisionData.feedbackMode === "ai" ? "ai" : "heuristic",
+        providerUsed: scoreData.feedbackMode === "ai" ? scoreData.providerUsed : revisionData.providerUsed
+      };
+
+      setResult(mergedResult);
+      setActiveEditIndex(null);
     } catch (submissionError) {
       setResult(null);
       setError(submissionError instanceof Error ? submissionError.message : t.genericError);
@@ -284,32 +411,41 @@ export default function HomePage() {
 
   return (
     <main className="pageShell">
-      <section className="hero">
-        <div className="heroCopy">
-          <div className="heroTopbar">
-            <div>
-              <p className="eyebrow">{t.heroEyebrow}</p>
-            </div>
-            <label className="localeControl">
-              <span>{t.languageLabel}</span>
-              <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
-                <option value="zh-CN">简体中文</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-          </div>
+      <header className="pageHeader">
+        <div className="titleBlock">
+          <p className="eyebrow">{t.heroEyebrow}</p>
           <h1>{t.heroTitle}</h1>
           <p className="lede">{t.heroDescription}</p>
         </div>
-        <div className="heroStat">
-          <span>{t.modesLabel}</span>
-          <strong>{result?.feedbackMode === "ai" ? t.aiReview : t.heuristicReady}</strong>
-          <small>{t.coverage}</small>
+        <div className="headerControls">
+          <div className="metaPills">
+            <span>{result?.feedbackMode === "ai" ? t.aiReview : t.heuristicReady}</span>
+          </div>
+          <label className="localeControl">
+            <span>{t.languageLabel}</span>
+            <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
+              <option value="zh-CN">简体中文</option>
+              <option value="en">English</option>
+            </select>
+          </label>
         </div>
-      </section>
+      </header>
 
       <section className="workspace">
         <form className="editorPanel" onSubmit={handleSubmit}>
+          <div className="panelHeading">
+            <div>
+              <p className="sectionLabel">{t.modesLabel}</p>
+              <h2>{taskType === "task1" ? t.task1 : t.task2}</h2>
+            </div>
+            <div className="inlineMeta">
+              <span>{t.providerDeepSeek}</span>
+              <span>
+                {t.wordCount}: {essay.trim() ? essay.trim().split(/\s+/).length : 0}
+              </span>
+            </div>
+          </div>
+
           <div className="segmentedControl" role="tablist" aria-label={t.taskSwitcherAria}>
             <button
               type="button"
@@ -364,21 +500,23 @@ export default function HomePage() {
 
         <section className="resultsPanel">
           {result ? (
-            <>
+            <div className="reportPaper">
               <div className="resultHero">
-                <div>
-                  <p className="eyebrow">{t.estimatedBand}</p>
+                <div className="resultScore">
+                  <p className="sectionLabel">{t.estimatedBand}</p>
                   <h2>{result.estimatedBand.toFixed(1)}</h2>
                 </div>
                 <div className="resultMeta">
                   <span>{result.taskType === "task1" ? t.task1 : t.task2}</span>
                   <span>
+                    {locale === "zh-CN" ? "目标" : "Target"} {result.targetBand.toFixed(1)}
+                  </span>
+                  <span>
                     {result.wordCount} {locale === "zh-CN" ? "词" : "words"}
                   </span>
-                  <span>{t.targetBand}: {result.targetBand.toFixed(1)}</span>
                   <span>{result.feedbackMode === "ai" ? t.aiMode : t.heuristicMode}</span>
                   <span>
-                    {locale === "zh-CN" ? "当前平台" : "Provider"}: {result.providerUsed}
+                    {t.providerUsed}: {result.providerUsed}
                   </span>
                 </div>
               </div>
@@ -407,7 +545,7 @@ export default function HomePage() {
               </div>
 
               <article className="feedbackSection">
-                <h3>{t.strengths}</h3>
+                <p className="sectionLabel">{t.strengths}</p>
                 <ul>
                   {result.strengths.map((item) => (
                     <li key={item}>{item}</li>
@@ -416,7 +554,7 @@ export default function HomePage() {
               </article>
 
               <article className="feedbackSection">
-                <h3>{t.highlightedSentences}</h3>
+                <p className="sectionLabel">{t.highlightedSentences}</p>
                 <div className="correctionList">
                   {result.highlightedSentences.map((item, index) => (
                     <article key={`${item.sentence}-${index}`} className="correctionCard">
@@ -432,7 +570,7 @@ export default function HomePage() {
               </article>
 
               <article className="feedbackSection">
-                <h3>{t.priorityFixes}</h3>
+                <p className="sectionLabel">{t.priorityFixes}</p>
                 <ul>
                   {result.priorityFixes.map((item) => (
                     <li key={item.title}>
@@ -442,40 +580,25 @@ export default function HomePage() {
                 </ul>
               </article>
 
-              <article className="feedbackSection">
-                <h3>{t.annotatedEssay}</h3>
-                <div className="annotatedEssay">
-                  {renderAnnotatedEssay(
-                    result.annotatedEssay,
-                    result.highlightedSentences.map((item) => item.sentence)
-                  )}
+              <article className="feedbackSection revisionSection">
+                <p className="sectionLabel">{t.revisionBundle}</p>
+                <p className="revisionHint">{t.tapForReason}</p>
+
+                <div className="revisionBlock">
+                  <p className="subsectionTitle">{t.annotatedEssay}</p>
+                  <div className="annotatedEssay" ref={activeEditRef}>
+                    {renderAnnotatedEssay(
+                      result.annotatedEssay,
+                      result.highlightedSentences.map((item) => item.sentence),
+                      result.correctionNotes,
+                      activeEditIndex,
+                      (index) => setActiveEditIndex((current) => (current === index ? null : index)),
+                      t
+                    )}
+                  </div>
                 </div>
               </article>
-
-              <article className="feedbackSection">
-                <h3>{t.correctionNotes}</h3>
-                <div className="correctionList">
-                  {result.correctionNotes.map((item, index) => (
-                    <article key={`${item.original}-${index}`} className="correctionCard">
-                      <p>
-                        <strong>{t.correctionOriginal}:</strong> {item.original}
-                      </p>
-                      <p>
-                        <strong>{t.correctionCorrected}:</strong> {item.corrected}
-                      </p>
-                      <p>
-                        <strong>{t.correctionReason}:</strong> {item.reason}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-              </article>
-
-              <article className="feedbackSection">
-                <h3>{t.sampleRewrite}</h3>
-                <p>{result.sampleRewrite}</p>
-              </article>
-            </>
+            </div>
           ) : (
             <div className="emptyState">
               <p className="eyebrow">{t.ready}</p>

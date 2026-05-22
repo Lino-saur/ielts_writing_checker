@@ -7,7 +7,9 @@ import {
   Locale,
   TargetBand,
   TaskType,
-  WritingCheckResult
+  WritingCheckResult,
+  WritingRevisionResult,
+  WritingScoreResult
 } from "./types";
 
 type CheckInput = {
@@ -87,10 +89,7 @@ function getDeepSeekConfig(): ProviderConfig {
         type: "disabled"
       },
       temperature: 0.3,
-      max_tokens: 1600,
-      response_format: {
-        type: "json_object"
-      }
+      max_tokens: 2200
     }
   };
 }
@@ -125,6 +124,7 @@ function buildHeuristicCorrectionNotes(essay: string, locale: Locale): Correctio
 
   return [
     {
+      id: "1",
       original: firstSentence,
       corrected:
         "This essay addresses the issue directly and presents a clearer position on the topic.",
@@ -134,6 +134,7 @@ function buildHeuristicCorrectionNotes(essay: string, locale: Locale): Correctio
           : "Makes the opening more direct and clarifies the writer's position."
     },
     {
+      id: "2",
       original: secondSentence,
       corrected:
         "The main argument would be stronger if each point were explained more precisely and linked more logically.",
@@ -153,7 +154,7 @@ function buildAnnotatedEssayFromNotes(essay: string, notes: CorrectionNote[]) {
       continue;
     }
 
-    const replacement = `[del]${note.original}[/del][add]${note.corrected}[/add]`;
+    const replacement = `[del#${note.id}]${note.original}[/del#${note.id}][add#${note.id}]${note.corrected}[/add#${note.id}]`;
     annotatedEssay = annotatedEssay.replace(note.original, replacement);
   }
 
@@ -333,14 +334,6 @@ function buildHeuristicFeedback({ taskType, prompt, essay, locale }: CheckInput)
           }
         ];
 
-  const sampleRewrite =
-    taskType === "task1"
-      ? targetBand >= 7
-        ? "Overall, all three energy sources became more widely used over the period, but solar recorded by far the most dramatic growth. While hydro increased only modestly and remained the least common source throughout, solar rose sharply after 2010 and finished as the dominant form of renewable household energy. Wind also followed an upward trend, although its increase was steadier and less pronounced than that of solar."
-        : "Overall, the chart shows a clear upward trend in the later period, while the earlier figures remain comparatively stable. The most notable change is the sharp rise in the final category, which overtakes the others by the end of the timeline."
-      : targetBand >= 7
-        ? "I strongly agree that unpaid community service should be a compulsory element of high school education because it develops both civic awareness and practical capability. By working with charities, environmental projects, or community programmes, students learn to cooperate with others, understand real social needs, and apply classroom knowledge in meaningful situations. However, schools should ensure that such programmes are well supervised and flexible enough to avoid placing excessive pressure on students with heavy academic responsibilities."
-        : "I largely agree with the statement because long-term progress usually depends on disciplined habits rather than short bursts of motivation. In particular, consistent effort helps people build skill, while repeated practice makes good decisions easier to maintain.";
   const correctionNotes = buildHeuristicCorrectionNotes(essay, resolvedLocale);
   const annotatedEssay = buildAnnotatedEssayFromNotes(essay, correctionNotes);
   const highlightedSentences = buildHeuristicHighlightedSentences(essay, resolvedLocale, taskType);
@@ -389,21 +382,69 @@ function buildHeuristicFeedback({ taskType, prompt, essay, locale }: CheckInput)
     priorityFixes,
     annotatedEssay,
     correctionNotes,
-    sampleRewrite,
     feedbackMode: "heuristic",
     providerUsed: "heuristic"
+  };
+}
+
+function toScoreResult(result: WritingCheckResult): WritingScoreResult {
+  return {
+    taskType: result.taskType,
+    wordCount: result.wordCount,
+    estimatedBand: result.estimatedBand,
+    targetBand: result.targetBand,
+    bandBreakdown: result.bandBreakdown,
+    strengths: result.strengths,
+    highlightedSentences: result.highlightedSentences,
+    priorityFixes: result.priorityFixes,
+    feedbackMode: result.feedbackMode,
+    providerUsed: result.providerUsed
+  };
+}
+
+function toRevisionResult(result: WritingCheckResult): WritingRevisionResult {
+  return {
+    taskType: result.taskType,
+    wordCount: result.wordCount,
+    targetBand: result.targetBand,
+    annotatedEssay: result.annotatedEssay,
+    correctionNotes: result.correctionNotes,
+    feedbackMode: result.feedbackMode,
+    providerUsed: result.providerUsed
   };
 }
 
 function cleanModelText(text: string) {
   return text
     .replace(/```json/gi, "```")
+    .replace(/```text/gi, "```")
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/```/g, "")
     .trim();
 }
 
 function previewText(text: string, maxLength = 400) {
   return text.slice(0, maxLength).replace(/\s+/g, " ");
+}
+
+function repairJsonString(text: string) {
+  let repaired = cleanModelText(text);
+
+  // Normalize common punctuation variants that break JSON parsers.
+  repaired = repaired
+    .replace(/\u201c|\u201d/g, "\"")
+    .replace(/\u2018|\u2019/g, "'")
+    .replace(/\u00a0/g, " ");
+
+  // Remove trailing commas before object/array close.
+  repaired = repaired.replace(/,\s*([}\]])/g, "$1");
+
+  // Recover missing commas between adjacent objects/arrays.
+  repaired = repaired
+    .replace(/(\}|\])\s*(\{|\[)/g, "$1,$2")
+    .replace(/"\s*\n\s*"/g, "\",\n\"");
+
+  return repaired;
 }
 
 function extractJsonObject(text: string) {
@@ -414,10 +455,321 @@ function extractJsonObject(text: string) {
     throw new Error(`Model response did not include a JSON object. Raw preview: ${preview}`);
   }
 
-  return JSON.parse(match[0]) as WritingCheckResult;
+  const candidate = match[0];
+
+  try {
+    return JSON.parse(candidate) as WritingCheckResult;
+  } catch (error) {
+    const repaired = repairJsonString(candidate);
+
+    try {
+      return JSON.parse(repaired) as WritingCheckResult;
+    } catch {
+      throw error;
+    }
+  }
 }
 
-function normalizeParsedResult(parsed: WritingCheckResult, input: CheckInput, providerName: ProviderConfig["name"]) {
+function extractTaggedSections(text: string) {
+  const cleanedText = cleanModelText(text);
+  const sections = new Map<string, string>();
+  const pattern = /===([A-Z_]+)===/g;
+  const matches = [...cleanedText.matchAll(pattern)];
+
+  for (let index = 0; index < matches.length; index += 1) {
+    const current = matches[index];
+    const name = current[1];
+
+    if (name === "END") {
+      continue;
+    }
+
+    const contentStart = current.index! + current[0].length;
+    const nextIndex = matches[index + 1]?.index ?? cleanedText.length;
+    const content = cleanedText.slice(contentStart, nextIndex).trim();
+    sections.set(name, content);
+  }
+
+  return sections;
+}
+
+function parseScoreAndRationaleBlock(block: string) {
+  const scoreMatch = block.match(/score:\s*([0-9]+(?:\.[0-9])?)/i);
+  const rationaleMatch = block.match(/rationale:\s*([\s\S]*)/i);
+
+  if (!scoreMatch || !rationaleMatch) {
+    throw new Error(`Invalid score block: ${previewText(block)}`);
+  }
+
+  return {
+    score: Number(scoreMatch[1]),
+    rationale: rationaleMatch[1].trim()
+  };
+}
+
+function parseBulletList(block: string) {
+  return block
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[-*]\s*/, "").replace(/^\d+\.\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function splitNumberedEntries(block: string, entryLeadPattern: string) {
+  const pattern = new RegExp(`(?:^|\\s)(\\d+\\.\\s*(?:${entryLeadPattern})[\\s\\S]*?)(?=(?:\\s+\\d+\\.\\s*(?:${entryLeadPattern}))|$)`, "g");
+  const matches = [...block.matchAll(pattern)].map((match) => match[1].trim());
+
+  if (matches.length > 0) {
+    return matches;
+  }
+
+  return block
+    .split(/\n(?=\d+\.\s)/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function parseHighlightedSentencesBlock(block: string): HighlightedSentence[] {
+  return splitNumberedEntries(block, "sentence:")
+    .map((entry) => {
+      const sentenceMatch = entry.match(/sentence:\s*([\s\S]*?)(?=\s+reason:|$)/i);
+      const reasonMatch = entry.match(/reason:\s*([\s\S]*)/i);
+
+      if (!sentenceMatch || !reasonMatch) {
+        return null;
+      }
+
+      return {
+        sentence: sentenceMatch[1].trim(),
+        reason: reasonMatch[1].trim()
+      };
+    })
+    .filter((item): item is HighlightedSentence => Boolean(item));
+}
+
+function parsePriorityFixesBlock(block: string) {
+  return splitNumberedEntries(block, "title:")
+    .map((entry) => {
+      const titleMatch = entry.match(/title:\s*([\s\S]*?)(?=\s+detail:|$)/i);
+      const detailMatch = entry.match(/detail:\s*([\s\S]*)/i);
+
+      if (!titleMatch || !detailMatch) {
+        return null;
+      }
+
+      return {
+        title: titleMatch[1].trim(),
+        detail: detailMatch[1].trim()
+      };
+    })
+    .filter((item): item is WritingCheckResult["priorityFixes"][number] => Boolean(item));
+}
+
+function parseCorrectionNotesBlock(block: string): CorrectionNote[] {
+  return splitNumberedEntries(block, "id:")
+    .map((entry) => {
+      const idMatch = entry.match(/id:\s*([A-Za-z0-9_-]+)/i);
+      const originalMatch = entry.match(/original:\s*([\s\S]*?)(?=\s+corrected:|$)/i);
+      const correctedMatch = entry.match(/corrected:\s*([\s\S]*?)(?=\s+reason:|$)/i);
+      const reasonMatch = entry.match(/reason:\s*([\s\S]*)/i);
+
+      if (!idMatch || !originalMatch || !correctedMatch || !reasonMatch) {
+        return null;
+      }
+
+      return {
+        id: idMatch[1].trim(),
+        original: originalMatch[1].trim(),
+        corrected: correctedMatch[1].trim(),
+        reason: reasonMatch[1].trim()
+      };
+    })
+    .filter((item): item is CorrectionNote => Boolean(item));
+}
+
+function extractStructuredResponse(text: string): WritingCheckResult {
+  const sections = extractTaggedSections(text);
+
+  if (sections.size === 0) {
+    throw new Error(`Model response did not include tagged sections. Raw preview: ${previewText(text)}`);
+  }
+
+  const taskType = (sections.get("TASK_TYPE") || "").trim();
+  const estimatedBand = Number((sections.get("ESTIMATED_BAND") || "").trim());
+  const taskAchievement = parseScoreAndRationaleBlock(sections.get("TASK_ACHIEVEMENT") || "");
+  const coherenceAndCohesion = parseScoreAndRationaleBlock(sections.get("COHERENCE_AND_COHESION") || "");
+  const lexicalResource = parseScoreAndRationaleBlock(sections.get("LEXICAL_RESOURCE") || "");
+  const grammaticalRangeAndAccuracy = parseScoreAndRationaleBlock(
+    sections.get("GRAMMATICAL_RANGE_AND_ACCURACY") || ""
+  );
+  const strengths = parseBulletList(sections.get("STRENGTHS") || "");
+  const highlightedSentences = parseHighlightedSentencesBlock(sections.get("HIGHLIGHTED_SENTENCES") || "");
+  const priorityFixes = parsePriorityFixesBlock(sections.get("PRIORITY_FIXES") || "");
+  const annotatedEssay = (sections.get("ANNOTATED_ESSAY") || "").trim();
+  const correctionNotes = parseCorrectionNotesBlock(sections.get("CORRECTION_NOTES") || "");
+
+  if (taskType !== "task1" && taskType !== "task2") {
+    throw new Error(`Invalid task type section: ${taskType}`);
+  }
+
+  if (!annotatedEssay) {
+    throw new Error("Missing ANNOTATED_ESSAY section.");
+  }
+
+  return {
+    taskType,
+    wordCount: 0,
+    estimatedBand,
+    targetBand: 6.5,
+    bandBreakdown: {
+      taskAchievement,
+      coherenceAndCohesion,
+      lexicalResource,
+      grammaticalRangeAndAccuracy
+    },
+    strengths,
+    highlightedSentences,
+    priorityFixes,
+    annotatedEssay,
+    correctionNotes,
+    feedbackMode: "ai",
+    providerUsed: "deepseek"
+  };
+}
+
+function parseModelResponse(text: string): WritingCheckResult {
+  try {
+    return extractStructuredResponse(text);
+  } catch (structuredError) {
+    try {
+      return extractJsonObject(text);
+    } catch {
+      throw structuredError;
+    }
+  }
+}
+
+function parseScoreStructuredResponse(text: string): WritingScoreResult {
+  const sections = extractTaggedSections(text);
+
+  if (sections.size === 0) {
+    throw new Error(`Model response did not include tagged sections. Raw preview: ${previewText(text)}`);
+  }
+
+  const taskType = (sections.get("TASK_TYPE") || "").trim();
+  const estimatedBand = Number((sections.get("ESTIMATED_BAND") || "").trim());
+  const taskAchievement = parseScoreAndRationaleBlock(sections.get("TASK_ACHIEVEMENT") || "");
+  const coherenceAndCohesion = parseScoreAndRationaleBlock(sections.get("COHERENCE_AND_COHESION") || "");
+  const lexicalResource = parseScoreAndRationaleBlock(sections.get("LEXICAL_RESOURCE") || "");
+  const grammaticalRangeAndAccuracy = parseScoreAndRationaleBlock(
+    sections.get("GRAMMATICAL_RANGE_AND_ACCURACY") || ""
+  );
+
+  if (taskType !== "task1" && taskType !== "task2") {
+    throw new Error(`Invalid task type section: ${taskType}`);
+  }
+
+  return {
+    taskType,
+    wordCount: 0,
+    estimatedBand,
+    targetBand: 6.5,
+    bandBreakdown: {
+      taskAchievement,
+      coherenceAndCohesion,
+      lexicalResource,
+      grammaticalRangeAndAccuracy
+    },
+    strengths: parseBulletList(sections.get("STRENGTHS") || ""),
+    highlightedSentences: parseHighlightedSentencesBlock(sections.get("HIGHLIGHTED_SENTENCES") || ""),
+    priorityFixes: parsePriorityFixesBlock(sections.get("PRIORITY_FIXES") || ""),
+    feedbackMode: "ai",
+    providerUsed: "deepseek"
+  };
+}
+
+function parseRevisionStructuredResponse(text: string): WritingRevisionResult {
+  const sections = extractTaggedSections(text);
+
+  if (sections.size === 0) {
+    throw new Error(`Model response did not include tagged sections. Raw preview: ${previewText(text)}`);
+  }
+
+  const taskType = (sections.get("TASK_TYPE") || "").trim();
+  const annotatedEssay = (sections.get("ANNOTATED_ESSAY") || "").trim();
+
+  if (taskType !== "task1" && taskType !== "task2") {
+    throw new Error(`Invalid task type section: ${taskType}`);
+  }
+
+  if (!annotatedEssay) {
+    throw new Error("Missing ANNOTATED_ESSAY section.");
+  }
+
+  return {
+    taskType,
+    wordCount: 0,
+    targetBand: 6.5,
+    annotatedEssay,
+    correctionNotes: parseCorrectionNotesBlock(sections.get("CORRECTION_NOTES") || ""),
+    feedbackMode: "ai",
+    providerUsed: "deepseek"
+  };
+}
+
+function attachIdsToAnnotatedEssay(annotatedEssay: string, correctionNotes: CorrectionNote[]) {
+  if (!annotatedEssay.includes("[del]")) {
+    return annotatedEssay;
+  }
+
+  let noteIndex = 0;
+  return annotatedEssay.replace(/\[del\]([\s\S]*?)\[\/del\]\[add\]([\s\S]*?)\[\/add\]/g, (_match, original, corrected) => {
+    const id = correctionNotes[noteIndex]?.id || String(noteIndex + 1);
+    noteIndex += 1;
+    return `[del#${id}]${original}[/del#${id}][add#${id}]${corrected}[/add#${id}]`;
+  });
+}
+
+function validateRevisionAlignment(annotatedEssay: string, correctionNotes: CorrectionNote[]) {
+  const editIds = [...annotatedEssay.matchAll(/\[del#([A-Za-z0-9_-]+)\][\s\S]*?\[\/del#\1\]\[add#\1\][\s\S]*?\[\/add#\1\]/g)].map(
+    (match) => match[1]
+  );
+  const noteIds = correctionNotes.map((note) => note.id);
+
+  const uniqueEditIds = new Set(editIds);
+  const uniqueNoteIds = new Set(noteIds);
+
+  if (editIds.length === 0) {
+    throw new Error("annotatedEssay did not include any revision ids.");
+  }
+
+  if (uniqueEditIds.size !== editIds.length) {
+    throw new Error(`annotatedEssay contains duplicate revision ids: ${editIds.join(", ")}`);
+  }
+
+  if (uniqueNoteIds.size !== noteIds.length) {
+    throw new Error(`correctionNotes contains duplicate ids: ${noteIds.join(", ")}`);
+  }
+
+  if (uniqueEditIds.size !== uniqueNoteIds.size) {
+    throw new Error(`Revision count mismatch: ${uniqueEditIds.size} edits vs ${uniqueNoteIds.size} notes.`);
+  }
+
+  for (const id of uniqueEditIds) {
+    if (!uniqueNoteIds.has(id)) {
+      throw new Error(`Missing correction note for revision id ${id}.`);
+    }
+  }
+
+  for (const id of uniqueNoteIds) {
+    if (!uniqueEditIds.has(id)) {
+      throw new Error(`Unused correction note id ${id}.`);
+    }
+  }
+}
+
+function normalizeScoreResult(parsed: WritingScoreResult, input: CheckInput, providerName: ProviderConfig["name"]) {
   parsed.feedbackMode = "ai";
   parsed.providerUsed = providerName;
   parsed.wordCount = countWords(input.essay);
@@ -430,37 +782,98 @@ function normalizeParsedResult(parsed: WritingCheckResult, input: CheckInput, pr
   }
 
   parsed.estimatedBand = clampBand(parsed.estimatedBand);
-
   return parsed;
 }
 
-async function buildScoringPrompt(input: CheckInput, minimumWords: number, providerName: ProviderConfig["name"]) {
+function normalizeRevisionResult(parsed: WritingRevisionResult, input: CheckInput, providerName: ProviderConfig["name"]) {
+  parsed.feedbackMode = "ai";
+  parsed.providerUsed = providerName;
+  parsed.wordCount = countWords(input.essay);
+  parsed.taskType = input.taskType;
+  parsed.targetBand = getTargetBand(input.targetBand);
+  parsed.correctionNotes =
+    parsed.correctionNotes?.map((note, index) => ({
+      ...note,
+      id: note.id || String(index + 1)
+    })) || [];
+  parsed.annotatedEssay = attachIdsToAnnotatedEssay(parsed.annotatedEssay, parsed.correctionNotes);
+  validateRevisionAlignment(parsed.annotatedEssay, parsed.correctionNotes);
+  return parsed;
+}
+
+async function buildScorePrompt(input: CheckInput, minimumWords: number, providerName: ProviderConfig["name"]) {
   const locale = getLocale(input.locale);
   const targetBand = getTargetBand(input.targetBand);
   const outputLanguageInstruction =
     locale === "zh-CN"
-      ? "Write rationale, strengths, and priorityFixes in Simplified Chinese. sampleRewrite must remain in natural English."
-      : "Write rationale, strengths, priorityFixes, and sampleRewrite in English.";
-  const [basePrompt, taskPrompt] = await Promise.all([
-    readPromptFile("base.md"),
+      ? "Write rationale, strengths, highlighted sentence reasons, and priority fixes in Simplified Chinese."
+      : "Write rationale, strengths, highlighted sentence reasons, and priority fixes in English.";
+  const [taskPrompt] = await Promise.all([
     readPromptFile(input.taskType === "task1" ? "task1.md" : "task2.md")
   ]);
 
-  const rules = applyTemplate(basePrompt, {
-    providerName,
-    minimumWords,
-    outputLanguageInstruction
-  });
-
   return `
-${rules}
+Return ONLY plain text using the exact section markers below. Do not return JSON.
+
+Required output format:
+===TASK_TYPE===
+task1 or task2
+
+===ESTIMATED_BAND===
+5.5
+
+===TASK_ACHIEVEMENT===
+score: 5.5
+rationale: ...
+
+===COHERENCE_AND_COHESION===
+score: 5.5
+rationale: ...
+
+===LEXICAL_RESOURCE===
+score: 5.5
+rationale: ...
+
+===GRAMMATICAL_RANGE_AND_ACCURACY===
+score: 5.5
+rationale: ...
+
+===STRENGTHS===
+- ...
+- ...
+- ...
+
+===HIGHLIGHTED_SENTENCES===
+1. sentence: ...
+reason: ...
+
+===PRIORITY_FIXES===
+1. title: ...
+detail: ...
+2. title: ...
+detail: ...
+3. title: ...
+detail: ...
+
+===END===
 
 ${taskPrompt}
 
 Target band:
 ${targetBand}
 
-The sampleRewrite must be written to match the quality, sophistication, and control expected around IELTS band ${targetBand}. It should not be generic. It should reflect the target score level the user wants to reach.
+Constraints:
+- Use band scores from 0 to 9 in 0.5 increments.
+- Keep rationales concise and specific to the essay.
+- Include exactly 3 strengths.
+- Include 1 to 3 highlightedSentences taken from the student's original essay.
+- For each highlighted sentence, explain briefly why it is effective.
+- Include exactly 3 priority fixes.
+- Consider the minimum word expectation of ${minimumWords}.
+- Use the exact section headers above and keep them in the same order.
+- Put each section header on its own line, and put the section content on the following lines.
+- Do not add any extra sections, markdown fences, commentary, revision text, or JSON syntax.
+- ${outputLanguageInstruction}
 
 Prompt:
 ${input.prompt}
@@ -472,36 +885,98 @@ Detected word count: ${countWords(input.essay)}
 `.trim();
 }
 
-async function runChatCompletion(input: CheckInput, config: ProviderConfig): Promise<WritingCheckResult> {
+async function buildRevisionPrompt(input: CheckInput, minimumWords: number) {
+  const locale = getLocale(input.locale);
+  const targetBand = getTargetBand(input.targetBand);
+  const outputLanguageInstruction =
+    locale === "zh-CN"
+      ? "Write correctionNotes.reason in Simplified Chinese. annotatedEssay, original, and corrected text must remain in natural English."
+      : "Write correctionNotes.reason in English. annotatedEssay, original, and corrected text must remain in natural English.";
+  const taskPrompt = await readPromptFile(input.taskType === "task1" ? "task1.md" : "task2.md");
+
+  return `
+Return ONLY plain text using the exact section markers below. Do not return JSON.
+
+Required output format:
+===TASK_TYPE===
+task1 or task2
+
+===ANNOTATED_ESSAY===
+...
+
+===CORRECTION_NOTES===
+1. id: 1
+original: ...
+corrected: ...
+reason: ...
+
+===END===
+
+${taskPrompt}
+
+Target band:
+${targetBand}
+
+Constraints:
+- annotatedEssay must preserve the original essay order and mark edits inline using [del#1]original text[/del#1][add#1]improved text[/add#1], [del#2]...[/del#2][add#2]...[/add#2], etc.
+- Every inline edit id in annotatedEssay must have exactly one matching correctionNotes item with the same id, and every correctionNotes id must appear exactly once in annotatedEssay.
+- Every single revision in annotatedEssay must be annotated.
+- Build the output in this order mentally: first decide the full correctionNotes list, then write annotatedEssay by reusing those same ids exactly once each.
+- Before finalizing, count the ids in correctionNotes and count the [del#id]/[add#id] pairs in annotatedEssay. These two counts must be exactly the same.
+- If you cannot fully annotate many tiny edits reliably, merge nearby edits into fewer larger revisions so that every revision still has one clear note.
+- correctionNotes and annotatedEssay must actively correct grammar mistakes, spelling mistakes, punctuation problems, awkward phrasing, weak logic links, and unclear sentence structure wherever needed.
+- annotatedEssay itself must read like the target-band version of the essay after all [add] text is applied.
+- Keep the student's core stance, major supporting points, and overall paragraph plan whenever possible.
+- If the original essay is underdeveloped, expand ideas inside annotatedEssay so that the revised result better matches the requested band level, but still stays recognizably based on the original response.
+- Consider the minimum word expectation of ${minimumWords}.
+- Use the exact section headers above and keep them in the same order.
+- Put each section header on its own line, and put the section content on the following lines.
+- Do not add any extra sections, markdown fences, commentary, score analysis, or JSON syntax.
+- ${outputLanguageInstruction}
+
+Prompt:
+${input.prompt}
+
+Essay:
+${input.essay}
+
+Detected word count: ${countWords(input.essay)}
+`.trim();
+}
+
+async function runTaggedCompletion<T>(input: CheckInput, config: ProviderConfig, options: {
+  kind: "score" | "revision";
+  prompt: string;
+  parse: (text: string) => T;
+  normalize: (parsed: T, input: CheckInput, providerName: ProviderConfig["name"]) => T;
+}): Promise<T> {
   if (!config.apiKey) {
     throw new Error(`${config.name.toUpperCase()}_API_KEY is not configured.`);
   }
 
-  const minimumWords = input.taskType === "task1" ? 150 : 250;
-  const prompt = await buildScoringPrompt(input, minimumWords, config.name);
   const wordCount = countWords(input.essay);
   const baseMessages: ChatMessage[] = [
     {
       role: "system",
-      content: "You are a precise IELTS writing evaluator. Always respond with valid json."
+      content: "You are a precise IELTS writing evaluator. Always follow the required tagged-section output format exactly."
     },
     {
       role: "user",
-      content: prompt
+      content: options.prompt
     }
   ];
 
-  console.log("[IELTS_CHECK][REQUEST]", {
+  console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][REQUEST]`, {
     provider: config.name,
     model: config.model,
     taskType: input.taskType,
     locale: input.locale,
     wordCount,
-    promptLength: prompt.length,
+    promptLength: options.prompt.length,
     essayLength: input.essay.length
   });
 
-  async function requestCompletion(messages: ChatMessage[], phase: "first" | "retry") {
+  async function requestCompletion(messages: ChatMessage[], phase: "first" | "retry" | "repair") {
     const response = await fetch(config.endpoint, {
       method: "POST",
       headers: {
@@ -538,7 +1013,7 @@ async function runChatCompletion(input: CheckInput, config: ProviderConfig): Pro
       throw new Error(`${config.name} response was empty.`);
     }
 
-    console.log("[IELTS_CHECK][RAW_RESPONSE]", {
+    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][RAW_RESPONSE]`, {
       provider: config.name,
       phase,
       rawLength: text.length,
@@ -552,16 +1027,15 @@ async function runChatCompletion(input: CheckInput, config: ProviderConfig): Pro
   const firstText = await requestCompletion(baseMessages, "first");
 
   try {
-    const parsed = extractJsonObject(firstText);
-    console.log("[IELTS_CHECK][PARSE_SUCCESS]", {
+    const parsed = options.parse(firstText);
+    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
       provider: config.name,
       phase: "first",
-      estimatedBand: parsed.estimatedBand,
-      correctionNoteCount: parsed.correctionNotes?.length
+      preview: previewText(JSON.stringify(parsed))
     });
-    return normalizeParsedResult(parsed, input, config.name);
+    return options.normalize(parsed, input, config.name);
   } catch (firstError) {
-    console.error("[IELTS_CHECK][PARSE_FAIL]", {
+    console.error(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_FAIL]`, {
       provider: config.name,
       phase: "first",
       error: firstError instanceof Error ? firstError.message : String(firstError),
@@ -577,38 +1051,86 @@ async function runChatCompletion(input: CheckInput, config: ProviderConfig): Pro
       },
       {
         role: "user",
-        content:
-          "Your previous reply was invalid. Return ONLY one valid JSON object matching the required schema. No markdown, no explanation, no prose, no code fences."
+        content: `Your previous reply was invalid for this exact reason: ${
+          firstError instanceof Error ? firstError.message : String(firstError)
+        }. Return ONLY the required sections in the exact same order, with the exact same section headers, and no JSON or markdown fences.`
       }
     ], "retry");
 
     try {
-      const parsed = extractJsonObject(retryText);
-      console.log("[IELTS_CHECK][PARSE_SUCCESS]", {
+      const parsed = options.parse(retryText);
+      console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
         provider: config.name,
         phase: "retry",
-        estimatedBand: parsed.estimatedBand,
-        correctionNoteCount: parsed.correctionNotes?.length
+        preview: previewText(JSON.stringify(parsed))
       });
-      return normalizeParsedResult(parsed, input, config.name);
+      return options.normalize(parsed, input, config.name);
     } catch (retryError) {
-      console.error("[IELTS_CHECK][PARSE_FAIL]", {
+      console.error(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_FAIL]`, {
         provider: config.name,
         phase: "retry",
         error: retryError instanceof Error ? retryError.message : String(retryError),
         rawPreview: previewText(retryText),
         cleanedPreview: previewText(cleanModelText(retryText))
       });
-      throw retryError instanceof Error ? retryError : firstError;
+
+      const repairText = await requestCompletion([
+        ...baseMessages,
+        {
+          role: "assistant",
+          content: retryText
+        },
+        {
+          role: "user",
+          content: `Do not rescore. Do not rewrite the evaluation. Only repair your previous answer so it exactly matches the required tagged-section template. The concrete problem to fix is: ${
+            retryError instanceof Error ? retryError.message : String(retryError)
+          }. Keep the content semantically the same.`
+        }
+      ], "repair");
+
+      try {
+        const parsed = options.parse(repairText);
+        console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+          provider: config.name,
+          phase: "repair",
+          preview: previewText(JSON.stringify(parsed))
+        });
+        return options.normalize(parsed, input, config.name);
+      } catch (repairError) {
+        console.error(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_FAIL]`, {
+          provider: config.name,
+          phase: "repair",
+          error: repairError instanceof Error ? repairError.message : String(repairError),
+          rawPreview: previewText(repairText),
+          cleanedPreview: previewText(cleanModelText(repairText))
+        });
+        throw repairError instanceof Error ? repairError : retryError instanceof Error ? retryError : firstError;
+      }
     }
   }
 }
 
-async function buildAiFeedback(input: CheckInput): Promise<WritingCheckResult> {
-  return runChatCompletion(input, getDeepSeekConfig());
+async function buildAiScoreFeedback(input: CheckInput): Promise<WritingScoreResult> {
+  const minimumWords = input.taskType === "task1" ? 150 : 250;
+  return runTaggedCompletion(input, getDeepSeekConfig(), {
+    kind: "score",
+    prompt: await buildScorePrompt(input, minimumWords, "deepseek"),
+    parse: parseScoreStructuredResponse,
+    normalize: normalizeScoreResult
+  });
 }
 
-export async function evaluateWriting(input: CheckInput): Promise<WritingCheckResult> {
+async function buildAiRevisionFeedback(input: CheckInput): Promise<WritingRevisionResult> {
+  const minimumWords = input.taskType === "task1" ? 150 : 250;
+  return runTaggedCompletion(input, getDeepSeekConfig(), {
+    kind: "revision",
+    prompt: await buildRevisionPrompt(input, minimumWords),
+    parse: parseRevisionStructuredResponse,
+    normalize: normalizeRevisionResult
+  });
+}
+
+function validateInput(input: CheckInput) {
   const cleanInput = {
     taskType: input.taskType,
     prompt: input.prompt.trim(),
@@ -626,15 +1148,59 @@ export async function evaluateWriting(input: CheckInput): Promise<WritingCheckRe
     throw new Error("Essay is required.");
   }
 
+  return cleanInput;
+}
+
+export async function evaluateWritingScore(input: CheckInput): Promise<WritingScoreResult> {
+  const cleanInput = validateInput(input);
+
   try {
-    return await buildAiFeedback(cleanInput);
+    return await buildAiScoreFeedback(cleanInput);
   } catch (error) {
-    console.error("[IELTS_CHECK][FALLBACK_TO_HEURISTIC]", {
+    console.error("[IELTS_CHECK][SCORE][FALLBACK_TO_HEURISTIC]", {
       taskType: cleanInput.taskType,
       locale: cleanInput.locale,
       wordCount: countWords(cleanInput.essay),
       error: error instanceof Error ? error.message : String(error)
     });
-    return buildHeuristicFeedback(cleanInput);
+    return toScoreResult(buildHeuristicFeedback(cleanInput));
   }
+}
+
+export async function evaluateWritingRevision(input: CheckInput): Promise<WritingRevisionResult> {
+  const cleanInput = validateInput(input);
+
+  try {
+    return await buildAiRevisionFeedback(cleanInput);
+  } catch (error) {
+    console.error("[IELTS_CHECK][REVISION][FALLBACK_TO_HEURISTIC]", {
+      taskType: cleanInput.taskType,
+      locale: cleanInput.locale,
+      wordCount: countWords(cleanInput.essay),
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return toRevisionResult(buildHeuristicFeedback(cleanInput));
+  }
+}
+
+export async function evaluateWriting(input: CheckInput): Promise<WritingCheckResult> {
+  const [score, revision] = await Promise.all([
+    evaluateWritingScore(input),
+    evaluateWritingRevision(input)
+  ]);
+
+  return {
+    taskType: score.taskType,
+    wordCount: score.wordCount,
+    estimatedBand: score.estimatedBand,
+    targetBand: score.targetBand,
+    bandBreakdown: score.bandBreakdown,
+    strengths: score.strengths,
+    highlightedSentences: score.highlightedSentences,
+    priorityFixes: score.priorityFixes,
+    annotatedEssay: revision.annotatedEssay,
+    correctionNotes: revision.correctionNotes,
+    feedbackMode: score.feedbackMode === "ai" && revision.feedbackMode === "ai" ? "ai" : "heuristic",
+    providerUsed: score.feedbackMode === "ai" ? score.providerUsed : revision.providerUsed
+  };
 }

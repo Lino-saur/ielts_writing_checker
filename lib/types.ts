@@ -19,6 +19,7 @@ export type ImprovementItem = {
 };
 
 export type CorrectionNote = {
+  id: string;
   original: string;
   corrected: string;
   reason: string;
@@ -27,6 +28,34 @@ export type CorrectionNote = {
 export type HighlightedSentence = {
   sentence: string;
   reason: string;
+};
+
+export type WritingScoreResult = {
+  taskType: TaskType;
+  wordCount: number;
+  estimatedBand: number;
+  targetBand: TargetBand;
+  bandBreakdown: {
+    taskAchievement: BandBreakdown;
+    coherenceAndCohesion: BandBreakdown;
+    lexicalResource: BandBreakdown;
+    grammaticalRangeAndAccuracy: BandBreakdown;
+  };
+  strengths: string[];
+  highlightedSentences: HighlightedSentence[];
+  priorityFixes: ImprovementItem[];
+  feedbackMode: "ai" | "heuristic";
+  providerUsed: ActiveProvider;
+};
+
+export type WritingRevisionResult = {
+  taskType: TaskType;
+  wordCount: number;
+  targetBand: TargetBand;
+  annotatedEssay: string;
+  correctionNotes: CorrectionNote[];
+  feedbackMode: "ai" | "heuristic";
+  providerUsed: ActiveProvider;
 };
 
 export type WritingCheckResult = {
@@ -45,7 +74,6 @@ export type WritingCheckResult = {
   priorityFixes: ImprovementItem[];
   annotatedEssay: string;
   correctionNotes: CorrectionNote[];
-  sampleRewrite: string;
   feedbackMode: "ai" | "heuristic";
   providerUsed: ActiveProvider;
 };
