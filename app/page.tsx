@@ -46,8 +46,6 @@ const UI_COPY = {
     authHintSignUp: "Create a formal account for your reviews and energy.",
     authClose: "Close",
     authSignOut: "Sign Out",
-    resetGuest: "Reset Guest",
-    resettingGuest: "Resetting...",
     energy: "Energy",
     energyCost: "Cost",
     insufficientEnergy: "Not enough energy for a review.",
@@ -109,8 +107,6 @@ const UI_COPY = {
     authHintSignUp: "创建正式账号，用于绑定批改记录和能量。",
     authClose: "关闭",
     authSignOut: "退出登录",
-    resetGuest: "重置访客",
-    resettingGuest: "重置中...",
     energy: "能量",
     energyCost: "消耗",
     insufficientEnergy: "当前能量不足，无法继续批阅。",
@@ -376,7 +372,6 @@ export default function HomePage() {
   const [reviewCost, setReviewCost] = useState(1);
   const [sessionReady, setSessionReady] = useState(false);
   const [currentUser, setCurrentUser] = useState<SessionPayload["user"] | null>(null);
-  const [resettingGuest, setResettingGuest] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signIn");
   const [authName, setAuthName] = useState("");
@@ -385,6 +380,11 @@ export default function HomePage() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
 
   const t = UI_COPY[locale];
+  const isAnonymousUser = currentUser?.isAnonymous ?? false;
+  const isRegisteredUser = Boolean(currentUser && !currentUser.isAnonymous);
+  const showLoginAction = sessionReady && !isRegisteredUser;
+  const showSignOutAction = sessionReady && isRegisteredUser;
+  const authActionDisabled = loading || authSubmitting;
 
   function clearError() {
     setError(null);
@@ -493,35 +493,6 @@ export default function HomePage() {
     setCurrentUser(sessionData.user);
     setEnergy(energyData.energy);
     setReviewCost(energyData.cost);
-  }
-
-  async function handleResetGuest() {
-    if (!currentUser?.isAnonymous || resettingGuest) {
-      return;
-    }
-
-    setResettingGuest(true);
-    clearError();
-
-    try {
-      const signOutResult = await authClient.signOut();
-      if (signOutResult.error) {
-        throw new Error(signOutResult.error.message || t.genericError);
-      }
-
-      const anonymousResult = await authClient.signIn.anonymous();
-      if (anonymousResult.error) {
-        throw new Error(anonymousResult.error.message || t.genericError);
-      }
-
-      await refreshSessionContext();
-      setResult(null);
-      setActiveEditIndex(null);
-    } catch (resetError) {
-      showError(resetError instanceof Error ? resetError.message : t.genericError, "auth");
-    } finally {
-      setResettingGuest(false);
-    }
   }
 
   function handleLoginPlaceholder() {
@@ -684,7 +655,6 @@ export default function HomePage() {
         </div>
         <div className="headerControls">
           <div className="metaPills">
-            <span>{result?.feedbackMode === "ai" ? t.aiReview : t.heuristicReady}</span>
             <span>{formatUserPill(currentUser, t)}</span>
             <span>
               {t.energy}: {energy?.balance ?? "--"}
@@ -692,45 +662,33 @@ export default function HomePage() {
             <span>
               {t.energyCost}: {reviewCost}
             </span>
-          </div>
-          {currentUser?.isAnonymous ? (
-            <div className="authActionGroup">
+            {showLoginAction ? (
               <button
                 type="button"
-                className="ghostAction primary"
+                className="ghostAction primary metaAction"
                 onClick={handleLoginPlaceholder}
-                disabled={loading || !sessionReady}
+                disabled={authActionDisabled}
               >
                 {t.login}
               </button>
+            ) : null}
+            {showSignOutAction ? (
               <button
                 type="button"
-                className="ghostAction"
-                onClick={handleResetGuest}
-                disabled={resettingGuest || loading || !sessionReady}
-              >
-                {resettingGuest ? t.resettingGuest : t.resetGuest}
-              </button>
-            </div>
-          ) : currentUser ? (
-            <div className="authActionGroup">
-              <button
-                type="button"
-                className="ghostAction"
+                className="ghostAction metaAction"
                 onClick={handleSignOut}
-                disabled={loading || !sessionReady}
+                disabled={authActionDisabled}
               >
                 {t.authSignOut}
               </button>
-            </div>
-          ) : null}
-          <label className="localeControl">
-            <span>{t.languageLabel}</span>
-            <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
-              <option value="zh-CN">简体中文</option>
-              <option value="en">English</option>
-            </select>
-          </label>
+            ) : null}
+            <label className="localePill" aria-label={t.languageLabel}>
+              <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
+                <option value="zh-CN">简体中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+          </div>
         </div>
       </header>
 

@@ -104,15 +104,8 @@ select {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 10px;
-  min-width: 156px;
-}
-
-.authActionGroup {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+  gap: 12px;
+  min-width: 220px;
 }
 
 .authDialogBackdrop {
@@ -217,6 +210,10 @@ select {
 }
 
 .ghostAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--paper);
@@ -254,6 +251,7 @@ select {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
 }
 
@@ -270,35 +268,78 @@ select {
   font-weight: 500;
 }
 
-.localeControl {
-  min-width: 156px;
-}
-
-.localeControl span {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--muted);
+.metaAction {
+  min-height: 30px;
+  padding: 5px 10px;
   font-size: 0.74rem;
 }
 
+.localePill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 3px 24px 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.localePill::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-65%) rotate(45deg);
+  pointer-events: none;
+}
+
+.localePill:focus-within {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
+}
+
+.localePill select,
 .localeControl select,
 .editorPanel select,
 .editorPanel textarea {
-  width: 100%;
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
   background: var(--paper);
   color: var(--ink);
 }
 
+.localePill select {
+  min-width: 82px;
+  padding: 0 14px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
 .localeControl select,
 .editorPanel select {
+  width: 100%;
   min-height: 42px;
   padding: 10px 12px;
+  border-radius: var(--radius-md);
 }
 
 .editorPanel textarea {
+  width: 100%;
   padding: 15px 16px;
+  border-radius: var(--radius-md);
   resize: vertical;
   line-height: 1.75;
 }
@@ -439,6 +480,12 @@ select {
   outline: none;
   border-color: #93c5fd;
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
+}
+
+.localePill select:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .editorFooter {
@@ -750,6 +797,10 @@ select {
   .resultMeta {
     align-items: flex-start;
     justify-content: flex-start;
+  }
+
+  .ghostAction {
+    min-width: 112px;
   }
 /* 
   .authActionGroup {
