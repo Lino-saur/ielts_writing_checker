@@ -195,6 +195,7 @@ function formatUserPill(
 }
 
 type AuthMode = "signIn" | "signUp";
+type ErrorSource = "auth" | "general";
 
 function ScoreCard({
   label,
@@ -368,6 +369,7 @@ export default function HomePage() {
   const [essay, setEssay] = useState(TASK_PLACEHOLDERS.task2.essay);
   const [result, setResult] = useState<WritingCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorSource, setErrorSource] = useState<ErrorSource>("general");
   const [loading, setLoading] = useState(false);
   const [activeEditIndex, setActiveEditIndex] = useState<number | null>(null);
   const [energy, setEnergy] = useState<EnergyState | null>(null);
@@ -383,6 +385,16 @@ export default function HomePage() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
 
   const t = UI_COPY[locale];
+
+  function clearError() {
+    setError(null);
+    setErrorSource("general");
+  }
+
+  function showError(message: string, source: ErrorSource = "general") {
+    setError(message);
+    setErrorSource(source);
+  }
 
   useEffect(() => {
     if (activeEditIndex === null) {
@@ -489,7 +501,7 @@ export default function HomePage() {
     }
 
     setResettingGuest(true);
-    setError(null);
+    clearError();
 
     try {
       const signOutResult = await authClient.signOut();
@@ -506,14 +518,14 @@ export default function HomePage() {
       setResult(null);
       setActiveEditIndex(null);
     } catch (resetError) {
-      setError(resetError instanceof Error ? resetError.message : t.genericError);
+      showError(resetError instanceof Error ? resetError.message : t.genericError, "auth");
     } finally {
       setResettingGuest(false);
     }
   }
 
   function handleLoginPlaceholder() {
-    setError(null);
+    clearError();
     setAuthDialogOpen(true);
     setAuthMode("signIn");
   }
@@ -521,7 +533,7 @@ export default function HomePage() {
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAuthSubmitting(true);
-    setError(null);
+    clearError();
 
     try {
       if (authMode === "signIn") {
@@ -551,14 +563,14 @@ export default function HomePage() {
       setResult(null);
       setActiveEditIndex(null);
     } catch (authError) {
-      setError(authError instanceof Error ? authError.message : t.genericError);
+      showError(authError instanceof Error ? authError.message : t.genericError, "auth");
     } finally {
       setAuthSubmitting(false);
     }
   }
 
   async function handleSignOut() {
-    setError(null);
+    clearError();
 
     try {
       const signOutResult = await authClient.signOut();
@@ -575,7 +587,7 @@ export default function HomePage() {
       setResult(null);
       setActiveEditIndex(null);
     } catch (signOutError) {
-      setError(signOutError instanceof Error ? signOutError.message : t.genericError);
+      showError(signOutError instanceof Error ? signOutError.message : t.genericError, "auth");
     }
   }
 
@@ -584,7 +596,7 @@ export default function HomePage() {
     setPrompt(TASK_PLACEHOLDERS[nextType].prompt);
     setEssay(TASK_PLACEHOLDERS[nextType].essay);
     setResult(null);
-    setError(null);
+    clearError();
     setActiveEditIndex(null);
   }
 
@@ -594,7 +606,7 @@ export default function HomePage() {
       return;
     }
     setLoading(true);
-    setError(null);
+    clearError();
 
     try {
       const response = await fetch("/api/check", {
@@ -622,7 +634,7 @@ export default function HomePage() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          setError(t.genericError);
+          showError(t.genericError, "auth");
           return;
         }
 
@@ -630,7 +642,7 @@ export default function HomePage() {
           if ("energy" in data && data.energy) {
             setEnergy(data.energy);
           }
-          setError(t.insufficientEnergy);
+          showError(t.insufficientEnergy);
           return;
         }
 
@@ -647,7 +659,7 @@ export default function HomePage() {
       setActiveEditIndex(null);
     } catch (submissionError) {
       setResult(null);
-      setError(submissionError instanceof Error ? submissionError.message : t.genericError);
+      showError(submissionError instanceof Error ? submissionError.message : t.genericError);
     } finally {
       setLoading(false);
     }
@@ -655,6 +667,15 @@ export default function HomePage() {
 
   return (
     <main className="pageShell">
+      {error && errorSource === "auth" ? (
+        <div className="topErrorBanner" role="alert" aria-live="polite">
+          <span>{error}</span>
+          <button type="button" className="topErrorDismiss" onClick={clearError} aria-label={t.authClose}>
+            {t.authClose}
+          </button>
+        </div>
+      ) : null}
+
       <header className="pageHeader">
         <div className="titleBlock">
           <p className="eyebrow">{t.heroEyebrow}</p>
@@ -777,7 +798,7 @@ export default function HomePage() {
             </button>
           </div>
 
-          {error ? <p className="errorBox">{error}</p> : null}
+          {error && errorSource !== "auth" ? <p className="errorBox">{error}</p> : null}
         </form>
 
         <section className="resultsPanel">

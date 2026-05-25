@@ -115,3 +115,4 @@ Returns the current user session's energy balance and review cost.
 - The heuristic mode is intentionally simple. It keeps the app usable when AI output fails, but it is not a substitute for a real IELTS examiner.
 - Review energy is tied to the Better Auth session user, including anonymous users.
 - PostgreSQL is required for deployment. Local file-based SQLite is no longer used.
+- Neon(DB), Vercel(Deploy) and Spaceship(Domain)
