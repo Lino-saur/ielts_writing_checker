@@ -1,37 +1,17 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { authClient } from "@/lib/auth-client";
-import {
-  AiProvider,
-  CorrectionNote,
-  Locale,
-  TargetBand,
-  TaskType,
-  WritingCheckResult
-} from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
+import { AppNavbar } from "@/components/app-navbar";
+import { ActionLink } from "@/components/ui-kit";
 
-const TASK_PLACEHOLDERS: Record<TaskType, { prompt: string; essay: string }> = {
-  task1: {
-    prompt:
-      "The chart below shows the percentage of households using three different renewable energy sources in a European country from 2000 to 2020. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
-    essay:
-      "The chart compares the proportion of households that used solar, wind and hydro energy in one European country between 2000 and 2020.\n\nOverall, all three sources became more common over the period, although solar power showed the most dramatic growth. By contrast, hydro remained the least widely used source despite a gradual increase.\n\nIn 2000, hydro was used by around 5% of households, while solar and wind accounted for approximately 2% and 3% respectively. Over the next ten years, the figures for solar and wind rose steadily to about 8% and 9%. Hydro also increased, but only to roughly 7%.\n\nAfter 2010, solar use climbed sharply and reached about 18% in 2020, making it the leading source by the end of the period. Wind energy followed a similar but less pronounced pattern, finishing at around 14%. Meanwhile, hydro rose more modestly to approximately 9%."
-  },
-  task2: {
-    prompt:
-      "Some people believe that unpaid community service should be a compulsory part of high school programmes. To what extent do you agree or disagree?",
-    essay:
-      "Some people thinks unpaid community service should be compulsory in high school programmes, I am agree with this opinion because it can helps students become more responsibility and know the society better.\n\nFirstly, students nowadays is always study in classroom and they dont have many chance to touch real life, so community service are a good ways for them to learning how other people live. For example help old peoples in a care home or cleaning the streets can let student understand the value of hard working. This kind of activity also make them more kindness, and they will not only thinking about themself.\n\nSecondly, unpaid work can improving many useful skills, such as communicate with others, teamwork and solve problems. When students join in a charity event, they need talk with different people and maybe organize some small things, these experience is very helpful for their future job. Also, if they only focus on exam, they may becomes selfish and lack of social ability.\n\nHowever some people may said compulsory community service is not good because students already have many homework and exams. This is true in some ways, but I think school can just ask them do few hours every month, it will not be too much pressure. If the activity is designed good, student will feel interesting and meaningful, not just a boring task.\n\nIn conclusion, I strongly agree unpaid community service should be a compulsory part of high school, because it teach students responsibility, kindness and useful skills. But school should not make it too heavy, otherwise students will hate it and the purpose will lost."
-  }
-};
+const LOCALE_STORAGE_KEY = "app-locale";
 
-const UI_COPY = {
+const COPY = {
   en: {
+    brand: "IELTS Writing Checker",
+    task1: "Task 1",
+    task2: "Task 2",
     languageLabel: "Language",
-    heroEyebrow: "AI Writing Review",
-    heroTitle: "IELTS Writing Checker",
-    heroDescription: "Rubric-based feedback with inline revision reasons.",
     userLabel: "User",
     guestUser: "Guest",
     login: "Log In",
@@ -46,53 +26,87 @@ const UI_COPY = {
     authHintSignUp: "Create a formal account for your reviews and energy.",
     authClose: "Close",
     authSignOut: "Sign Out",
-    energy: "Energy",
-    energyCost: "Cost",
-    insufficientEnergy: "Not enough energy for a review.",
-    modesLabel: "Modes",
-    aiReview: "AI Review",
-    heuristicReady: "Fallback Review",
-    coverage: "Task 1 + Task 2",
-    taskSwitcherAria: "Task type",
-    task1: "Task 1",
-    task2: "Task 2",
-    providerDeepSeek: "DeepSeek",
-    targetBand: "Target Band",
-    prompt: "Prompt",
-    essay: "Essay",
-    wordCount: "Word count",
-    checking: "Checking...",
-    checkWriting: "Check Writing",
-    estimatedBand: "Estimated Band",
-    aiMode: "AI mode",
-    heuristicMode: "Heuristic mode",
-    providerUsed: "Provider",
-    taskAchievement: "Task Achievement",
-    coherence: "Coherence & Cohesion",
-    lexical: "Lexical Resource",
-    grammar: "Grammar Range & Accuracy",
-    strengths: "Strengths",
-    highlightedSentences: "Highlighted Sentences",
-    highlightedSentence: "Sentence",
-    highlightedReason: "Why It Works",
-    priorityFixes: "Priority Fixes",
-    annotatedEssay: "Revision",
-    correctionOriginal: "Original",
-    correctionCorrected: "Corrected",
-    correctionReason: "Reason",
-    revisionBundle: "Inline Revision",
-    tapForReason: "Click a revision to see why it was changed.",
-    ready: "Ready",
-    emptyTitle: "Run the first review",
-    emptyDescription:
-      "Choose Task 1 or Task 2, paste the prompt and essay, then run the checker to get rubric-based feedback.",
-    genericError: "Something went wrong."
+    genericError: "Something went wrong.",
+    heroTitleLead: "Review",
+    heroTitleAccent: "IELTS writing",
+    heroBody:
+      "A polished review desk for Task 1 and Task 2 with band scoring, inline revisions and session-aware usage.",
+    heroPrimary: "Open checker",
+    heroStatOneValue: "Task 1 + Task 2",
+    heroStatOneLabel: "coverage",
+    heroStatTwoValue: "Band rubric",
+    heroStatTwoLabel: "feedback",
+    heroStatThreeValue: "Guest + account",
+    heroStatThreeLabel: "access",
+    storyTitle: "A cleaner way to study each draft.",
+    storyBody:
+      "Move from prompt to report with one focused workflow. Read the score, inspect revisions and decide what to fix next.",
+    storyLink: "Read more",
+    featureOneTitle: "Band scoring",
+    featureOneBody: "Rubric-based scoring with a clear breakdown for task achievement, cohesion, vocabulary and grammar.",
+    featureTwoTitle: "Inline notes",
+    featureTwoBody: "Each correction stays attached to the essay so users can inspect what changed and why.",
+    featureThreeTitle: "Study flow",
+    featureThreeBody: "Task switching, target band and usage tracking stay in one place instead of being split across screens.",
+    colorsTitleLead: "Flexible",
+    colorsTitleRest: "review modes for different writing goals",
+    colorsBody:
+      "Use the same checker for task practice, quick scoring, revision study and account-linked sessions.",
+    modeGray: "Quick scan",
+    modeBlue: "Focused review",
+    modeGreen: "Full report",
+    modePink: "Revision study",
+    ctaTitle: "A checker that fits your workflow.",
+    ctaBody:
+      "Open the writing checker, choose Task 1 or Task 2, then run a full review with inline feedback and band scoring.",
+    ctaPrimary: "Go to checker",
+    detailsTitle: "Product details",
+    detailsOther: "Review tools",
+    detailsBattery: "Accounts",
+    detailsConnectivity: "Workflow",
+    detailsGeneral: "Output",
+    detailsHighlights: "Highlights",
+    detailsOtherOne: "Band score breakdown",
+    detailsOtherTwo: "Priority fixes",
+    detailsBatteryOne: "Anonymous session",
+    detailsBatteryTwo: "Account upgrade",
+    detailsBatteryThree: "Energy tracking",
+    detailsConnectivityOne: "Task 1 switch",
+    detailsConnectivityTwo: "Task 2 switch",
+    detailsGeneralOne: "Annotated draft",
+    detailsGeneralTwo: "Strength summary",
+    detailsGeneralThree: "Revision reasons",
+    detailsHighlightBodyOne:
+      "The landing page now follows the Around product layout much more closely: large visual hero, centered media section, split CTA rows, detail columns and a gallery finish.",
+    detailsHighlightBodyTwo:
+      "The copy and images are placeholders for now. The important part is that the page structure, rhythm and component hierarchy match the original template style.",
+    galleryTitle: "Take another look at the checker.",
+    galleryBody:
+      "These gallery blocks mirror the original product landing composition and can be replaced later with real IELTS-specific visuals.",
+    galleryCardOneTitle: "Essay review views",
+    galleryCardOneBody: "Use large visual blocks to present the scoring, revision and study experience.",
+    galleryCardTwoTitle: "Study for scores that matter",
+    galleryCardTwoBody: "Turn the landing page into a product story first, then route users into the working checker.",
+    footerTitleLead: "Open the checker and get",
+    footerTitleAccent: "faster revision cycles",
+    footerStatOne: "Band scoring",
+    footerStatTwo: "Inline feedback",
+    footerStatThree: "Task coverage",
+    footerPrimary: "Start reviewing",
+    footerNavOne: "Features",
+    footerNavTwo: "Modes",
+    footerNavThree: "Details",
+    footerNavFour: "Checker",
+    footerMail: "hello@example.com",
+    footerPhoneOne: "+1 526 220 0459",
+    footerPhoneTwo: "+1 526 220 0444",
+    footerCopyright: "All rights reserved."
   },
   "zh-CN": {
+    brand: "IELTS Writing Checker",
+    task1: "Task 1",
+    task2: "Task 2",
     languageLabel: "语言",
-    heroEyebrow: "AI 写作评估",
-    heroTitle: "IELTS 写作批改器",
-    heroDescription: "按评分标准返回反馈，并在文中直接说明修改原因。",
     userLabel: "用户",
     guestUser: "访客",
     login: "登录",
@@ -107,857 +121,446 @@ const UI_COPY = {
     authHintSignUp: "创建正式账号，用于绑定批改记录和能量。",
     authClose: "关闭",
     authSignOut: "退出登录",
-    energy: "能量",
-    energyCost: "消耗",
-    insufficientEnergy: "当前能量不足，无法继续批阅。",
-    modesLabel: "模式",
-    aiReview: "AI 评分",
-    heuristicReady: "本地评分",
-    coverage: "覆盖 Task 1 + Task 2",
-    taskSwitcherAria: "题型选择",
-    task1: "Task 1",
-    task2: "Task 2",
-    providerDeepSeek: "DeepSeek",
-    targetBand: "目标分数",
-    prompt: "题目",
-    essay: "作文",
-    wordCount: "词数",
-    checking: "评分中...",
-    checkWriting: "开始批改",
-    estimatedBand: "预估分数",
-    aiMode: "AI 模式",
-    heuristicMode: "本地启发式模式",
-    providerUsed: "当前平台",
-    taskAchievement: "任务回应",
-    coherence: "连贯与衔接",
-    lexical: "词汇资源",
-    grammar: "语法范围与准确性",
-    strengths: "优点",
-    highlightedSentences: "精彩句子",
-    highlightedSentence: "原句",
-    highlightedReason: "精彩原因",
-    priorityFixes: "优先修改点",
-    annotatedEssay: "批改痕迹",
-    correctionOriginal: "原句",
-    correctionCorrected: "修改后",
-    correctionReason: "修改原因",
-    revisionBundle: "文中批改",
-    tapForReason: "点击文中的修改处，可查看原因。",
-    ready: "已就绪",
-    emptyTitle: "开始第一次批改",
-    emptyDescription: "选择 Task 1 或 Task 2，粘贴题目和作文，然后运行批改以获取按评分标准生成的反馈。",
-    genericError: "发生了一些问题。"
+    genericError: "发生了一些问题。",
+    heroTitleLead: "批改",
+    heroTitleAccent: "IELTS 写作",
+    heroBody: "一个更完整的 Task 1 / Task 2 批改工作台，包含 band 评分、文中修改和会话能力。",
+    heroPrimary: "进入批改器",
+    heroStatOneValue: "Task 1 + Task 2",
+    heroStatOneLabel: "题型覆盖",
+    heroStatTwoValue: "Band 标准",
+    heroStatTwoLabel: "反馈方式",
+    heroStatThreeValue: "访客 + 账号",
+    heroStatThreeLabel: "使用模式",
+    storyTitle: "用更清楚的路径学习每一篇草稿。",
+    storyBody: "从题目到报告走完一条完整流程。先看分数，再看修改痕迹，最后决定下一步怎么改。",
+    storyLink: "了解更多",
+    featureOneTitle: "Band 评分",
+    featureOneBody: "按任务回应、连贯衔接、词汇和语法四项给出更清楚的评分拆解。",
+    featureTwoTitle: "文中说明",
+    featureTwoBody: "每一处修改都贴在原文里，用户可以直接看到改了什么、为什么改。",
+    featureThreeTitle: "学习流程",
+    featureThreeBody: "题型切换、目标分和使用记录都留在同一条流程里，不再分散在多个页面。",
+    colorsTitleLead: "灵活的",
+    colorsTitleRest: "批改模式适配不同练习目标",
+    colorsBody: "同一套 checker 可以同时支持快速评分、完整报告、修改学习和账号会话。",
+    modeGray: "快速扫描",
+    modeBlue: "重点批改",
+    modeGreen: "完整报告",
+    modePink: "修改学习",
+    ctaTitle: "适配你流程的批改器。",
+    ctaBody: "进入写作批改页，选择 Task 1 或 Task 2，然后运行带文中反馈和 band 评分的完整批改。",
+    ctaPrimary: "打开批改器",
+    detailsTitle: "产品细节",
+    detailsOther: "批改工具",
+    detailsBattery: "账号能力",
+    detailsConnectivity: "使用流程",
+    detailsGeneral: "结果输出",
+    detailsHighlights: "亮点说明",
+    detailsOtherOne: "分项评分",
+    detailsOtherTwo: "重点修改项",
+    detailsBatteryOne: "访客会话",
+    detailsBatteryTwo: "账号升级",
+    detailsBatteryThree: "能量记录",
+    detailsConnectivityOne: "Task 1 切换",
+    detailsConnectivityTwo: "Task 2 切换",
+    detailsGeneralOne: "批改痕迹",
+    detailsGeneralTwo: "优点总结",
+    detailsGeneralThree: "修改原因",
+    detailsHighlightBodyOne:
+      "现在这个首页在结构上已经明显更接近 Around 的 landing-product：大首屏、居中媒体区、分栏 CTA、细节列和结尾 gallery。",
+    detailsHighlightBodyTwo:
+      "目前文案和资源仍然是占位内容，后面可以再替换成真正表达 IELTS 批改产品的素材。",
+    galleryTitle: "再看一遍这个批改器。",
+    galleryBody: "这组 gallery 区块直接借用了原版产品落地页的展示节奏，后续可以替换成真实的 IELTS 视觉素材。",
+    galleryCardOneTitle: "批改界面展示",
+    galleryCardOneBody: "用大图块来呈现评分、修改和学习体验，而不是只靠文字描述。",
+    galleryCardTwoTitle: "先讲产品，再引导使用",
+    galleryCardTwoBody: "先把首页做成产品故事，再把用户带进真正可用的批改器。",
+    footerTitleLead: "打开批改器，获得",
+    footerTitleAccent: "更快的修改循环",
+    footerStatOne: "Band 评分",
+    footerStatTwo: "文中反馈",
+    footerStatThree: "题型覆盖",
+    footerPrimary: "开始批改",
+    footerNavOne: "能力",
+    footerNavTwo: "模式",
+    footerNavThree: "细节",
+    footerNavFour: "批改器",
+    footerMail: "hello@example.com",
+    footerPhoneOne: "+1 526 220 0459",
+    footerPhoneTwo: "+1 526 220 0444",
+    footerCopyright: "保留所有权利。"
   }
 } as const;
 
-function isErrorPayload(value: unknown): value is { error?: string } {
-  return typeof value === "object" && value !== null && "error" in value;
-}
+const COLOR_IMAGES = {
+  gray: "/around-product/study-overhead.jpg",
+  blue: "/around-product/proofreading-closeup.jpg",
+  green: "/around-product/hero-study.jpg",
+  pink: "/around-product/review-paper.jpg"
+} as const;
 
-type EnergyState = {
-  balance: number;
-  totalConsumed: number;
-  totalRecharged: number;
-  updatedAt: string;
-};
+type Locale = "en" | "zh-CN";
+type ColorMode = keyof typeof COLOR_IMAGES;
 
-type EnergyPayload = {
-  energy: EnergyState;
-  cost: number;
-};
-
-type SessionPayload = {
-  user: {
-    id: string;
-    name?: string | null;
-    email?: string | null;
-    isAnonymous: boolean;
-  };
-};
-
-function formatUserPill(
-  user: SessionPayload["user"] | null,
-  t: (typeof UI_COPY)["en"] | (typeof UI_COPY)["zh-CN"]
-) {
-  if (!user) {
-    return `${t.userLabel}: --`;
-  }
-
-  const identity = user.isAnonymous
-    ? t.guestUser
-    : user.name?.trim() || user.email?.trim() || t.userLabel;
-
-  return `${t.userLabel}: ${identity} · ${user.id.slice(0, 8)}`;
-}
-
-type AuthMode = "signIn" | "signUp";
-type ErrorSource = "auth" | "general";
-
-function ScoreCard({
-  label,
-  score,
-  rationale
-}: {
-  label: string;
-  score: number;
-  rationale: string;
-}) {
-  return (
-    <article className="scoreCard">
-      <div className="scoreHeader">
-        <div>
-          <p className="sectionLabel">{label}</p>
-          <h3>{score.toFixed(1)}</h3>
-        </div>
-      </div>
-      <p>{rationale}</p>
-    </article>
-  );
-}
-
-function renderAnnotatedEssay(
-  text: string,
-  highlightedSentences: string[],
-  correctionNotes: CorrectionNote[],
-  activeEditIndex: number | null,
-  onToggleEdit: (index: number) => void,
-  t: (typeof UI_COPY)["en"] | (typeof UI_COPY)["zh-CN"]
-) {
-  const notesById = new Map(correctionNotes.map((note) => [note.id, note]));
-  const parts: Array<
-    | { type: "plain"; text: string }
-    | { type: "edit"; id: string; original: string; corrected: string; note?: CorrectionNote; index: number }
-    | { type: "del" | "add"; text: string }
-  > = [];
-  const pairPattern = /\[del#([A-Za-z0-9_-]+)\]([\s\S]*?)\[\/del#\1\]\[add#\1\]([\s\S]*?)\[\/add#\1\]/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let editIndex = 0;
-
-  while ((match = pairPattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: "plain", text: text.slice(lastIndex, match.index) });
-    }
-
-    parts.push({
-      type: "edit",
-      id: match[1],
-      original: match[2],
-      corrected: match[3],
-      note: notesById.get(match[1]),
-      index: editIndex
-    });
-    editIndex += 1;
-
-    lastIndex = pairPattern.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push({ type: "plain", text: text.slice(lastIndex) });
-  }
-
-  function renderPlainTextSegment(segment: string, keyPrefix: string) {
-    if (!highlightedSentences.length) {
-      return <span key={keyPrefix}>{segment}</span>;
-    }
-
-    const normalizedCandidates = highlightedSentences.filter(Boolean);
-    if (!normalizedCandidates.length) {
-      return <span key={keyPrefix}>{segment}</span>;
-    }
-
-    const subparts: React.ReactNode[] = [];
-    let remaining = segment;
-    let cursor = 0;
-
-    while (remaining.length > 0) {
-      let matchedSentence = "";
-      let matchedIndex = -1;
-
-      for (const candidate of normalizedCandidates) {
-        const index = remaining.indexOf(candidate);
-        if (index !== -1 && (matchedIndex === -1 || index < matchedIndex)) {
-          matchedSentence = candidate;
-          matchedIndex = index;
-        }
-      }
-
-      if (matchedIndex === -1) {
-        subparts.push(<span key={`${keyPrefix}-tail-${cursor}`}>{remaining}</span>);
-        break;
-      }
-
-      if (matchedIndex > 0) {
-        subparts.push(
-          <span key={`${keyPrefix}-plain-${cursor}`}>{remaining.slice(0, matchedIndex)}</span>
-        );
-      }
-
-      subparts.push(
-        <mark key={`${keyPrefix}-highlight-${cursor}`} className="essayHighlight">
-          {matchedSentence}
-        </mark>
-      );
-
-      remaining = remaining.slice(matchedIndex + matchedSentence.length);
-      cursor += 1;
-    }
-
-    return <span key={keyPrefix}>{subparts}</span>;
-  }
-
-  return parts.map((part, index) => {
-    if (part.type === "edit") {
-      const isActive = activeEditIndex === part.index;
-
-      return (
-        <span
-          key={`edit-${part.index}-${index}`}
-          className={`editChip${isActive ? " active" : ""}`}
-          role="button"
-          tabIndex={0}
-          onClick={() => onToggleEdit(part.index)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onToggleEdit(part.index);
-            }
-          }}
-        >
-          <del className="essayDel">{part.original}</del>
-          <ins className="essayAdd">{part.corrected}</ins>
-          {part.note ? (
-            <span className={`editTooltip${isActive ? " visible" : ""}`}>
-              <strong>{t.correctionReason}:</strong> {part.note.reason}
-            </span>
-          ) : null}
-        </span>
-      );
-    }
-
-    if (part.type === "del") {
-      return (
-        <del key={index} className="essayDel">
-          {part.text}
-        </del>
-      );
-    }
-
-    if (part.type === "add") {
-      return (
-        <ins key={index} className="essayAdd">
-          {part.text}
-        </ins>
-      );
-    }
-
-    return renderPlainTextSegment(part.text, `plain-${index}`);
-  });
-}
-
-export default function HomePage() {
-  const activeEditRef = useRef<HTMLDivElement | null>(null);
+export default function LandingPage() {
   const [locale, setLocale] = useState<Locale>("zh-CN");
-  const [taskType, setTaskType] = useState<TaskType>("task2");
-  const provider: AiProvider = "deepseek";
-  const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
-  const [prompt, setPrompt] = useState(TASK_PLACEHOLDERS.task2.prompt);
-  const [essay, setEssay] = useState(TASK_PLACEHOLDERS.task2.essay);
-  const [result, setResult] = useState<WritingCheckResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [errorSource, setErrorSource] = useState<ErrorSource>("general");
-  const [loading, setLoading] = useState(false);
-  const [activeEditIndex, setActiveEditIndex] = useState<number | null>(null);
-  const [energy, setEnergy] = useState<EnergyState | null>(null);
-  const [reviewCost, setReviewCost] = useState(1);
-  const [sessionReady, setSessionReady] = useState(false);
-  const [currentUser, setCurrentUser] = useState<SessionPayload["user"] | null>(null);
-  const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<AuthMode>("signIn");
-  const [authName, setAuthName] = useState("");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authSubmitting, setAuthSubmitting] = useState(false);
-
-  const t = UI_COPY[locale];
-  const isAnonymousUser = currentUser?.isAnonymous ?? false;
-  const isRegisteredUser = Boolean(currentUser && !currentUser.isAnonymous);
-  const showLoginAction = sessionReady && !isRegisteredUser;
-  const showSignOutAction = sessionReady && isRegisteredUser;
-  const authActionDisabled = loading || authSubmitting;
-
-  function clearError() {
-    setError(null);
-    setErrorSource("general");
-  }
-
-  function showError(message: string, source: ErrorSource = "general") {
-    setError(message);
-    setErrorSource(source);
-  }
+  const [colorMode, setColorMode] = useState<ColorMode>("green");
+  const localeHydratedRef = useRef(false);
+  const t = COPY[locale];
+  const showExtendedSections = false;
+  const showFooterContactMeta = false;
 
   useEffect(() => {
-    if (activeEditIndex === null) {
-      return;
+    const params = new URLSearchParams(window.location.search);
+    const urlLocale = params.get("lang");
+    const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    const nextLocale =
+      urlLocale === "en" || urlLocale === "zh-CN"
+        ? urlLocale
+        : storedLocale === "en" || storedLocale === "zh-CN"
+          ? storedLocale
+          : "zh-CN";
+
+    setLocale(nextLocale);
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
+    localeHydratedRef.current = true;
+
+    if (params.get("lang") !== nextLocale) {
+      params.set("lang", nextLocale);
+      const nextQuery = params.toString();
+      window.history.replaceState({}, "", nextQuery ? `/?${nextQuery}` : "/");
     }
-
-    function handlePointerDown(event: MouseEvent | TouchEvent) {
-      if (!activeEditRef.current) {
-        return;
-      }
-
-      const target = event.target;
-      if (target instanceof Node && !activeEditRef.current.contains(target)) {
-        setActiveEditIndex(null);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("touchstart", handlePointerDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("touchstart", handlePointerDown);
-    };
-  }, [activeEditIndex]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function ensureAnonymousSession() {
-      const sessionResult = await authClient.getSession();
-
-      if (sessionResult.data) {
-        return;
-      }
-
-      const anonymousResult = await authClient.signIn.anonymous();
-      if (anonymousResult.error) {
-        throw new Error(anonymousResult.error.message || "AUTH_INIT_FAILED");
-      }
-    }
-
-    async function loadSessionContext() {
-      try {
-        await ensureAnonymousSession();
-        const [sessionResponse, energyResponse] = await Promise.all([
-          fetch("/api/session"),
-          fetch("/api/energy")
-        ]);
-
-        const sessionData = (await sessionResponse.json()) as SessionPayload | { error?: string };
-        const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
-
-        if (!sessionResponse.ok || isErrorPayload(sessionData)) {
-          return;
-        }
-
-        if (!energyResponse.ok || isErrorPayload(energyData)) {
-          return;
-        }
-
-        if (mounted) {
-          setCurrentUser(sessionData.user);
-          setEnergy(energyData.energy);
-          setReviewCost(energyData.cost);
-        }
-      } catch {
-        // Ignore preload failures.
-      } finally {
-        if (mounted) {
-          setSessionReady(true);
-        }
-      }
-    }
-
-    loadSessionContext();
-
-    return () => {
-      mounted = false;
-    };
   }, []);
 
-  async function refreshSessionContext() {
-    const [sessionResponse, energyResponse] = await Promise.all([fetch("/api/session"), fetch("/api/energy")]);
-    const sessionData = (await sessionResponse.json()) as SessionPayload | { error?: string };
-    const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
-
-    if (!sessionResponse.ok || isErrorPayload(sessionData)) {
-      throw new Error(t.genericError);
-    }
-
-    if (!energyResponse.ok || isErrorPayload(energyData)) {
-      throw new Error(t.genericError);
-    }
-
-    setCurrentUser(sessionData.user);
-    setEnergy(energyData.energy);
-    setReviewCost(energyData.cost);
-  }
-
-  function handleLoginPlaceholder() {
-    clearError();
-    setAuthDialogOpen(true);
-    setAuthMode("signIn");
-  }
-
-  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAuthSubmitting(true);
-    clearError();
-
-    try {
-      if (authMode === "signIn") {
-        const result = await authClient.signIn.email({
-          email: authEmail.trim(),
-          password: authPassword
-        });
-
-        if (result.error) {
-          throw new Error(result.error.message || t.genericError);
-        }
-      } else {
-        const result = await authClient.signUp.email({
-          name: authName.trim(),
-          email: authEmail.trim(),
-          password: authPassword
-        });
-
-        if (result.error) {
-          throw new Error(result.error.message || t.genericError);
-        }
-      }
-
-      await refreshSessionContext();
-      setAuthDialogOpen(false);
-      setAuthPassword("");
-      setResult(null);
-      setActiveEditIndex(null);
-    } catch (authError) {
-      showError(authError instanceof Error ? authError.message : t.genericError, "auth");
-    } finally {
-      setAuthSubmitting(false);
-    }
-  }
-
-  async function handleSignOut() {
-    clearError();
-
-    try {
-      const signOutResult = await authClient.signOut();
-      if (signOutResult.error) {
-        throw new Error(signOutResult.error.message || t.genericError);
-      }
-
-      const anonymousResult = await authClient.signIn.anonymous();
-      if (anonymousResult.error) {
-        throw new Error(anonymousResult.error.message || t.genericError);
-      }
-
-      await refreshSessionContext();
-      setResult(null);
-      setActiveEditIndex(null);
-    } catch (signOutError) {
-      showError(signOutError instanceof Error ? signOutError.message : t.genericError, "auth");
-    }
-  }
-
-  function onTaskTypeChange(nextType: TaskType) {
-    setTaskType(nextType);
-    setPrompt(TASK_PLACEHOLDERS[nextType].prompt);
-    setEssay(TASK_PLACEHOLDERS[nextType].essay);
-    setResult(null);
-    clearError();
-    setActiveEditIndex(null);
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!sessionReady) {
+  useEffect(() => {
+    if (!localeHydratedRef.current) {
       return;
     }
-    setLoading(true);
-    clearError();
 
-    try {
-      const response = await fetch("/api/check", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          taskType,
-          provider,
-          locale,
-          targetBand,
-          prompt,
-          essay
-        })
-      });
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    const params = new URLSearchParams(window.location.search);
 
-      const data = (await response.json()) as
-        | {
-            result: WritingCheckResult;
-            energy: EnergyState;
-            cost: number;
-          }
-        | { error?: string; energy?: EnergyState; cost?: number };
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          showError(t.genericError, "auth");
-          return;
-        }
-
-        if (isErrorPayload(data) && data.error === "INSUFFICIENT_ENERGY") {
-          if ("energy" in data && data.energy) {
-            setEnergy(data.energy);
-          }
-          showError(t.insufficientEnergy);
-          return;
-        }
-
-        throw new Error(isErrorPayload(data) ? data.error || "Request failed." : "Request failed.");
-      }
-
-      if (!("result" in data)) {
-        throw new Error(t.genericError);
-      }
-
-      setResult(data.result);
-      setEnergy(data.energy);
-      setReviewCost(data.cost);
-      setActiveEditIndex(null);
-    } catch (submissionError) {
-      setResult(null);
-      showError(submissionError instanceof Error ? submissionError.message : t.genericError);
-    } finally {
-      setLoading(false);
+    if (params.get("lang") !== locale) {
+      params.set("lang", locale);
+      const nextQuery = params.toString();
+      window.history.replaceState({}, "", nextQuery ? `/?${nextQuery}` : "/");
     }
-  }
+  }, [locale]);
+
+  const colorLabels = {
+    gray: t.modeGray,
+    blue: t.modeBlue,
+    green: t.modeGreen,
+    pink: t.modePink
+  } as const;
 
   return (
-    <main className="pageShell">
-      {error && errorSource === "auth" ? (
-        <div className="topErrorBanner" role="alert" aria-live="polite">
-          <span>{error}</span>
-          <button type="button" className="topErrorDismiss" onClick={clearError} aria-label={t.authClose}>
-            {t.authClose}
-          </button>
-        </div>
-      ) : null}
+    <main className="aroundProductPage">
+      <div className="aroundProductHeaderShell">
+        <AppNavbar locale={locale} onLocaleChange={setLocale} copy={t} />
+      </div>
 
-      <header className="pageHeader">
-        <div className="titleBlock">
-          <p className="eyebrow">{t.heroEyebrow}</p>
-          <h1>{t.heroTitle}</h1>
-          <p className="lede">{t.heroDescription}</p>
-        </div>
-        <div className="headerControls">
-          <div className="metaPills">
-            <span>{formatUserPill(currentUser, t)}</span>
-            <span>
-              {t.energy}: {energy?.balance ?? "--"}
-            </span>
-            <span>
-              {t.energyCost}: {reviewCost}
-            </span>
-            {showLoginAction ? (
-              <button
-                type="button"
-                className="ghostAction primary metaAction"
-                onClick={handleLoginPlaceholder}
-                disabled={authActionDisabled}
-              >
-                {t.login}
-              </button>
-            ) : null}
-            {showSignOutAction ? (
-              <button
-                type="button"
-                className="ghostAction metaAction"
-                onClick={handleSignOut}
-                disabled={authActionDisabled}
-              >
-                {t.authSignOut}
-              </button>
-            ) : null}
-            <label className="localePill" aria-label={t.languageLabel}>
-              <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
-                <option value="zh-CN">简体中文</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-          </div>
-        </div>
-      </header>
+      <section className="aroundProductHero">
+        <div className="aroundProductContainer aroundProductHeroGrid">
+          <div className="aroundProductHeroCopy">
+            <h1>
+              <span>{t.heroTitleLead} </span>
+              <span className="accent">{t.heroTitleAccent}</span>
+              <img src="/around-product/soundwave.svg" alt="" aria-hidden="true" />
+            </h1>
 
-      <section className="workspace">
-        <form className="editorPanel" onSubmit={handleSubmit}>
-          <div className="panelHeading">
-            <div>
-              <p className="sectionLabel">{t.modesLabel}</p>
-              <h2>{taskType === "task1" ? t.task1 : t.task2}</h2>
-            </div>
-            <div className="inlineMeta">
-              <span>{t.providerDeepSeek}</span>
-              <span>
-                {t.wordCount}: {essay.trim() ? essay.trim().split(/\s+/).length : 0}
-              </span>
-            </div>
-          </div>
-
-          <div className="segmentedControl" role="tablist" aria-label={t.taskSwitcherAria}>
-            <button
-              type="button"
-              className={taskType === "task1" ? "active" : ""}
-              onClick={() => onTaskTypeChange("task1")}
-            >
-              {t.task1}
-            </button>
-            <button
-              type="button"
-              className={taskType === "task2" ? "active" : ""}
-              onClick={() => onTaskTypeChange("task2")}
-            >
-              {t.task2}
-            </button>
-          </div>
-
-          <label>
-            <span>{t.targetBand}</span>
-            <select value={targetBand} onChange={(event) => setTargetBand(Number(event.target.value) as TargetBand)}>
-              <option value={5}>5.0</option>
-              <option value={5.5}>5.5</option>
-              <option value={6}>6.0</option>
-              <option value={6.5}>6.5</option>
-              <option value={7}>7.0</option>
-              <option value={7.5}>7.5</option>
-              <option value={8}>8.0</option>
-            </select>
-          </label>
-
-          <label>
-            <span>{t.prompt}</span>
-            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} />
-          </label>
-
-          <label>
-            <span>{t.essay}</span>
-            <textarea value={essay} onChange={(event) => setEssay(event.target.value)} rows={16} />
-          </label>
-
-          <div className="editorFooter">
-            <p>
-              {t.wordCount}: <strong>{essay.trim() ? essay.trim().split(/\s+/).length : 0}</strong>
-            </p>
-            <button type="submit" disabled={loading || !sessionReady}>
-              {loading ? t.checking : t.checkWriting}
-            </button>
-          </div>
-
-          {error && errorSource !== "auth" ? <p className="errorBox">{error}</p> : null}
-        </form>
-
-        <section className="resultsPanel">
-          {result ? (
-            <div className="reportPaper">
-              <div className="resultHero">
-                <div className="resultScore">
-                  <p className="sectionLabel">{t.estimatedBand}</p>
-                  <h2>{result.estimatedBand.toFixed(1)}</h2>
-                </div>
-                <div className="resultMeta">
-                  <span>{result.taskType === "task1" ? t.task1 : t.task2}</span>
-                  <span>
-                    {locale === "zh-CN" ? "目标" : "Target"} {result.targetBand.toFixed(1)}
-                  </span>
-                  <span>
-                    {result.wordCount} {locale === "zh-CN" ? "词" : "words"}
-                  </span>
-                  <span>{result.feedbackMode === "ai" ? t.aiMode : t.heuristicMode}</span>
-                  <span>
-                    {t.providerUsed}: {result.providerUsed}
-                  </span>
-                </div>
+            <div className="aroundProductHeroTextBlock">
+              <div className="aroundProductHeroLead">
+                <p>{t.heroBody}</p>
+                <ActionLink href={`/checker?lang=${locale}`} className="aroundOutlineButton">
+                  {t.heroPrimary}
+                </ActionLink>
               </div>
 
-              <div className="scoreGrid">
-                <ScoreCard
-                  label={t.taskAchievement}
-                  score={result.bandBreakdown.taskAchievement.score}
-                  rationale={result.bandBreakdown.taskAchievement.rationale}
-                />
-                <ScoreCard
-                  label={t.coherence}
-                  score={result.bandBreakdown.coherenceAndCohesion.score}
-                  rationale={result.bandBreakdown.coherenceAndCohesion.rationale}
-                />
-                <ScoreCard
-                  label={t.lexical}
-                  score={result.bandBreakdown.lexicalResource.score}
-                  rationale={result.bandBreakdown.lexicalResource.rationale}
-                />
-                <ScoreCard
-                  label={t.grammar}
-                  score={result.bandBreakdown.grammaticalRangeAndAccuracy.score}
-                  rationale={result.bandBreakdown.grammaticalRangeAndAccuracy.rationale}
-                />
-              </div>
-
-              <article className="feedbackSection">
-                <p className="sectionLabel">{t.strengths}</p>
-                <ul>
-                  {result.strengths.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-
-              <article className="feedbackSection">
-                <p className="sectionLabel">{t.highlightedSentences}</p>
-                <div className="correctionList">
-                  {result.highlightedSentences.map((item, index) => (
-                    <article key={`${item.sentence}-${index}`} className="correctionCard">
-                      <p>
-                        <strong>{t.highlightedSentence}:</strong> {item.sentence}
-                      </p>
-                      <p>
-                        <strong>{t.highlightedReason}:</strong> {item.reason}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-              </article>
-
-              <article className="feedbackSection">
-                <p className="sectionLabel">{t.priorityFixes}</p>
-                <ul>
-                  {result.priorityFixes.map((item) => (
-                    <li key={item.title}>
-                      <strong>{item.title}:</strong> {item.detail}
-                    </li>
-                  ))}
-                </ul>
-              </article>
-
-              <article className="feedbackSection revisionSection">
-                <p className="sectionLabel">{t.revisionBundle}</p>
-                <p className="revisionHint">{t.tapForReason}</p>
-
-                <div className="revisionBlock">
-                  <p className="subsectionTitle">{t.annotatedEssay}</p>
-                  <div className="annotatedEssay" ref={activeEditRef}>
-                    {renderAnnotatedEssay(
-                      result.annotatedEssay,
-                      result.highlightedSentences.map((item) => item.sentence),
-                      result.correctionNotes,
-                      activeEditIndex,
-                      (index) => setActiveEditIndex((current) => (current === index ? null : index)),
-                      t
-                    )}
+              <div className="aroundProductHeroMeta">
+                <div className="aroundProductStatRow">
+                  <div>
+                    <div className="value">{t.heroStatOneValue}</div>
+                    <div className="label">{t.heroStatOneLabel}</div>
+                  </div>
+                  <div>
+                    <div className="value">{t.heroStatTwoValue}</div>
+                    <div className="label">{t.heroStatTwoLabel}</div>
+                  </div>
+                  <div>
+                    <div className="value">{t.heroStatThreeValue}</div>
+                    <div className="label">{t.heroStatThreeLabel}</div>
                   </div>
                 </div>
-              </article>
+
+                <div className="aroundProductStoryBlock">
+                  <h2>{t.storyTitle}</h2>
+                  <p>{t.storyBody}</p>
+                  <a href={`/checker?lang=${locale}`} className="aroundTextLink">
+                    {t.storyLink}
+                    <i className="ai-arrow-right" />
+                  </a>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="emptyState">
-              <p className="eyebrow">{t.ready}</p>
-              <h2>{t.emptyTitle}</h2>
-              <p>{t.emptyDescription}</p>
-            </div>
-          )}
-        </section>
+          </div>
+        </div>
       </section>
 
-      {authDialogOpen ? (
-        <div className="authDialogBackdrop" onClick={() => !authSubmitting && setAuthDialogOpen(false)}>
-          <div
-            className="authDialog"
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-          >
-            <div className="authDialogHeader">
-              <div className="authTabs" role="tablist" aria-label="Authentication mode">
-                <button
-                  type="button"
-                  className={authMode === "signIn" ? "active" : ""}
-                  onClick={() => setAuthMode("signIn")}
-                  disabled={authSubmitting}
-                >
-                  {t.signInTab}
-                </button>
-                <button
-                  type="button"
-                  className={authMode === "signUp" ? "active" : ""}
-                  onClick={() => setAuthMode("signUp")}
-                  disabled={authSubmitting}
-                >
-                  {t.signUpTab}
-                </button>
-              </div>
-              <button
-                type="button"
-                className="ghostAction"
-                onClick={() => setAuthDialogOpen(false)}
-                disabled={authSubmitting}
-              >
-                {t.authClose}
+      {showExtendedSections ? (
+        <>
+          <section className="aroundProductContainer aroundProductVideoSection" id="features">
+            <div className="aroundProductVideoCover">
+              <img src="/around-product/review-paper.jpg" alt="" />
+              <button type="button" className="aroundPlayButton" aria-label="Play">
+                <i className="ai-play-filled" />
               </button>
             </div>
 
-            <p className="authHint">{authMode === "signIn" ? t.authHintSignIn : t.authHintSignUp}</p>
+            <div className="aroundProductFeatureRow">
+              {[
+                { title: t.featureOneTitle, body: t.featureOneBody, icon: "ai-chart" },
+                { title: t.featureTwoTitle, body: t.featureTwoBody, icon: "ai-edit-alt" },
+                { title: t.featureThreeTitle, body: t.featureThreeBody, icon: "ai-target" }
+              ].map((feature) => (
+                <article key={feature.title} className="aroundProductFeature">
+                  <i className={`featureIcon ${feature.icon}`} aria-hidden="true" />
+                  <h3>{feature.title}</h3>
+                  <p>{feature.body}</p>
+                </article>
+              ))}
+            </div>
+          </section>
 
-            <form className="authForm" onSubmit={handleAuthSubmit}>
-              {authMode === "signUp" ? (
-                <label>
-                  <span>{t.authName}</span>
-                  <input
-                    type="text"
-                    value={authName}
-                    onChange={(event) => setAuthName(event.target.value)}
-                    required
-                    minLength={2}
-                  />
-                </label>
-              ) : null}
+          <section className="aroundProductContainer aroundProductColorsSection" id="modes">
+            <div className="aroundProductColorsGrid">
+              <div className="aroundProductColorVisual">
+                <div className="backplate" />
+                <div className="imageWrap">
+                  <img src={COLOR_IMAGES[colorMode]} alt="" />
+                </div>
+                <div className="colorLabel">{colorLabels[colorMode]}</div>
+                <div className="colorSwitches">
+                  {(["gray", "blue", "green", "pink"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={colorMode === option ? "active" : undefined}
+                      onClick={() => setColorMode(option)}
+                      aria-label={colorLabels[option]}
+                    >
+                      <span className={`swatch ${option}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <label>
-                <span>{t.authEmail}</span>
-                <input
-                  type="email"
-                  value={authEmail}
-                  onChange={(event) => setAuthEmail(event.target.value)}
-                  required
-                  autoComplete="email"
-                />
-              </label>
+              <div className="aroundProductSectionCopy">
+                <h2>
+                  <span className="gradient">{t.colorsTitleLead}</span> {t.colorsTitleRest}
+                </h2>
+                <p>{t.colorsBody}</p>
+              </div>
+            </div>
+          </section>
 
-              <label>
-                <span>{t.authPassword}</span>
-                <input
-                  type="password"
-                  value={authPassword}
-                  onChange={(event) => setAuthPassword(event.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete={authMode === "signIn" ? "current-password" : "new-password"}
-                />
-              </label>
-              <div className="editorFooter">
-                <button type="submit" disabled={authSubmitting}>
-                  {authSubmitting
-                    ? "Submitting..."
-                    : authMode === "signIn"
-                      ? t.authSubmitSignIn
-                      : t.authSubmitSignUp}
+          <section className="aroundProductContainer aroundProductCtaSection">
+            <div className="aroundProductCtaGrid">
+              <div className="aroundProductCtaVisual">
+                <div className="ctaVisualFrame">
+                  <img src="/around-product/study-overhead.jpg" alt="" />
+                  <img src="/around-product/proofreading-closeup.jpg" alt="" className="ctaOverlay" />
+                </div>
+              </div>
+
+              <div className="aroundProductSectionCopy">
+                <h2>{t.ctaTitle}</h2>
+                <p>{t.ctaBody}</p>
+                <div className="aroundProductMiniStats">
+                  <div>
+                    <h3>60-200 Hz</h3>
+                    <p>{locale === "zh-CN" ? "反馈范围" : "feedback range"}</p>
+                  </div>
+                  <div>
+                    <h3>0.75 kg</h3>
+                    <p>{locale === "zh-CN" ? "工作台重量" : "workspace weight"}</p>
+                  </div>
+                </div>
+                <ActionLink href={`/checker?lang=${locale}`} className="aroundDarkButton">
+                  {t.ctaPrimary}
+                </ActionLink>
+              </div>
+            </div>
+          </section>
+
+          <section className="aroundProductDetailsSection" id="details">
+            <div className="aroundProductContainer aroundProductDetailsInner">
+              <h2>{t.detailsTitle}</h2>
+              <div className="aroundProductHotspotStage">
+                <img src="/around-product/study-overhead.jpg" alt="" />
+                <button type="button" className="hotspot one" aria-label={t.featureTwoTitle}>
+                  <span>+</span>
+                </button>
+                <button type="button" className="hotspot two" aria-label={t.featureOneTitle}>
+                  <span>+</span>
+                </button>
+                <button type="button" className="hotspot three" aria-label={t.featureThreeTitle}>
+                  <span>+</span>
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
+
+              <div className="aroundProductDetailsGrid">
+                <div>
+                  <h3>{t.detailsOther}</h3>
+                  <ul>
+                    <li>{t.detailsOtherOne}</li>
+                    <li>{t.detailsOtherTwo}</li>
+                  </ul>
+                  <h3>{t.detailsBattery}</h3>
+                  <ul>
+                    <li>{t.detailsBatteryOne}</li>
+                    <li>{t.detailsBatteryTwo}</li>
+                    <li>{t.detailsBatteryThree}</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3>{t.detailsConnectivity}</h3>
+                  <ul>
+                    <li>{t.detailsConnectivityOne}</li>
+                    <li>{t.detailsConnectivityTwo}</li>
+                  </ul>
+                  <h3>{t.detailsGeneral}</h3>
+                  <ul>
+                    <li>{t.detailsGeneralOne}</li>
+                    <li>{t.detailsGeneralTwo}</li>
+                    <li>{t.detailsGeneralThree}</li>
+                  </ul>
+                </div>
+
+                <div className="highlights">
+                  <h3>{t.detailsHighlights}</h3>
+                  <p>{t.detailsHighlightBodyOne}</p>
+                  <p>{t.detailsHighlightBodyTwo}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="aroundProductContainer aroundProductGallerySection">
+            <div className="aroundProductGalleryIntro">
+              <h2>{t.galleryTitle}</h2>
+              <p>{t.galleryBody}</p>
+            </div>
+
+            <div className="aroundProductGalleryGrid">
+              <div className="mediaCard" style={{ backgroundImage: "url(/around-product/hero-study.jpg)" }} />
+              <article className="textCard wide">
+                <img src="/around-product/proofreading-closeup.jpg" alt="" />
+                <div className="body">
+                  <h3>{t.galleryCardOneTitle}</h3>
+                  <p>{t.galleryCardOneBody}</p>
+                </div>
+              </article>
+              <div className="mediaCard" style={{ backgroundImage: "url(/around-product/review-paper.jpg)" }} />
+              <article className="textCard wide split">
+                <div className="imagePane">
+                  <img src="/around-product/study-overhead.jpg" alt="" />
+                </div>
+                <div className="body">
+                  <h3>{t.galleryCardTwoTitle}</h3>
+                  <p>{t.galleryCardTwoBody}</p>
+                </div>
+              </article>
+            </div>
+          </section>
+        </>
       ) : null}
+
+      <footer className="aroundProductFooter">
+        <div className="overlay" />
+        <div className="aroundProductContainer aroundProductFooterInner">
+          <div className="footerMain">
+            <div className="footerLead">
+              <h2>
+                {t.footerTitleLead} <span className="gradient">{t.footerTitleAccent}</span>
+              </h2>
+              <div className="footerStats">
+                <div>
+                  <i className="ai-check-alt" />
+                  <span>{t.footerStatOne}</span>
+                </div>
+                <div>
+                  <i className="ai-check-alt" />
+                  <span>{t.footerStatTwo}</span>
+                </div>
+                <div>
+                  <i className="ai-check-alt" />
+                  <span>{t.footerStatThree}</span>
+                </div>
+              </div>
+              <ActionLink href={`/checker?lang=${locale}`} className="aroundOutlineLightButton">
+                {t.footerPrimary}
+              </ActionLink>
+            </div>
+
+            <div className="footerLinks">
+              <div>
+                <ul>
+                  <li>
+                    <a href={`/checker?lang=${locale}&task=task1`}>{t.footerNavOne}</a>
+                  </li>
+                  <li>
+                    <a href={`/checker?lang=${locale}&task=task2`}>{t.footerNavTwo}</a>
+                  </li>
+                  <li>
+                    <a href={`/checker?lang=${locale}`}>{t.footerNavThree}</a>
+                  </li>
+                  <li>
+                    <a href={`/checker?lang=${locale}`}>{t.footerNavFour}</a>
+                  </li>
+                </ul>
+              </div>
+
+              {showFooterContactMeta ? (
+                <>
+                  <div className="socials">
+                    <a href="#" aria-label="Instagram">
+                      <i className="ai-instagram" />
+                    </a>
+                    <a href="#" aria-label="Facebook">
+                      <i className="ai-facebook" />
+                    </a>
+                    <a href="#" aria-label="YouTube">
+                      <i className="ai-youtube" />
+                    </a>
+                  </div>
+
+                  <div>
+                    <ul>
+                      <li>
+                        <a href={`mailto:${t.footerMail}`}>{t.footerMail}</a>
+                      </li>
+                      <li>
+                        <a href={`tel:${t.footerPhoneOne.replace(/\s+/g, "")}`}>{t.footerPhoneOne}</a>
+                      </li>
+                      <li>
+                        <a href={`tel:${t.footerPhoneTwo.replace(/\s+/g, "")}`}>{t.footerPhoneTwo}</a>
+                      </li>
+                    </ul>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <p className="copyright">
+            <span>{t.footerCopyright}</span>
+          </p>
+        </div>
+      </footer>
     </main>
   );
 }
