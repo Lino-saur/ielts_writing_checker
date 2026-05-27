@@ -64,13 +64,17 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
   const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signIn");
-  const [authName, setAuthName] = useState("");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
+  const [signInEmail, setSignInEmail] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
+  const [signUpName, setSignUpName] = useState("");
+  const [signUpEmail, setSignUpEmail] = useState("");
+  const [signUpPassword, setSignUpPassword] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [activeTask, setActiveTask] = useState<string | null>(null);
+  const [signInPasswordVisible, setSignInPasswordVisible] = useState(false);
+  const [signUpPasswordVisible, setSignUpPasswordVisible] = useState(false);
 
   const homeHref = useMemo(() => `/?lang=${locale}`, [locale]);
   const checkerTask1Href = useMemo(() => `/checker?task=task1&lang=${locale}`, [locale]);
@@ -134,17 +138,22 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
     await onSessionUpdated?.();
   }
 
-  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function openAuth(mode: AuthMode) {
+    setAuthMode(mode);
+    setAuthError(null);
+    setAuthDialogOpen(true);
+  }
+
+  async function submitAuth(mode: AuthMode) {
     setAuthSubmitting(true);
     setAuthError(null);
 
     try {
       const authClient = await getAuthClient();
-      if (authMode === "signIn") {
+      if (mode === "signIn") {
         const result = await authClient.signIn.email({
-          email: authEmail.trim(),
-          password: authPassword
+          email: signInEmail.trim(),
+          password: signInPassword
         });
 
         if (result.error) {
@@ -152,9 +161,9 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
         }
       } else {
         const result = await authClient.signUp.email({
-          name: authName.trim(),
-          email: authEmail.trim(),
-          password: authPassword
+          name: signUpName.trim(),
+          email: signUpEmail.trim(),
+          password: signUpPassword
         });
 
         if (result.error) {
@@ -164,12 +173,27 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
 
       await refreshSession();
       setAuthDialogOpen(false);
-      setAuthPassword("");
+      setSignInPassword("");
+      setSignUpPassword("");
+      setSignInPasswordVisible(false);
+      setSignUpPasswordVisible(false);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : copy.genericError);
     } finally {
       setAuthSubmitting(false);
     }
+  }
+
+  async function handleSignInSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthMode("signIn");
+    await submitAuth("signIn");
+  }
+
+  async function handleSignUpSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthMode("signUp");
+    await submitAuth("signUp");
   }
 
   async function handleSignOut() {
@@ -249,20 +273,11 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
               <>
                 <ActionButton
                   className="ghostAction primary"
-                  onClick={() => {
-                    setAuthMode("signIn");
-                    setAuthDialogOpen(true);
-                  }}
+                  onClick={() => openAuth("signIn")}
                 >
                   {copy.login}
                 </ActionButton>
-                <ActionButton
-                  className="ghostAction"
-                  onClick={() => {
-                    setAuthMode("signUp");
-                    setAuthDialogOpen(true);
-                  }}
-                >
+                <ActionButton className="ghostAction" onClick={() => openAuth("signUp")}>
                   {copy.signUpTab}
                 </ActionButton>
               </>
@@ -278,86 +293,143 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
       {authDialogOpen ? (
         <div className="authDialogBackdrop" onClick={() => !authSubmitting && setAuthDialogOpen(false)}>
           <Surface
-            className="authDialog"
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
+            className={`authDialog ${locale === "zh-CN" ? "authDialogCn" : "authDialogEn"}`}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="authDialogHeader">
-              <div className="authTabs" role="tablist" aria-label="Authentication mode">
-                <ActionButton
-                  variant="plain"
-                  className={authMode === "signIn" ? "active" : ""}
-                  onClick={() => setAuthMode("signIn")}
-                  disabled={authSubmitting}
-                >
-                  {copy.signInTab}
-                </ActionButton>
-                <ActionButton
-                  variant="plain"
-                  className={authMode === "signUp" ? "active" : ""}
-                  onClick={() => setAuthMode("signUp")}
-                  disabled={authSubmitting}
-                >
-                  {copy.signUpTab}
-                </ActionButton>
+              <div className="authCardIntro">
+                <h2>{authMode === "signIn" ? copy.signInTab : copy.signUpTab}</h2>
+                <p className="authHint">{authMode === "signIn" ? copy.authHintSignIn : copy.authHintSignUp}</p>
               </div>
-              <ActionButton className="ghostAction" onClick={() => setAuthDialogOpen(false)} disabled={authSubmitting}>
-                {copy.authClose}
-              </ActionButton>
+              <button type="button" className="authDialogClose" onClick={() => setAuthDialogOpen(false)} disabled={authSubmitting}>
+                <i className="ai-cross" aria-hidden="true" />
+                <span className="srOnly">{copy.authClose}</span>
+              </button>
             </div>
 
-            <p className="authHint">{authMode === "signIn" ? copy.authHintSignIn : copy.authHintSignUp}</p>
+            <section className="authCardInner">
+              {authMode === "signIn" ? (
+                <form className="authForm" onSubmit={handleSignInSubmit}>
+                  <label className="authField">
+                    <span>{copy.authEmail}</span>
+                    <div className="authInputWrap">
+                      <i className="ai-mail" aria-hidden="true" />
+                      <input
+                        type="email"
+                        value={signInEmail}
+                        onChange={(event) => setSignInEmail(event.target.value)}
+                        required
+                        autoComplete="email"
+                      />
+                    </div>
+                  </label>
 
-            <form className="authForm" onSubmit={handleAuthSubmit}>
-              {authMode === "signUp" ? (
-                <label>
-                  <span>{copy.authName}</span>
-                  <input
-                    type="text"
-                    value={authName}
-                    onChange={(event) => setAuthName(event.target.value)}
-                    required
-                    minLength={2}
-                  />
-                </label>
-              ) : null}
+                  <label className="authField">
+                    <span>{copy.authPassword}</span>
+                    <div className="authInputWrap authPasswordWrap">
+                      <i className="ai-lock-closed" aria-hidden="true" />
+                      <input
+                        type={signInPasswordVisible ? "text" : "password"}
+                        value={signInPassword}
+                        onChange={(event) => setSignInPassword(event.target.value)}
+                        required
+                        minLength={8}
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        className="authPasswordToggle"
+                        onClick={() => setSignInPasswordVisible((value) => !value)}
+                        aria-label={signInPasswordVisible ? "Hide password" : "Show password"}
+                      >
+                        <i className={signInPasswordVisible ? "ai-hide" : "ai-show"} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </label>
 
-              <label>
-                <span>{copy.authEmail}</span>
-                <input
-                  type="email"
-                  value={authEmail}
-                  onChange={(event) => setAuthEmail(event.target.value)}
-                  required
-                  autoComplete="email"
-                />
-              </label>
+                  {authError ? <p className="errorBox">{authError}</p> : null}
 
-              <label>
-                <span>{copy.authPassword}</span>
-                <input
-                  type="password"
-                  value={authPassword}
-                  onChange={(event) => setAuthPassword(event.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete={authMode === "signIn" ? "current-password" : "new-password"}
-                />
-              </label>
+                  <ActionButton type="submit" variant="primary" fullWidth disabled={authSubmitting}>
+                    {authSubmitting ? "Submitting..." : copy.authSubmitSignIn}
+                  </ActionButton>
+                </form>
+              ) : (
+                <form className="authForm" onSubmit={handleSignUpSubmit}>
+                  <label className="authField">
+                    <span>{copy.authName}</span>
+                    <div className="authInputWrap">
+                      <i className="ai-user" aria-hidden="true" />
+                      <input
+                        type="text"
+                        value={signUpName}
+                        onChange={(event) => setSignUpName(event.target.value)}
+                        required
+                        minLength={2}
+                        autoComplete="name"
+                      />
+                    </div>
+                  </label>
 
-              {authError ? <p className="errorBox">{authError}</p> : null}
+                  <label className="authField">
+                    <span>{copy.authEmail}</span>
+                    <div className="authInputWrap">
+                      <i className="ai-mail" aria-hidden="true" />
+                      <input
+                        type="email"
+                        value={signUpEmail}
+                        onChange={(event) => setSignUpEmail(event.target.value)}
+                        required
+                        autoComplete="email"
+                      />
+                    </div>
+                  </label>
 
-              <div className="editorFooter">
-                <ActionButton type="submit" variant="primary" disabled={authSubmitting}>
-                  {authSubmitting
-                    ? "Submitting..."
-                    : authMode === "signIn"
-                      ? copy.authSubmitSignIn
-                      : copy.authSubmitSignUp}
-                </ActionButton>
-              </div>
-            </form>
+                  <label className="authField">
+                    <span>{copy.authPassword}</span>
+                    <div className="authInputWrap authPasswordWrap">
+                      <i className="ai-lock-closed" aria-hidden="true" />
+                      <input
+                        type={signUpPasswordVisible ? "text" : "password"}
+                        value={signUpPassword}
+                        onChange={(event) => setSignUpPassword(event.target.value)}
+                        required
+                        minLength={8}
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        className="authPasswordToggle"
+                        onClick={() => setSignUpPasswordVisible((value) => !value)}
+                        aria-label={signUpPasswordVisible ? "Hide password" : "Show password"}
+                      >
+                        <i className={signUpPasswordVisible ? "ai-hide" : "ai-show"} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </label>
+
+                  {authError ? <p className="errorBox">{authError}</p> : null}
+
+                  <ActionButton type="submit" variant="primary" fullWidth disabled={authSubmitting}>
+                    {authSubmitting ? "Submitting..." : copy.authSubmitSignUp}
+                  </ActionButton>
+                </form>
+              )}
+
+              <p className="authSwitchLine">
+                {authMode === "signIn" ? "没有账号？" : "已有账号？"}
+                <button
+                  type="button"
+                  className="authSwitchButton"
+                  onClick={() => {
+                    setAuthError(null);
+                    setAuthMode(authMode === "signIn" ? "signUp" : "signIn");
+                  }}
+                  disabled={authSubmitting}
+                >
+                  {authMode === "signIn" ? "创建账号" : "返回登录"}
+                </button>
+              </p>
+            </section>
           </Surface>
         </div>
       ) : null}
