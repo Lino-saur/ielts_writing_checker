@@ -62,6 +62,7 @@ function formatUser(user: SessionUser | null, copy: NavbarCopy) {
 export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: AppNavbarProps) {
   const themeSwitchId = useId();
   const taskMenuRef = useRef<HTMLDivElement | null>(null);
+  const utilityMenuRef = useRef<HTMLDivElement | null>(null);
   const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signIn");
@@ -76,6 +77,7 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
   const [activeTask, setActiveTask] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [taskMenuOpen, setTaskMenuOpen] = useState(false);
+  const [utilityMenuOpen, setUtilityMenuOpen] = useState(false);
   const [signInPasswordVisible, setSignInPasswordVisible] = useState(false);
   const [signUpPasswordVisible, setSignUpPasswordVisible] = useState(false);
 
@@ -85,8 +87,11 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
   const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : locale === "zh-CN" ? "写作任务" : "Writing tasks";
   const mobileMenuOpenLabel = locale === "zh-CN" ? "打开菜单" : "Open menu";
   const mobileMenuCloseLabel = locale === "zh-CN" ? "收起菜单" : "Close menu";
+  const utilityMenuOpenLabel = locale === "zh-CN" ? "打开更多设置" : "Open more settings";
+  const utilityMenuCloseLabel = locale === "zh-CN" ? "收起更多设置" : "Close more settings";
   const authSwitchPrefix = authMode === "signIn" ? (locale === "zh-CN" ? "没有账号？" : "No account?") : locale === "zh-CN" ? "已有账号？" : "Already have an account?";
   const authSwitchAction = authMode === "signIn" ? (locale === "zh-CN" ? "创建账号" : "Create one") : locale === "zh-CN" ? "返回登录" : "Back to sign in";
+  const guestBadge = locale === "zh-CN" ? "访客模式" : "Guest";
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("theme-mode");
@@ -148,6 +153,7 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
     if (authDialogOpen) {
       setMobileMenuOpen(false);
       setTaskMenuOpen(false);
+      setUtilityMenuOpen(false);
     }
   }, [authDialogOpen]);
 
@@ -155,6 +161,10 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
     function handlePointerDown(event: MouseEvent) {
       if (!taskMenuRef.current?.contains(event.target as Node)) {
         setTaskMenuOpen(false);
+      }
+
+      if (!utilityMenuRef.current?.contains(event.target as Node)) {
+        setUtilityMenuOpen(false);
       }
     }
 
@@ -167,6 +177,7 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
     setTheme(nextTheme);
     document.documentElement.dataset.theme = nextTheme;
     window.localStorage.setItem("theme-mode", nextTheme);
+    setUtilityMenuOpen(false);
   }
 
   async function refreshSession() {
@@ -315,37 +326,12 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
         </button>
 
         <div id="app-navbar-menu" className={`aroundNavControls${mobileMenuOpen ? " is-open" : ""}`}>
-          <div className="form-switch mode-switch aroundModeSwitch" data-theme-toggle="mode">
-            <input
-              id={themeSwitchId}
-              className="form-check-input"
-              type="checkbox"
-              checked={theme === "dark"}
-              onChange={toggleTheme}
-              aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-            />
-            <label className="form-check-label" htmlFor={themeSwitchId}>
-              <i className="ai-sun fs-lg" />
-            </label>
-            <label className="form-check-label" htmlFor={themeSwitchId}>
-              <i className="ai-moon fs-lg" />
-            </label>
-          </div>
-
-          <label className="aroundLanguageSelect">
-            <span>{copy.languageLabel}:</span>
-            <select value={locale} onChange={(event) => onLocaleChange(event.target.value as Locale)}>
-              <option value="zh-CN">简体中文</option>
-              <option value="en">English</option>
-            </select>
-          </label>
-
           <div className="aroundAuthArea">
-            <Pill className="aroundUserChip">{formatUser(currentUser, copy)}</Pill>
             {currentUser?.isAnonymous !== false ? (
               <>
+                <Pill className="aroundUserChip aroundUserBadge">{guestBadge}</Pill>
                 <ActionButton
-                  className="ghostAction primary"
+                  className="aroundPrimaryAction"
                   onClick={() => {
                     setMobileMenuOpen(false);
                     openAuth("signIn");
@@ -353,27 +339,68 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
                 >
                   {copy.login}
                 </ActionButton>
-                <ActionButton
-                  className="ghostAction"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    openAuth("signUp");
-                  }}
-                >
-                  {copy.signUpTab}
-                </ActionButton>
               </>
             ) : (
-              <ActionButton
-                className="ghostAction"
-                onClick={async () => {
-                  setMobileMenuOpen(false);
-                  await handleSignOut();
-                }}
-              >
-                {copy.authSignOut}
-              </ActionButton>
+              <>
+                <Pill className="aroundUserChip aroundUserBadge">{formatUser(currentUser, copy)}</Pill>
+                <ActionButton
+                  className="ghostAction"
+                  onClick={async () => {
+                    setMobileMenuOpen(false);
+                    await handleSignOut();
+                  }}
+                >
+                  {copy.authSignOut}
+                </ActionButton>
+              </>
             )}
+          </div>
+
+          <div className="aroundUtilityMenu" ref={utilityMenuRef}>
+            <button
+              type="button"
+              className={`aroundUtilityMenuButton${utilityMenuOpen ? " is-open" : ""}`}
+              aria-haspopup="menu"
+              aria-expanded={utilityMenuOpen}
+              aria-label={utilityMenuOpen ? utilityMenuCloseLabel : utilityMenuOpenLabel}
+              onClick={() => setUtilityMenuOpen((value) => !value)}
+            >
+              <i className="ai-settings" aria-hidden="true" />
+            </button>
+
+            <div className={`aroundUtilityDropdown${utilityMenuOpen ? " is-open" : ""}`} role="menu">
+              <label className="aroundLanguageSelect">
+                <span>{copy.languageLabel}:</span>
+                <select
+                  value={locale}
+                  onChange={(event) => {
+                    onLocaleChange(event.target.value as Locale);
+                    setUtilityMenuOpen(false);
+                  }}
+                >
+                  <option value="zh-CN">简体中文</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+
+              <div className="form-switch mode-switch aroundModeSwitch" data-theme-toggle="mode">
+                <input
+                  id={themeSwitchId}
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={theme === "dark"}
+                  onChange={toggleTheme}
+                  aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+                />
+                <label className="form-check-label" htmlFor={themeSwitchId}>
+                  <i className="ai-sun fs-lg" />
+                </label>
+                <label className="form-check-label" htmlFor={themeSwitchId}>
+                  <i className="ai-moon fs-lg" />
+                </label>
+              </div>
+
+            </div>
           </div>
         </div>
       </Surface>

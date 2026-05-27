@@ -215,6 +215,7 @@ a {
 }
 
 .aroundTaskMenu,
+.aroundUtilityMenu,
 .aroundNavControls,
 .aroundAuthArea,
 .aroundLanguageSelect {
@@ -224,6 +225,11 @@ a {
 
 .aroundTaskMenu {
   position: relative;
+}
+
+.aroundUtilityMenu {
+  position: relative;
+  flex-shrink: 0;
 }
 
 .aroundTaskMenuButton {
@@ -315,6 +321,26 @@ a {
   min-width: 0;
 }
 
+.aroundPrimaryAction {
+  min-height: 42px;
+  padding-inline: 13px;
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  white-space: nowrap;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  box-shadow: none;
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.aroundPrimaryAction:hover {
+  border-color: rgba(var(--accent-rgb), 0.36);
+  background: rgba(var(--accent-rgb), 0.14);
+  box-shadow: none;
+  color: var(--accent);
+}
+
 .aroundNavMenuButton {
   display: none;
   align-items: center;
@@ -349,11 +375,72 @@ a {
   color: var(--accent);
 }
 
+.aroundUtilityMenuButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-pill);
+  color: var(--muted-strong);
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.aroundUtilityMenuButton:hover,
+.aroundUtilityMenuButton.is-open {
+  color: var(--accent);
+  border-color: var(--line-strong, var(--line));
+  transform: translateY(-1px);
+}
+
+.aroundUtilityMenuButton i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.aroundUtilityMenuButton i::before {
+  display: block;
+  line-height: 1;
+}
+
+.aroundUtilityDropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 16;
+  display: none;
+  min-width: 220px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+.aroundUtilityDropdown.is-open {
+  display: grid;
+  gap: 10px;
+}
+
 .aroundModeSwitch {
   display: flex;
   align-items: center;
+  justify-content: center;
+  min-height: 42px;
   margin: 0;
-  padding-left: 0;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-pill);
 }
 
 .aroundModeSwitch .form-check-label {
@@ -452,7 +539,7 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   justify-content: flex-end;
   gap: 10px;
   min-width: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .aroundUserChip {
@@ -467,6 +554,12 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   font-size: 0.84rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.aroundUserBadge {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.22);
 }
 
 .pageBackdrop {
@@ -2038,7 +2131,8 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .aroundTaskMenuButton,
-  .aroundNavMenuButton {
+  .aroundNavMenuButton,
+  .aroundUtilityMenuButton {
     min-height: 40px;
   }
 
@@ -2071,23 +2165,26 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .aroundModeSwitch {
-    justify-content: center;
     min-height: 44px;
-    padding: 0 4px;
+    width: 100%;
+    padding: 0 14px;
   }
 
-  .aroundLanguageSelect {
+  .aroundLanguageSelect,
+  .aroundUtilityMenuButton {
     width: 100%;
-    justify-content: space-between;
     padding-inline: 14px;
+  }
+
+  .aroundUtilityMenuButton {
+    justify-content: center;
   }
 
   .aroundAuthArea {
     width: 100%;
-    flex-direction: column;
-    align-items: stretch;
+    justify-content: space-between;
+    align-items: center;
     gap: 10px;
-    flex-wrap: nowrap;
   }
 
   .aroundUserChip {
@@ -2096,8 +2193,23 @@ html[data-theme="dark"] .authSwitchButton {
     text-align: center;
   }
 
-  .aroundAuthArea .ghostAction {
+  .aroundPrimaryAction {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .aroundUtilityMenu {
     width: 100%;
+  }
+
+  .aroundUtilityDropdown {
+    position: static;
+    min-width: 0;
+  }
+
+  .aroundAuthArea .ghostAction,
+  .aroundAuthArea .uiButtonPrimary {
+    width: auto;
   }
 }
 
@@ -2129,6 +2241,12 @@ html[data-theme="dark"] .authSwitchButton {
     font-size: 0.82rem;
   }
 
+  .aroundUtilityMenuButton {
+    width: 40px;
+    height: 40px;
+    padding-inline: 0;
+  }
+
   .aroundTaskDropdown {
     min-width: 188px;
   }
@@ -2141,6 +2259,17 @@ html[data-theme="dark"] .authSwitchButton {
     top: 12px;
     width: calc(100% - 24px);
     align-items: flex-start;
+  }
+
+  .aroundAuthArea {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .aroundPrimaryAction,
+  .aroundAuthArea .ghostAction,
+  .aroundAuthArea .uiButtonPrimary {
+    width: 100%;
   }
 
   .siteHeader,
