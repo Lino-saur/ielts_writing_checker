@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useId, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
 
 type Locale = "en" | "zh-CN";
@@ -61,6 +61,7 @@ function formatUser(user: SessionUser | null, copy: NavbarCopy) {
 
 export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: AppNavbarProps) {
   const themeSwitchId = useId();
+  const taskMenuRef = useRef<HTMLDivElement | null>(null);
   const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signIn");
@@ -73,12 +74,19 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
   const [authError, setAuthError] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [activeTask, setActiveTask] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [taskMenuOpen, setTaskMenuOpen] = useState(false);
   const [signInPasswordVisible, setSignInPasswordVisible] = useState(false);
   const [signUpPasswordVisible, setSignUpPasswordVisible] = useState(false);
 
   const homeHref = useMemo(() => `/?lang=${locale}`, [locale]);
   const checkerTask1Href = useMemo(() => `/checker?task=task1&lang=${locale}`, [locale]);
   const checkerTask2Href = useMemo(() => `/checker?task=task2&lang=${locale}`, [locale]);
+  const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : locale === "zh-CN" ? "写作任务" : "Writing tasks";
+  const mobileMenuOpenLabel = locale === "zh-CN" ? "打开菜单" : "Open menu";
+  const mobileMenuCloseLabel = locale === "zh-CN" ? "收起菜单" : "Close menu";
+  const authSwitchPrefix = authMode === "signIn" ? (locale === "zh-CN" ? "没有账号？" : "No account?") : locale === "zh-CN" ? "已有账号？" : "Already have an account?";
+  const authSwitchAction = authMode === "signIn" ? (locale === "zh-CN" ? "创建账号" : "Create one") : locale === "zh-CN" ? "返回登录" : "Back to sign in";
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("theme-mode");
@@ -122,6 +130,36 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
     return () => {
       mounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    function syncMobileMenu() {
+      if (window.innerWidth > 760) {
+        setMobileMenuOpen(false);
+      }
+    }
+
+    syncMobileMenu();
+    window.addEventListener("resize", syncMobileMenu);
+    return () => window.removeEventListener("resize", syncMobileMenu);
+  }, []);
+
+  useEffect(() => {
+    if (authDialogOpen) {
+      setMobileMenuOpen(false);
+      setTaskMenuOpen(false);
+    }
+  }, [authDialogOpen]);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!taskMenuRef.current?.contains(event.target as Node)) {
+        setTaskMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
   function toggleTheme() {
@@ -229,19 +267,54 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
               />
             </svg>
           </span>
-          <span>{copy.brand}</span>
+          <span className="aroundBrandFull">{copy.brand}</span>
+          <span className="aroundBrandCompact">IELTS</span>
         </Link>
 
-        <nav className="aroundTaskNav" aria-label="Primary">
-          <Link href={checkerTask1Href} className={activeTask === "task1" ? "active" : undefined}>
-            {copy.task1}
-          </Link>
-          <Link href={checkerTask2Href} className={activeTask === "task2" ? "active" : undefined}>
-            {copy.task2}
-          </Link>
-        </nav>
+        <div className="aroundTaskMenu" ref={taskMenuRef}>
+          <button
+            type="button"
+            className={`aroundTaskMenuButton${taskMenuOpen ? " is-open" : ""}`}
+            aria-haspopup="menu"
+            aria-expanded={taskMenuOpen}
+            onClick={() => setTaskMenuOpen((value) => !value)}
+          >
+            <span>{taskMenuLabel}</span>
+            <i className={`ai-chevron-${taskMenuOpen ? "up" : "down"}`} aria-hidden="true" />
+          </button>
 
-        <div className="aroundNavControls">
+          <div className={`aroundTaskDropdown${taskMenuOpen ? " is-open" : ""}`} role="menu">
+            <Link
+              href={checkerTask1Href}
+              className={activeTask === "task1" ? "active" : undefined}
+              role="menuitem"
+              onClick={() => setTaskMenuOpen(false)}
+            >
+              {copy.task1}
+            </Link>
+            <Link
+              href={checkerTask2Href}
+              className={activeTask === "task2" ? "active" : undefined}
+              role="menuitem"
+              onClick={() => setTaskMenuOpen(false)}
+            >
+              {copy.task2}
+            </Link>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className={`aroundNavMenuButton${mobileMenuOpen ? " is-open" : ""}`}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="app-navbar-menu"
+          aria-label={mobileMenuOpen ? mobileMenuCloseLabel : mobileMenuOpenLabel}
+          onClick={() => setMobileMenuOpen((value) => !value)}
+        >
+          <i className="ai-dots-horizontal" aria-hidden="true" />
+        </button>
+
+        <div id="app-navbar-menu" className={`aroundNavControls${mobileMenuOpen ? " is-open" : ""}`}>
           <div className="form-switch mode-switch aroundModeSwitch" data-theme-toggle="mode">
             <input
               id={themeSwitchId}
@@ -273,16 +346,31 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
               <>
                 <ActionButton
                   className="ghostAction primary"
-                  onClick={() => openAuth("signIn")}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    openAuth("signIn");
+                  }}
                 >
                   {copy.login}
                 </ActionButton>
-                <ActionButton className="ghostAction" onClick={() => openAuth("signUp")}>
+                <ActionButton
+                  className="ghostAction"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    openAuth("signUp");
+                  }}
+                >
                   {copy.signUpTab}
                 </ActionButton>
               </>
             ) : (
-              <ActionButton className="ghostAction" onClick={handleSignOut}>
+              <ActionButton
+                className="ghostAction"
+                onClick={async () => {
+                  setMobileMenuOpen(false);
+                  await handleSignOut();
+                }}
+              >
                 {copy.authSignOut}
               </ActionButton>
             )}
@@ -416,7 +504,7 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
               )}
 
               <p className="authSwitchLine">
-                {authMode === "signIn" ? "没有账号？" : "已有账号？"}
+                {authSwitchPrefix}
                 <button
                   type="button"
                   className="authSwitchButton"
@@ -426,7 +514,7 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
                   }}
                   disabled={authSubmitting}
                 >
-                  {authMode === "signIn" ? "创建账号" : "返回登录"}
+                  {authSwitchAction}
                 </button>
               </p>
             </section>

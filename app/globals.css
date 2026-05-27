@@ -203,6 +203,10 @@ a {
   white-space: nowrap;
 }
 
+.aroundBrandCompact {
+  display: none;
+}
+
 .aroundBrandIcon {
   display: inline-flex;
   align-items: center;
@@ -210,7 +214,7 @@ a {
   color: var(--accent);
 }
 
-.aroundTaskNav,
+.aroundTaskMenu,
 .aroundNavControls,
 .aroundAuthArea,
 .aroundLanguageSelect {
@@ -218,44 +222,131 @@ a {
   align-items: center;
 }
 
-.aroundTaskNav {
-  gap: 8px;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-subtle);
+.aroundTaskMenu {
+  position: relative;
 }
 
-.aroundTaskNav a {
+.aroundTaskMenuButton {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 17px;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
   border-radius: 999px;
+  background: var(--surface-pill);
   color: var(--muted-strong);
   font-size: 0.9rem;
   font-weight: 700;
   text-decoration: none;
-  transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
+  white-space: nowrap;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease, transform 140ms ease;
 }
 
-.aroundTaskNav a:hover {
-  background: var(--surface-pill);
+.aroundTaskMenuButton:hover,
+.aroundTaskMenuButton.is-open {
   color: var(--accent);
+  border-color: var(--line-strong, var(--line));
   transform: translateY(-1px);
 }
 
-.aroundTaskNav a.active {
-  background: var(--paper-strong);
-  color: var(--accent);
+.aroundTaskMenuButton i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.aroundTaskMenuButton i::before {
+  display: block;
+  line-height: 1;
+}
+
+.aroundTaskDropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 16;
+  display: none;
+  min-width: 188px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-elevated);
   box-shadow: var(--shadow-sm);
+}
+
+.aroundTaskDropdown.is-open {
+  display: grid;
+  gap: 6px;
+}
+
+.aroundTaskDropdown a {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: var(--muted-strong);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.aroundTaskDropdown a:hover {
+  background: var(--surface-pill);
+  color: var(--accent);
+}
+
+.aroundTaskDropdown a.active {
+  background: var(--surface-pill);
+  color: var(--accent);
 }
 
 .aroundNavControls {
   justify-content: flex-end;
   gap: 12px;
   min-width: 0;
+}
+
+.aroundNavMenuButton {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-pill);
+  color: var(--muted-strong);
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.aroundNavMenuButton i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.aroundNavMenuButton i::before {
+  display: block;
+  line-height: 1;
+}
+
+.aroundNavMenuButton.is-open {
+  color: var(--accent);
 }
 
 .aroundModeSwitch {
@@ -1910,16 +2001,6 @@ html[data-theme="dark"] .authSwitchButton {
 }
 
 @media (max-width: 1080px) {
-  .aroundNavbar {
-    grid-template-columns: 1fr;
-    justify-items: stretch;
-  }
-
-  .aroundTaskNav,
-  .aroundNavControls {
-    justify-content: flex-start;
-  }
-
   .workspace,
   .featureStrip,
   .processGrid,
@@ -1932,21 +2013,122 @@ html[data-theme="dark"] .authSwitchButton {
   }
 }
 
-@media (max-width: 760px) {
-  .aroundNavControls,
-  .aroundAuthArea {
-    flex-wrap: wrap;
+@media (max-width: 991px) {
+  .aroundNavbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
   }
 
-  .aroundTaskNav {
+  .aroundTaskMenu,
+  .aroundNavControls {
+    justify-content: flex-start;
+  }
+
+  .aroundNavBrand {
+    min-width: 0;
+  }
+
+  .aroundNavBrand span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .aroundTaskMenuButton,
+  .aroundNavMenuButton {
+    min-height: 40px;
+  }
+
+  .aroundTaskMenuButton {
+    gap: 8px;
+    padding-inline: 14px;
+    font-size: 0.86rem;
+  }
+
+  .aroundNavMenuButton {
+    display: inline-flex;
+  }
+
+  .aroundNavControls {
+    display: none;
+    grid-column: 1 / -1;
     width: 100%;
   }
 
-  .aroundTaskNav a,
-  .aroundThemeSwitch,
-  .aroundLanguageSelect,
+  .aroundNavControls.is-open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--surface-elevated);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .aroundModeSwitch {
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 4px;
+  }
+
+  .aroundLanguageSelect {
+    width: 100%;
+    justify-content: space-between;
+    padding-inline: 14px;
+  }
+
+  .aroundAuthArea {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    flex-wrap: nowrap;
+  }
+
+  .aroundUserChip {
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+  }
+
   .aroundAuthArea .ghostAction {
-    flex: 1 1 auto;
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .aroundNavbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .aroundNavBrand {
+    min-width: 0;
+    gap: 10px;
+    font-size: 0.9rem;
+  }
+
+  .aroundNavBrand span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .aroundTaskMenu {
+    min-width: 0;
+  }
+
+  .aroundTaskMenuButton {
+    max-width: 100%;
+    padding-inline: 12px;
+    font-size: 0.82rem;
+  }
+
+  .aroundTaskDropdown {
+    min-width: 188px;
   }
 
   .pageShell {
@@ -3171,5 +3353,15 @@ html[data-theme="dark"] .aroundOutlineButton {
   .authDialogHeader {
     flex-direction: row;
     align-items: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .aroundBrandFull {
+    display: none;
+  }
+
+  .aroundBrandCompact {
+    display: inline;
   }
 }
