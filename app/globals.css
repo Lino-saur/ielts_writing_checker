@@ -2679,14 +2679,13 @@ html[data-theme="dark"] .authSwitchButton {
 
   .heroContent,
   .previewCard,
-  .checkerWorkbench,
   .checkerDraftPanel,
   .checkerReportShell,
   .editorPanel,
   .resultsPanel,
   .reportPaper {
-    padding-left: 18px;
-    padding-right: 18px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .heroStats,
