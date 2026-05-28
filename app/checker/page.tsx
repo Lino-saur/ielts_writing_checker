@@ -3,14 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
-import {
-  AiProvider,
-  CorrectionNote,
-  Locale,
-  TargetBand,
-  TaskType,
-  WritingCheckResult
-} from "@/lib/types";
+import { AiProvider, CorrectionNote, Locale, TargetBand, WritingCheckResult } from "@/lib/types";
 
 const LOCALE_STORAGE_KEY = "app-locale";
 
@@ -19,19 +12,11 @@ async function getAuthClient() {
   return authClient;
 }
 
-const TASK_PLACEHOLDERS: Record<TaskType, { prompt: string; essay: string }> = {
-  task1: {
-    prompt:
-      "The chart below shows the percentage of households using three different renewable energy sources in a European country from 2000 to 2020. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
-    essay:
-      "The chart compares the proportion of households that used solar, wind and hydro energy in one European country between 2000 and 2020.\n\nOverall, all three sources became more common over the period, although solar power showed the most dramatic growth. By contrast, hydro remained the least widely used source despite a gradual increase.\n\nIn 2000, hydro was used by around 5% of households, while solar and wind accounted for approximately 2% and 3% respectively. Over the next ten years, the figures for solar and wind rose steadily to about 8% and 9%. Hydro also increased, but only to roughly 7%.\n\nAfter 2010, solar use climbed sharply and reached about 18% in 2020, making it the leading source by the end of the period. Wind energy followed a similar but less pronounced pattern, finishing at around 14%. Meanwhile, hydro rose more modestly to approximately 9%."
-  },
-  task2: {
-    prompt:
-      "Some people believe that unpaid community service should be a compulsory part of high school programmes. To what extent do you agree or disagree?",
-    essay:
-      "Some people thinks unpaid community service should be compulsory in high school programmes, I am agree with this opinion because it can helps students become more responsibility and know the society better.\n\nFirstly, students nowadays is always study in classroom and they dont have many chance to touch real life, so community service are a good ways for them to learning how other people live. For example help old peoples in a care home or cleaning the streets can let student understand the value of hard working. This kind of activity also make them more kindness, and they will not only thinking about themself.\n\nSecondly, unpaid work can improving many useful skills, such as communicate with others, teamwork and solve problems. When students join in a charity event, they need talk with different people and maybe organize some small things, these experience is very helpful for their future job. Also, if they only focus on exam, they may becomes selfish and lack of social ability.\n\nHowever some people may said compulsory community service is not good because students already have many homework and exams. This is true in some ways, but I think school can just ask them do few hours every month, it will not be too much pressure. If the activity is designed good, student will feel interesting and meaningful, not just a boring task.\n\nIn conclusion, I strongly agree unpaid community service should be a compulsory part of high school, because it teach students responsibility, kindness and useful skills. But school should not make it too heavy, otherwise students will hate it and the purpose will lost."
-  }
+const TASK2_PLACEHOLDER = {
+  prompt:
+    "Some people believe that unpaid community service should be a compulsory part of high school programmes. To what extent do you agree or disagree?",
+  essay:
+    "Some people thinks unpaid community service should be compulsory in high school programmes, I am agree with this opinion because it can helps students become more responsibility and know the society better.\n\nFirstly, students nowadays is always study in classroom and they dont have many chance to touch real life, so community service are a good ways for them to learning how other people live. For example help old peoples in a care home or cleaning the streets can let student understand the value of hard working. This kind of activity also make them more kindness, and they will not only thinking about themself.\n\nSecondly, unpaid work can improving many useful skills, such as communicate with others, teamwork and solve problems. When students join in a charity event, they need talk with different people and maybe organize some small things, these experience is very helpful for their future job. Also, if they only focus on exam, they may becomes selfish and lack of social ability.\n\nHowever some people may said compulsory community service is not good because students already have many homework and exams. This is true in some ways, but I think school can just ask them do few hours every month, it will not be too much pressure. If the activity is designed good, student will feel interesting and meaningful, not just a boring task.\n\nIn conclusion, I strongly agree unpaid community service should be a compulsory part of high school, because it teach students responsibility, kindness and useful skills. But school should not make it too heavy, otherwise students will hate it and the purpose will lost."
 };
 
 const UI_COPY = {
@@ -42,7 +27,7 @@ const UI_COPY = {
     heroTitle: "IELTS Writing Checker",
     heroDescription: "Rubric-based feedback with inline revision reasons.",
     heroDescriptionStrong:
-      "A cleaner review desk for Task 1 and Task 2, shaped like a polished SaaS workspace.",
+      "A cleaner review desk for IELTS Task 2, shaped like a polished SaaS workspace.",
     navBadge: "Around-inspired interface",
     navFeatures: "Features",
     navTemplates: "Templates",
@@ -65,7 +50,7 @@ const UI_COPY = {
     editorEyebrow: "Writing workspace",
     resultEyebrow: "Review output",
     previewLabel: "Live review setup",
-    previewBody: "Switch task type, set a target band and keep track of energy before you submit.",
+    previewBody: "Adjust the target band and keep track of energy before you submit.",
     socialProofTitle: "Used to shape a faster IELTS writing workflow",
     galleryEyebrow: "Landing blocks",
     galleryTitle: "Homepage sections with placeholder visuals",
@@ -89,7 +74,7 @@ const UI_COPY = {
     processEyebrow: "Review flow",
     processTitle: "A simpler path from draft to revision",
     processStepOneTitle: "Paste the task",
-    processStepOneBody: "Switch between Task 1 and Task 2, then set the band target before review.",
+    processStepOneBody: "Paste the Task 2 prompt first, then set the band target before review.",
     processStepTwoTitle: "Run the check",
     processStepTwoBody: "Use AI scoring, energy tracking and session-aware access in one place.",
     processStepThreeTitle: "Study the report",
@@ -113,11 +98,14 @@ const UI_COPY = {
     energy: "Energy",
     energyCost: "Cost",
     insufficientEnergy: "Not enough energy for a review.",
+    confirmReviewTitle: "Use energy to run this review?",
+    confirmReviewBody: "This check will consume energy from your current balance.",
+    confirmReviewConfirm: "Confirm review",
+    confirmReviewCancel: "Cancel",
     modesLabel: "Modes",
     aiReview: "AI Review",
     heuristicReady: "Fallback Review",
-    coverage: "Task 1 + Task 2",
-    taskSwitcherAria: "Task type",
+    coverage: "Task 2",
     task1: "Task 1",
     task2: "Task 2",
     providerDeepSeek: "DeepSeek",
@@ -149,7 +137,7 @@ const UI_COPY = {
     ready: "Ready",
     emptyTitle: "Run the first review",
     emptyDescription:
-      "Choose Task 1 or Task 2, paste the prompt and essay, then run the checker to get rubric-based feedback.",
+      "Paste the Task 2 prompt and essay, then run the checker to get rubric-based feedback.",
     genericError: "Something went wrong."
   },
   "zh-CN": {
@@ -158,7 +146,7 @@ const UI_COPY = {
     heroEyebrow: "AI 写作评估",
     heroTitle: "IELTS 写作批改器",
     heroDescription: "按评分标准返回反馈，并在文中直接说明修改原因。",
-    heroDescriptionStrong: "把 Task 1 / Task 2 批改工作台整理成更完整、更克制的 Around 风格界面。",
+    heroDescriptionStrong: "把 IELTS Task 2 批改工作台整理成更完整、更克制的 Around 风格界面。",
     navBadge: "Around 风格界面",
     navFeatures: "能力",
     navTemplates: "模板区",
@@ -181,7 +169,7 @@ const UI_COPY = {
     editorEyebrow: "写作工作台",
     resultEyebrow: "批改结果",
     previewLabel: "当前批改配置",
-    previewBody: "可随时切换题型、目标分与语言，并在提交前确认能量消耗。",
+    previewBody: "可随时调整目标分与语言，并在提交前确认能量消耗。",
     socialProofTitle: "用于组织 IELTS 写作产品首页节奏的展示区",
     galleryEyebrow: "首页模块",
     galleryTitle: "带占位视觉的 Landing Page 内容区",
@@ -204,7 +192,7 @@ const UI_COPY = {
     processEyebrow: "使用路径",
     processTitle: "从草稿到修改的路径更直接",
     processStepOneTitle: "粘贴题目",
-    processStepOneBody: "先切换 Task 1 / Task 2，再设置目标分。",
+    processStepOneBody: "先粘贴 Task 2 题目，再设置目标分。",
     processStepTwoTitle: "运行批改",
     processStepTwoBody: "AI 评分、能量计费和会话逻辑都在同一个入口里完成。",
     processStepThreeTitle: "查看报告",
@@ -228,11 +216,14 @@ const UI_COPY = {
     energy: "能量",
     energyCost: "消耗",
     insufficientEnergy: "当前能量不足，无法继续批阅。",
+    confirmReviewTitle: "确认消耗能量开始批改？",
+    confirmReviewBody: "本次批改会从当前账号能量中扣除对应消耗。",
+    confirmReviewConfirm: "确认批改",
+    confirmReviewCancel: "取消",
     modesLabel: "模式",
     aiReview: "AI 评分",
     heuristicReady: "本地评分",
-    coverage: "覆盖 Task 1 + Task 2",
-    taskSwitcherAria: "题型选择",
+    coverage: "Task 2",
     task1: "Task 1",
     task2: "Task 2",
     providerDeepSeek: "DeepSeek",
@@ -263,7 +254,7 @@ const UI_COPY = {
     tapForReason: "点击文中的修改处，可查看原因。",
     ready: "已就绪",
     emptyTitle: "开始第一次批改",
-    emptyDescription: "选择 Task 1 或 Task 2，粘贴题目和作文，然后运行批改以获取按评分标准生成的反馈。",
+    emptyDescription: "粘贴 Task 2 题目和作文，然后运行批改以获取按评分标准生成的反馈。",
     genericError: "发生了一些问题。"
   }
 } as const;
@@ -450,13 +441,13 @@ function renderAnnotatedEssay(
 
 export default function HomePage() {
   const activeEditRef = useRef<HTMLDivElement | null>(null);
+  const reportSectionRef = useRef<HTMLDivElement | null>(null);
   const localeHydratedRef = useRef(false);
   const [locale, setLocale] = useState<Locale>("zh-CN");
-  const [taskType, setTaskType] = useState<TaskType>("task2");
   const provider: AiProvider = "deepseek";
   const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
-  const [prompt, setPrompt] = useState(TASK_PLACEHOLDERS.task2.prompt);
-  const [essay, setEssay] = useState(TASK_PLACEHOLDERS.task2.essay);
+  const [prompt, setPrompt] = useState(TASK2_PLACEHOLDER.prompt);
+  const [essay, setEssay] = useState(TASK2_PLACEHOLDER.essay);
   const [result, setResult] = useState<WritingCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorSource, setErrorSource] = useState<ErrorSource>("general");
@@ -465,9 +456,19 @@ export default function HomePage() {
   const [energy, setEnergy] = useState<EnergyState | null>(null);
   const [reviewCost, setReviewCost] = useState(1);
   const [sessionReady, setSessionReady] = useState(false);
+  const [promptEditing, setPromptEditing] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
   const t = UI_COPY[locale];
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
+  const wordCountTone = wordCount < 220 ? "low" : wordCount <= 320 ? "ready" : "extended";
+  const promptEditLabel = promptEditing
+    ? locale === "zh-CN"
+      ? "完成编辑"
+      : "Done editing"
+    : locale === "zh-CN"
+      ? "编辑题目"
+      : "Edit prompt";
 
   function clearError() {
     setError(null);
@@ -506,7 +507,6 @@ export default function HomePage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const taskParam = params.get("task");
     const langParam = params.get("lang");
     const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
     const nextLocale =
@@ -516,20 +516,13 @@ export default function HomePage() {
           ? storedLocale
           : "zh-CN";
 
-    if (taskParam === "task1" || taskParam === "task2") {
-      setTaskType(taskParam);
-      setPrompt(TASK_PLACEHOLDERS[taskParam].prompt);
-      setEssay(TASK_PLACEHOLDERS[taskParam].essay);
-      setResult(null);
-      setActiveEditIndex(null);
-    }
-
     setLocale(nextLocale);
     window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
     localeHydratedRef.current = true;
 
-    if (params.get("lang") !== nextLocale) {
+    if (params.get("lang") !== nextLocale || params.get("task") !== "task2") {
       params.set("lang", nextLocale);
+      params.set("task", "task2");
       const nextQuery = params.toString();
       window.history.replaceState({}, "", nextQuery ? `/checker?${nextQuery}` : "/checker");
     }
@@ -543,8 +536,9 @@ export default function HomePage() {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
     const params = new URLSearchParams(window.location.search);
 
-    if (params.get("lang") !== locale) {
+    if (params.get("lang") !== locale || params.get("task") !== "task2") {
       params.set("lang", locale);
+      params.set("task", "task2");
       const nextQuery = params.toString();
       window.history.replaceState({}, "", nextQuery ? `/checker?${nextQuery}` : "/checker");
     }
@@ -591,6 +585,36 @@ export default function HomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!result || !reportSectionRef.current) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      reportSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    });
+  }, [result]);
+
+  useEffect(() => {
+    if (!confirmDialogOpen) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setConfirmDialogOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [confirmDialogOpen]);
+
   async function refreshSessionContext() {
     const energyResponse = await fetch("/api/energy");
     const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
@@ -603,24 +627,7 @@ export default function HomePage() {
     setReviewCost(energyData.cost);
   }
 
-  function onTaskTypeChange(nextType: TaskType) {
-    setTaskType(nextType);
-    setPrompt(TASK_PLACEHOLDERS[nextType].prompt);
-    setEssay(TASK_PLACEHOLDERS[nextType].essay);
-    setResult(null);
-    clearError();
-    setActiveEditIndex(null);
-    const params = new URLSearchParams(window.location.search);
-    params.set("task", nextType);
-    params.set("lang", locale);
-    window.history.replaceState({}, "", `/checker?${params.toString()}`);
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!sessionReady) {
-      return;
-    }
+  async function runCheck() {
     setLoading(true);
     clearError();
 
@@ -631,7 +638,7 @@ export default function HomePage() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          taskType,
+          taskType: "task2",
           provider,
           locale,
           targetBand,
@@ -681,6 +688,15 @@ export default function HomePage() {
     }
   }
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sessionReady || loading) {
+      return;
+    }
+
+    setConfirmDialogOpen(true);
+  }
+
   return (
     <main className="pageShell">
       <div className="pageBackdrop" aria-hidden="true">
@@ -698,108 +714,140 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      <AppNavbar locale={locale} onLocaleChange={setLocale} copy={t} onSessionUpdated={refreshSessionContext} />
+      {confirmDialogOpen ? (
+        <div className="authDialogBackdrop" onClick={() => setConfirmDialogOpen(false)}>
+          <Surface className="authDialog confirmDialog" onClick={(event) => event.stopPropagation()}>
+            <div className="authDialogHeader confirmDialogHeader">
+              <div className="authCardIntro confirmDialogIntro">
+                <div>
+                  <h2>{t.confirmReviewTitle}</h2>
+                  <p className="authHint">{t.confirmReviewBody}</p>
+                </div>
+              </div>
+              <button type="button" className="authDialogClose" onClick={() => setConfirmDialogOpen(false)}>
+                <i className="ai-cross" aria-hidden="true" />
+                <span className="srOnly">{t.authClose}</span>
+              </button>
+            </div>
 
-      <section className="checkerIntro">
-        <Surface className="checkerIntroCard">
-          <p className="eyebrow">{t.heroEyebrow}</p>
-          <h1>{t.heroTitle}</h1>
-          <p className="lede">{t.heroDescription}</p>
-          <div className="checkerIntroMeta">
-            <Pill>{t.task1}</Pill>
-            <Pill>{t.task2}</Pill>
-            <Pill>{t.providerDeepSeek}</Pill>
-            <Pill>
-              {t.energy}: {energy?.balance ?? "--"}
-            </Pill>
+            <section className="authCardInner confirmDialogBody">
+              <div className="confirmEnergyRow">
+                <span>{t.energyCost}</span>
+                <span className="confirmEnergyDivider" aria-hidden="true">
+                  ·
+                </span>
+                <strong>
+                  {reviewCost} {locale === "zh-CN" ? "点能量" : "energy"}
+                </strong>
+              </div>
+
+              <div className="confirmDialogActions">
+                <ActionButton type="button" variant="secondary" onClick={() => setConfirmDialogOpen(false)}>
+                  {t.confirmReviewCancel}
+                </ActionButton>
+                <ActionButton
+                  type="button"
+                  variant="primary"
+                  onClick={() => {
+                    setConfirmDialogOpen(false);
+                    void runCheck();
+                  }}
+                >
+                  {t.confirmReviewConfirm}
+                </ActionButton>
+              </div>
+            </section>
+          </Surface>
+        </div>
+      ) : null}
+
+      <AppNavbar
+        locale={locale}
+        onLocaleChange={setLocale}
+        copy={t}
+        onSessionUpdated={refreshSessionContext}
+        taskMenuMode="task2Only"
+        energyBalance={energy?.balance ?? null}
+        energyLabel={t.energy}
+      />
+
+      <section className="checkerStudio" id="workspace">
+        <Surface as="form" className="checkerWorkbench" onSubmit={handleSubmit}>
+          <div className="checkerField checkerPromptBlock">
+            <div className="checkerPromptHeader">
+              <span>{t.prompt}</span>
+              <div className="checkerPromptControls">
+                <button
+                  type="button"
+                  className="checkerPromptEditButton"
+                  onClick={() => setPromptEditing((value) => !value)}
+                >
+                  {promptEditLabel}
+                </button>
+              </div>
+            </div>
+            <div className="checkerPromptBody">
+              {promptEditing ? (
+                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={4} />
+              ) : (
+                <p className="checkerPromptText">{prompt}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="checkerDraftPanel">
+            <div className="checkerDraftHeader">
+              <div>
+                <h2>{t.essay}</h2>
+              </div>
+              <label className="checkerInlineSelect">
+                <span>{t.targetBand}</span>
+                <select value={targetBand} onChange={(event) => setTargetBand(Number(event.target.value) as TargetBand)}>
+                  <option value={5}>5.0</option>
+                  <option value={5.5}>5.5</option>
+                  <option value={6}>6.0</option>
+                  <option value={6.5}>6.5</option>
+                  <option value={7}>7.0</option>
+                  <option value={7.5}>7.5</option>
+                  <option value={8}>8.0</option>
+                </select>
+              </label>
+            </div>
+
+            {error && errorSource !== "auth" ? <p className="errorBox">{error}</p> : null}
+
+            <label className="checkerEssayField">
+              <span className="srOnly">{t.essay}</span>
+              <textarea
+                className="checkerEssayInput"
+                value={essay}
+                onChange={(event) => setEssay(event.target.value)}
+                rows={24}
+              />
+            </label>
+
+            <div className="checkerDraftFooter">
+              <span className={`checkerWordHint is-${wordCountTone}`}>
+                <strong>{wordCount}</strong>
+                <span>{t.wordCount}</span>
+              </span>
+              <ActionButton type="submit" variant="primary" disabled={loading || !sessionReady}>
+                {loading ? t.checking : t.checkWriting}
+              </ActionButton>
+            </div>
           </div>
         </Surface>
-      </section>
 
-      <section className="workspace" id="workspace">
-        <Surface as="form" className="editorPanel" onSubmit={handleSubmit}>
-          <div className="panelHeading">
-            <div>
-              <p className="sectionLabel">{t.editorEyebrow}</p>
-              <h2>{taskType === "task1" ? t.task1 : t.task2}</h2>
-            </div>
-            <div className="inlineMeta">
-              <Pill>{t.providerDeepSeek}</Pill>
-              <Pill>
-                {t.wordCount}: {wordCount}
-              </Pill>
-            </div>
-          </div>
-
-          <div className="segmentedControl" role="tablist" aria-label={t.taskSwitcherAria}>
-            <ActionButton
-              variant="plain"
-              className={taskType === "task1" ? "active" : ""}
-              onClick={() => onTaskTypeChange("task1")}
-            >
-              {t.task1}
-            </ActionButton>
-            <ActionButton
-              variant="plain"
-              className={taskType === "task2" ? "active" : ""}
-              onClick={() => onTaskTypeChange("task2")}
-            >
-              {t.task2}
-            </ActionButton>
-          </div>
-
-          <label>
-            <span>{t.targetBand}</span>
-            <select value={targetBand} onChange={(event) => setTargetBand(Number(event.target.value) as TargetBand)}>
-              <option value={5}>5.0</option>
-              <option value={5.5}>5.5</option>
-              <option value={6}>6.0</option>
-              <option value={6.5}>6.5</option>
-              <option value={7}>7.0</option>
-              <option value={7.5}>7.5</option>
-              <option value={8}>8.0</option>
-            </select>
-          </label>
-
-          <label>
-            <span>{t.prompt}</span>
-            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} />
-          </label>
-
-          <label>
-            <span>{t.essay}</span>
-            <textarea value={essay} onChange={(event) => setEssay(event.target.value)} rows={16} />
-          </label>
-
-          <div className="editorFooter">
-            <p>
-              {t.wordCount}: <strong>{wordCount}</strong>
-            </p>
-            <ActionButton type="submit" variant="primary" disabled={loading || !sessionReady}>
-              {loading ? t.checking : t.checkWriting}
-            </ActionButton>
-          </div>
-
-          {error && errorSource !== "auth" ? <p className="errorBox">{error}</p> : null}
-        </Surface>
-
-        <Surface as="section" className="resultsPanel">
-          <div className="panelHeading resultPanelHeading">
-            <div>
-              <p className="sectionLabel">{t.resultEyebrow}</p>
-              <h2>{result ? t.estimatedBand : t.emptyTitle}</h2>
-            </div>
-          </div>
-
-          {result ? (
-            <Surface className="reportPaper">
+        {result ? (
+          <div ref={reportSectionRef}>
+            <Surface as="section" className="checkerReportShell is-revealed">
+            <Surface className="reportPaper checkerReportPaper">
               <div className="resultHero">
                 <div className="resultScore">
                   <p className="sectionLabel">{t.estimatedBand}</p>
                   <h2>{result.estimatedBand.toFixed(1)}</h2>
                 </div>
                 <div className="resultMeta">
-                  <Pill>{result.taskType === "task1" ? t.task1 : t.task2}</Pill>
                   <Pill>
                     {locale === "zh-CN" ? "目标" : "Target"} {result.targetBand.toFixed(1)}
                   </Pill>
@@ -807,9 +855,6 @@ export default function HomePage() {
                     {result.wordCount} {locale === "zh-CN" ? "词" : "words"}
                   </Pill>
                   <Pill>{result.feedbackMode === "ai" ? t.aiMode : t.heuristicMode}</Pill>
-                  <Pill>
-                    {t.providerUsed}: {result.providerUsed}
-                  </Pill>
                 </div>
               </div>
 
@@ -891,14 +936,9 @@ export default function HomePage() {
                 </div>
               </article>
             </Surface>
-          ) : (
-            <Surface className="emptyState">
-              <p className="eyebrow">{t.ready}</p>
-              <h2>{t.emptyTitle}</h2>
-              <p>{t.emptyDescription}</p>
-            </Surface>
-          )}
-        </Surface>
+          </Surface>
+          </div>
+        ) : null}
       </section>
     </main>
   );

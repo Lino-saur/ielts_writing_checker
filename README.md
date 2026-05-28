@@ -116,3 +116,9 @@ Returns the current user session's energy balance and review cost.
 - Review energy is tied to the Better Auth session user, including anonymous users.
 - PostgreSQL is required for deployment. Local file-based SQLite is no longer used.
 - Neon(DB), Vercel(Deploy) and Spaceship(Domain)
+
+## TODO
+
+* [ ] 真题练习模式
+* [ ] Task1 功能
+* [ ] 图片上传（OCR）

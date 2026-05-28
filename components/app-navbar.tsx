@@ -13,6 +13,12 @@ type SessionUser = {
   isAnonymous: boolean;
 };
 
+type EnergyPayload = {
+  energy?: {
+    balance?: number;
+  };
+};
+
 type NavbarCopy = {
   brand: string;
   task1: string;
@@ -40,6 +46,9 @@ type AppNavbarProps = {
   onLocaleChange: (locale: Locale) => void;
   copy: NavbarCopy;
   onSessionUpdated?: () => Promise<void> | void;
+  taskMenuMode?: "all" | "task2Only";
+  energyBalance?: number | null;
+  energyLabel?: string;
 };
 
 type AuthMode = "signIn" | "signUp";
@@ -59,11 +68,20 @@ function formatUser(user: SessionUser | null, copy: NavbarCopy) {
   return `${copy.userLabel}: ${identity}`;
 }
 
-export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: AppNavbarProps) {
+export function AppNavbar({
+  locale,
+  onLocaleChange,
+  copy,
+  onSessionUpdated,
+  taskMenuMode = "all",
+  energyBalance = null,
+  energyLabel
+}: AppNavbarProps) {
   const themeSwitchId = useId();
   const taskMenuRef = useRef<HTMLDivElement | null>(null);
   const utilityMenuRef = useRef<HTMLDivElement | null>(null);
   const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
+  const [currentEnergyBalance, setCurrentEnergyBalance] = useState<number | null>(energyBalance);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signIn");
   const [signInEmail, setSignInEmail] = useState("");
@@ -92,6 +110,11 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
   const authSwitchPrefix = authMode === "signIn" ? (locale === "zh-CN" ? "没有账号？" : "No account?") : locale === "zh-CN" ? "已有账号？" : "Already have an account?";
   const authSwitchAction = authMode === "signIn" ? (locale === "zh-CN" ? "创建账号" : "Create one") : locale === "zh-CN" ? "返回登录" : "Back to sign in";
   const guestBadge = locale === "zh-CN" ? "访客模式" : "Guest";
+  const effectiveEnergyBalance = energyBalance ?? currentEnergyBalance;
+
+  useEffect(() => {
+    setCurrentEnergyBalance(energyBalance);
+  }, [energyBalance]);
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("theme-mode");
@@ -119,13 +142,17 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
 
         const response = await fetch("/api/session");
         const data = (await response.json()) as { user?: SessionUser };
+        const energyResponse = await fetch("/api/energy");
+        const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
 
         if (mounted) {
           setCurrentUser(data.user ?? null);
+          setCurrentEnergyBalance(energyResponse.ok && "energy" in energyData ? energyData.energy?.balance ?? null : null);
         }
       } catch {
         if (mounted) {
           setCurrentUser(null);
+          setCurrentEnergyBalance(null);
         }
       }
     }
@@ -183,7 +210,10 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
   async function refreshSession() {
     const response = await fetch("/api/session");
     const data = (await response.json()) as { user?: SessionUser };
+    const energyResponse = await fetch("/api/energy");
+    const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
     setCurrentUser(data.user ?? null);
+    setCurrentEnergyBalance(energyResponse.ok && "energy" in energyData ? energyData.energy?.balance ?? null : null);
     await onSessionUpdated?.();
   }
 
@@ -283,35 +313,43 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
         </Link>
 
         <div className="aroundTaskMenu" ref={taskMenuRef}>
-          <button
-            type="button"
-            className={`aroundTaskMenuButton${taskMenuOpen ? " is-open" : ""}`}
-            aria-haspopup="menu"
-            aria-expanded={taskMenuOpen}
-            onClick={() => setTaskMenuOpen((value) => !value)}
-          >
-            <span>{taskMenuLabel}</span>
-            <i className={`ai-chevron-${taskMenuOpen ? "up" : "down"}`} aria-hidden="true" />
-          </button>
+          {taskMenuMode === "task2Only" ? (
+            <Link href={checkerTask2Href} className="aroundTaskMenuButton aroundTaskMenuStatic">
+              <span>{copy.task2}</span>
+            </Link>
+          ) : (
+            <>
+              <button
+                type="button"
+                className={`aroundTaskMenuButton${taskMenuOpen ? " is-open" : ""}`}
+                aria-haspopup="menu"
+                aria-expanded={taskMenuOpen}
+                onClick={() => setTaskMenuOpen((value) => !value)}
+              >
+                <span>{taskMenuLabel}</span>
+                <i className={`ai-chevron-${taskMenuOpen ? "up" : "down"}`} aria-hidden="true" />
+              </button>
 
-          <div className={`aroundTaskDropdown${taskMenuOpen ? " is-open" : ""}`} role="menu">
-            <Link
-              href={checkerTask1Href}
-              className={activeTask === "task1" ? "active" : undefined}
-              role="menuitem"
-              onClick={() => setTaskMenuOpen(false)}
-            >
-              {copy.task1}
-            </Link>
-            <Link
-              href={checkerTask2Href}
-              className={activeTask === "task2" ? "active" : undefined}
-              role="menuitem"
-              onClick={() => setTaskMenuOpen(false)}
-            >
-              {copy.task2}
-            </Link>
-          </div>
+              <div className={`aroundTaskDropdown${taskMenuOpen ? " is-open" : ""}`} role="menu">
+                <Link
+                  href={checkerTask1Href}
+                  className={activeTask === "task1" ? "active" : undefined}
+                  role="menuitem"
+                  onClick={() => setTaskMenuOpen(false)}
+                >
+                  {copy.task1}
+                </Link>
+                <Link
+                  href={checkerTask2Href}
+                  className={activeTask === "task2" ? "active" : undefined}
+                  role="menuitem"
+                  onClick={() => setTaskMenuOpen(false)}
+                >
+                  {copy.task2}
+                </Link>
+              </div>
+            </>
+          )}
         </div>
 
         <button
@@ -329,7 +367,16 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
           <div className="aroundAuthArea">
             {currentUser?.isAnonymous !== false ? (
               <>
-                <Pill className="aroundUserChip aroundUserBadge">{guestBadge}</Pill>
+                <div className="aroundAccountCluster">
+                  {energyLabel ? (
+                    <Pill className="aroundUserChip aroundEnergyBadge">
+                      <span className="aroundEnergyIcon" aria-hidden="true" />
+                      <span className="srOnly">{energyLabel}</span>
+                      <span>{effectiveEnergyBalance ?? "--"}</span>
+                    </Pill>
+                  ) : null}
+                  <Pill className="aroundUserChip aroundUserBadge">{guestBadge}</Pill>
+                </div>
                 <ActionButton
                   className="aroundPrimaryAction"
                   onClick={() => {
@@ -342,7 +389,16 @@ export function AppNavbar({ locale, onLocaleChange, copy, onSessionUpdated }: Ap
               </>
             ) : (
               <>
-                <Pill className="aroundUserChip aroundUserBadge">{formatUser(currentUser, copy)}</Pill>
+                <div className="aroundAccountCluster">
+                  {energyLabel ? (
+                    <Pill className="aroundUserChip aroundEnergyBadge">
+                      <span className="aroundEnergyIcon" aria-hidden="true" />
+                      <span className="srOnly">{energyLabel}</span>
+                      <span>{effectiveEnergyBalance ?? "--"}</span>
+                    </Pill>
+                  ) : null}
+                  <Pill className="aroundUserChip aroundUserBadge">{formatUser(currentUser, copy)}</Pill>
+                </div>
                 <ActionButton
                   className="ghostAction"
                   onClick={async () => {
