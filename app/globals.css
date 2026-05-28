@@ -1852,6 +1852,42 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   border-bottom: 1px solid var(--line);
 }
 
+.reportModeSwitch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 18px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.reportModeButton {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.reportModeButton.is-active {
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-deep);
+}
+
+.reportModeButton:hover {
+  transform: translateY(-1px);
+}
+
 .resultScore h2 {
   margin-top: 8px;
   font-size: clamp(3.2rem, 6vw, 4.8rem);
@@ -1933,6 +1969,132 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
 .revisionHint {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.reviseWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.9fr);
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.reviseWorkspace.is-stacked {
+  grid-template-columns: 1fr;
+}
+
+.reviseEssayPanel,
+.reviseSidebar {
+  margin-top: 0;
+}
+
+.revisePanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.reviseLayoutSwitch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.reviseLayoutButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.reviseLayoutButton.is-active {
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-deep);
+}
+
+.reviseLayoutButton i {
+  font-size: 0.88rem;
+}
+
+.reviseAnnotatedEssay {
+  margin-top: 14px;
+}
+
+.reviseSidebar {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.reviseDetailCard {
+  display: grid;
+  gap: 12px;
+}
+
+.revisePair,
+.reviseReason,
+.reviseSupportBlock {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-muted);
+}
+
+.revisePair span,
+.reviseReason span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.revisePair p,
+.reviseReason p,
+.reviseSupportBlock li {
+  margin: 0;
+  color: var(--ink);
+}
+
+.revisePairSuggested {
+  border-color: rgba(var(--accent-rgb), 0.18);
+  background: rgba(239, 248, 244, 0.88);
+}
+
+.reviseEmpty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed rgba(var(--accent-rgb), 0.18);
+  border-radius: 18px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.reviseSupportBlock ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.reviseSupportBlock li + li {
+  margin-top: 10px;
 }
 
 .revisionBlock {
@@ -2475,6 +2637,14 @@ html[data-theme="dark"] .authSwitchButton {
     grid-template-columns: 1fr;
   }
 
+  .reviseWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .reviseLayoutSwitch {
+    display: none;
+  }
+
   .checkerEssayInput {
     min-height: 56vh;
   }
@@ -2677,6 +2847,19 @@ html[data-theme="dark"] .authSwitchButton {
     justify-content: flex-start;
   }
 
+  .reportModeSwitch {
+    width: 100%;
+  }
+
+  .revisePanelHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reviseLayoutSwitch {
+    width: 100%;
+  }
+
   .heroContent,
   .previewCard,
   .checkerDraftPanel,
@@ -2732,6 +2915,13 @@ html[data-theme="dark"] .authSwitchButton {
   .checkerDraftFooter button {
     width: 100%;
     min-width: 0;
+  }
+
+  .revisePair,
+  .reviseReason,
+  .reviseSupportBlock,
+  .reviseEmpty {
+    padding: 14px;
   }
 
   .heroContent h1 {

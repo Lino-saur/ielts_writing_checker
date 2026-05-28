@@ -138,7 +138,16 @@ const UI_COPY = {
     emptyTitle: "Run the first review",
     emptyDescription:
       "Paste the Task 2 prompt and essay, then run the checker to get rubric-based feedback.",
-    genericError: "Something went wrong."
+    genericError: "Something went wrong.",
+    overviewTab: "Overview",
+    reviseTab: "Revise",
+    reviseTitle: "Revise against feedback",
+    reviseBody: "Keep the draft in view and inspect each suggestion where it appears.",
+    reviseEmpty: "Select a highlighted revision to inspect the change.",
+    reviseOriginal: "Original",
+    reviseSuggested: "Suggested",
+    layoutSplit: "Side by side",
+    layoutStack: "Stacked"
   },
   "zh-CN": {
     brand: "IELTS Writing Checker",
@@ -255,7 +264,16 @@ const UI_COPY = {
     ready: "已就绪",
     emptyTitle: "开始第一次批改",
     emptyDescription: "粘贴 Task 2 题目和作文，然后运行批改以获取按评分标准生成的反馈。",
-    genericError: "发生了一些问题。"
+    genericError: "发生了一些问题。",
+    overviewTab: "总览",
+    reviseTab: "修改",
+    reviseTitle: "结合批改结果修改原文",
+    reviseBody: "保持原文在主视图里，点开文中的修改处查看建议。",
+    reviseEmpty: "点击一处文中修改，右侧查看对应建议。",
+    reviseOriginal: "原句",
+    reviseSuggested: "建议改法",
+    layoutSplit: "左右布局",
+    layoutStack: "上下布局"
   }
 } as const;
 
@@ -276,6 +294,8 @@ type EnergyPayload = {
 };
 
 type ErrorSource = "auth" | "general";
+type ReportView = "overview" | "revise";
+type ReviseLayout = "split" | "stack";
 
 function ScoreCard({
   label,
@@ -299,20 +319,20 @@ function ScoreCard({
   );
 }
 
-function renderAnnotatedEssay(
-  text: string,
-  highlightedSentences: string[],
-  correctionNotes: CorrectionNote[],
-  activeEditIndex: number | null,
-  onToggleEdit: (index: number) => void,
-  t: (typeof UI_COPY)["en"] | (typeof UI_COPY)["zh-CN"]
-) {
+function parseAnnotatedEssay(text: string, correctionNotes: CorrectionNote[]) {
   const notesById = new Map(correctionNotes.map((note) => [note.id, note]));
   const parts: Array<
     | { type: "plain"; text: string }
     | { type: "edit"; id: string; original: string; corrected: string; note?: CorrectionNote; index: number }
     | { type: "del" | "add"; text: string }
   > = [];
+  const edits: Array<{
+    id: string;
+    original: string;
+    corrected: string;
+    note?: CorrectionNote;
+    index: number;
+  }> = [];
   const pairPattern = /\[del#([A-Za-z0-9_-]+)\]([\s\S]*?)\[\/del#\1\]\[add#\1\]([\s\S]*?)\[\/add#\1\]/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -323,22 +343,36 @@ function renderAnnotatedEssay(
       parts.push({ type: "plain", text: text.slice(lastIndex, match.index) });
     }
 
-    parts.push({
-      type: "edit",
+    const edit = {
       id: match[1],
       original: match[2],
       corrected: match[3],
       note: notesById.get(match[1]),
       index: editIndex
-    });
-    editIndex += 1;
+    };
 
+    parts.push({ type: "edit", ...edit });
+    edits.push(edit);
+    editIndex += 1;
     lastIndex = pairPattern.lastIndex;
   }
 
   if (lastIndex < text.length) {
     parts.push({ type: "plain", text: text.slice(lastIndex) });
   }
+
+  return { parts, edits };
+}
+
+function renderAnnotatedEssay(
+  text: string,
+  highlightedSentences: string[],
+  correctionNotes: CorrectionNote[],
+  activeEditIndex: number | null,
+  onToggleEdit: (index: number) => void,
+  t: (typeof UI_COPY)["en"] | (typeof UI_COPY)["zh-CN"]
+) {
+  const { parts } = parseAnnotatedEssay(text, correctionNotes);
 
   function renderPlainTextSegment(segment: string, keyPrefix: string) {
     if (!highlightedSentences.length) {
@@ -458,6 +492,8 @@ export default function HomePage() {
   const [sessionReady, setSessionReady] = useState(false);
   const [promptEditing, setPromptEditing] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [reportView, setReportView] = useState<ReportView>("overview");
+  const [reviseLayout, setReviseLayout] = useState<ReviseLayout>("split");
 
   const t = UI_COPY[locale];
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
@@ -469,6 +505,8 @@ export default function HomePage() {
     : locale === "zh-CN"
       ? "编辑题目"
       : "Edit prompt";
+  const parsedRevision = result ? parseAnnotatedEssay(result.annotatedEssay, result.correctionNotes) : null;
+  const activeCorrection = parsedRevision && activeEditIndex !== null ? parsedRevision.edits[activeEditIndex] ?? null : null;
 
   function clearError() {
     setError(null);
@@ -596,6 +634,16 @@ export default function HomePage() {
         block: "start"
       });
     });
+  }, [result]);
+
+  useEffect(() => {
+    if (!result) {
+      return;
+    }
+
+    setReportView("overview");
+    setReviseLayout("split");
+    setActiveEditIndex(null);
   }, [result]);
 
   useEffect(() => {
@@ -857,84 +905,155 @@ export default function HomePage() {
                   <Pill>{result.feedbackMode === "ai" ? t.aiMode : t.heuristicMode}</Pill>
                 </div>
               </div>
-
-              <div className="scoreGrid">
-                <ScoreCard
-                  label={t.taskAchievement}
-                  score={result.bandBreakdown.taskAchievement.score}
-                  rationale={result.bandBreakdown.taskAchievement.rationale}
-                />
-                <ScoreCard
-                  label={t.coherence}
-                  score={result.bandBreakdown.coherenceAndCohesion.score}
-                  rationale={result.bandBreakdown.coherenceAndCohesion.rationale}
-                />
-                <ScoreCard
-                  label={t.lexical}
-                  score={result.bandBreakdown.lexicalResource.score}
-                  rationale={result.bandBreakdown.lexicalResource.rationale}
-                />
-                <ScoreCard
-                  label={t.grammar}
-                  score={result.bandBreakdown.grammaticalRangeAndAccuracy.score}
-                  rationale={result.bandBreakdown.grammaticalRangeAndAccuracy.rationale}
-                />
+              <div className="reportModeSwitch" role="tablist" aria-label="Review modes">
+                <button
+                  type="button"
+                  className={`reportModeButton${reportView === "overview" ? " is-active" : ""}`}
+                  onClick={() => setReportView("overview")}
+                >
+                  {t.overviewTab}
+                </button>
+                <button
+                  type="button"
+                  className={`reportModeButton${reportView === "revise" ? " is-active" : ""}`}
+                  onClick={() => setReportView("revise")}
+                >
+                  {t.reviseTab}
+                </button>
               </div>
 
-              <article className="feedbackSection">
-                <p className="sectionLabel">{t.strengths}</p>
-                <ul>
-                  {result.strengths.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </article>
-
-              <article className="feedbackSection">
-                <p className="sectionLabel">{t.highlightedSentences}</p>
-                <div className="correctionList">
-                  {result.highlightedSentences.map((item, index) => (
-                    <article key={`${item.sentence}-${index}`} className="correctionCard">
-                      <p>
-                        <strong>{t.highlightedSentence}:</strong> {item.sentence}
-                      </p>
-                      <p>
-                        <strong>{t.highlightedReason}:</strong> {item.reason}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-              </article>
-
-              <article className="feedbackSection">
-                <p className="sectionLabel">{t.priorityFixes}</p>
-                <ul>
-                  {result.priorityFixes.map((item) => (
-                    <li key={item.title}>
-                      <strong>{item.title}:</strong> {item.detail}
-                    </li>
-                  ))}
-                </ul>
-              </article>
-
-              <article className="feedbackSection revisionSection">
-                <p className="sectionLabel">{t.revisionBundle}</p>
-                <p className="revisionHint">{t.tapForReason}</p>
-
-                <div className="revisionBlock">
-                  <p className="subsectionTitle">{t.annotatedEssay}</p>
-                  <div className="annotatedEssay" ref={activeEditRef}>
-                    {renderAnnotatedEssay(
-                      result.annotatedEssay,
-                      result.highlightedSentences.map((item) => item.sentence),
-                      result.correctionNotes,
-                      activeEditIndex,
-                      (index) => setActiveEditIndex((current) => (current === index ? null : index)),
-                      t
-                    )}
+              {reportView === "overview" ? (
+                <>
+                  <div className="scoreGrid">
+                    <ScoreCard
+                      label={t.taskAchievement}
+                      score={result.bandBreakdown.taskAchievement.score}
+                      rationale={result.bandBreakdown.taskAchievement.rationale}
+                    />
+                    <ScoreCard
+                      label={t.coherence}
+                      score={result.bandBreakdown.coherenceAndCohesion.score}
+                      rationale={result.bandBreakdown.coherenceAndCohesion.rationale}
+                    />
+                    <ScoreCard
+                      label={t.lexical}
+                      score={result.bandBreakdown.lexicalResource.score}
+                      rationale={result.bandBreakdown.lexicalResource.rationale}
+                    />
+                    <ScoreCard
+                      label={t.grammar}
+                      score={result.bandBreakdown.grammaticalRangeAndAccuracy.score}
+                      rationale={result.bandBreakdown.grammaticalRangeAndAccuracy.rationale}
+                    />
                   </div>
-                </div>
-              </article>
+
+                  <article className="feedbackSection">
+                    <p className="sectionLabel">{t.strengths}</p>
+                    <ul>
+                      {result.strengths.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </article>
+
+                  <article className="feedbackSection">
+                    <p className="sectionLabel">{t.highlightedSentences}</p>
+                    <div className="correctionList">
+                      {result.highlightedSentences.map((item, index) => (
+                        <article key={`${item.sentence}-${index}`} className="correctionCard">
+                          <p>
+                            <strong>{t.highlightedSentence}:</strong> {item.sentence}
+                          </p>
+                          <p>
+                            <strong>{t.highlightedReason}:</strong> {item.reason}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="feedbackSection">
+                    <p className="sectionLabel">{t.priorityFixes}</p>
+                    <ul>
+                      {result.priorityFixes.map((item) => (
+                        <li key={item.title}>
+                          <strong>{item.title}:</strong> {item.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                </>
+              ) : (
+                <section className={`reviseWorkspace${reviseLayout === "stack" ? " is-stacked" : ""}`}>
+                  <article className="feedbackSection reviseEssayPanel">
+                    <div className="revisePanelHeader">
+                      <p className="sectionLabel">{t.reviseTitle}</p>
+                      <div className="reviseLayoutSwitch" role="group" aria-label="Revise layout">
+                        <button
+                          type="button"
+                          className={`reviseLayoutButton${reviseLayout === "split" ? " is-active" : ""}`}
+                          onClick={() => setReviseLayout("split")}
+                        >
+                          <i className="ai-layout-column" aria-hidden="true" />
+                          <span>{t.layoutSplit}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`reviseLayoutButton${reviseLayout === "stack" ? " is-active" : ""}`}
+                          onClick={() => setReviseLayout("stack")}
+                        >
+                          <i className="ai-layout-row" aria-hidden="true" />
+                          <span>{t.layoutStack}</span>
+                        </button>
+                      </div>
+                    </div>
+                    <p className="revisionHint">{t.reviseBody}</p>
+                    <div className="annotatedEssay reviseAnnotatedEssay" ref={activeEditRef}>
+                      {renderAnnotatedEssay(
+                        result.annotatedEssay,
+                        result.highlightedSentences.map((item) => item.sentence),
+                        result.correctionNotes,
+                        activeEditIndex,
+                        (index) => setActiveEditIndex((current) => (current === index ? null : index)),
+                        t
+                      )}
+                    </div>
+                  </article>
+
+                  <aside className="feedbackSection reviseSidebar">
+                    <p className="sectionLabel">{t.revisionBundle}</p>
+                    {activeCorrection ? (
+                      <div className="reviseDetailCard">
+                        <div className="revisePair">
+                          <span>{t.reviseOriginal}</span>
+                          <p>{activeCorrection.original}</p>
+                        </div>
+                        <div className="revisePair revisePairSuggested">
+                          <span>{t.reviseSuggested}</span>
+                          <p>{activeCorrection.corrected}</p>
+                        </div>
+                        <div className="reviseReason">
+                          <span>{t.correctionReason}</span>
+                          <p>{activeCorrection.note?.reason ?? ""}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="reviseEmpty">{t.reviseEmpty}</p>
+                    )}
+
+                    <div className="reviseSupportBlock">
+                      <p className="subsectionTitle">{t.priorityFixes}</p>
+                      <ul>
+                        {result.priorityFixes.map((item) => (
+                          <li key={item.title}>
+                            <strong>{item.title}:</strong> {item.detail}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </aside>
+                </section>
+              )}
             </Surface>
           </Surface>
           </div>
