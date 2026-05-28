@@ -2656,7 +2656,6 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .siteHeader,
-  .checkerDraftHeader,
   .resultHero,
   .previewHeader,
   .editorFooter,
@@ -2698,8 +2697,32 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .checkerInlineSelect {
-    width: 100%;
+    width: auto;
+    min-width: 0;
+    justify-content: flex-start;
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .checkerDraftHeader {
+    flex-direction: row;
+    align-items: center;
     justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+  .checkerDraftHeader h2 {
+    font-size: 1.08rem;
+  }
+
+  .checkerInlineSelect span {
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+  }
+
+  .checkerInlineSelect select {
+    font-size: 0.9rem;
   }
 
   .checkerDraftFooter {
@@ -2753,6 +2776,44 @@ html[data-theme="dark"] .authSwitchButton {
 }
 
 @media (max-width: 560px) {
+  .checkerDraftHeader {
+    gap: 10px;
+  }
+
+  .checkerInlineSelect {
+    flex: 0 0 auto;
+    max-width: 46%;
+    padding: 0 10px;
+  }
+
+  .checkerInlineSelect select {
+    min-width: 0;
+  }
+
+  .checkerPromptBlock {
+    padding: 12px 12px 13px;
+  }
+
+  .checkerPromptHeader {
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .checkerPromptText {
+    font-size: 0.92rem;
+    line-height: 1.62;
+  }
+
+  .checkerPromptBody {
+    padding-left: 12px;
+  }
+
+  .checkerPromptEditButton {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 0.78rem;
+  }
+
   .checkerWorkbench,
   .checkerDraftPanel,
   .checkerReportShell,
