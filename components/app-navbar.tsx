@@ -2,22 +2,14 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  getClientSessionContext,
+  invalidateClientSessionContext,
+  type ClientSessionContext
+} from "@/lib/auth-client-session";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
 
 type Locale = "en" | "zh-CN";
-
-type SessionUser = {
-  id: string;
-  name?: string | null;
-  email?: string | null;
-  isAnonymous: boolean;
-};
-
-type EnergyPayload = {
-  energy?: {
-    balance?: number;
-  };
-};
 
 type NavbarCopy = {
   brand: string;
@@ -59,7 +51,7 @@ async function getAuthClient() {
   return authClient;
 }
 
-function formatUser(user: SessionUser | null, copy: NavbarCopy) {
+function formatUser(user: ClientSessionContext["user"], copy: NavbarCopy) {
   if (!user) {
     return `${copy.userLabel}: --`;
   }
@@ -79,8 +71,8 @@ export function AppNavbar({
 }: AppNavbarProps) {
   const themeSwitchId = useId();
   const taskMenuRef = useRef<HTMLDivElement | null>(null);
-  const utilityMenuRef = useRef<HTMLDivElement | null>(null);
-  const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const [currentUser, setCurrentUser] = useState<ClientSessionContext["user"]>(null);
   const [currentEnergyBalance, setCurrentEnergyBalance] = useState<number | null>(energyBalance);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signIn");
@@ -93,9 +85,8 @@ export function AppNavbar({
   const [authError, setAuthError] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [activeTask, setActiveTask] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [taskMenuOpen, setTaskMenuOpen] = useState(false);
-  const [utilityMenuOpen, setUtilityMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [signInPasswordVisible, setSignInPasswordVisible] = useState(false);
   const [signUpPasswordVisible, setSignUpPasswordVisible] = useState(false);
 
@@ -103,14 +94,14 @@ export function AppNavbar({
   const checkerTask1Href = useMemo(() => `/checker?task=task1&lang=${locale}`, [locale]);
   const checkerTask2Href = useMemo(() => `/checker?task=task2&lang=${locale}`, [locale]);
   const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : locale === "zh-CN" ? "写作任务" : "Writing tasks";
-  const mobileMenuOpenLabel = locale === "zh-CN" ? "打开菜单" : "Open menu";
-  const mobileMenuCloseLabel = locale === "zh-CN" ? "收起菜单" : "Close menu";
-  const utilityMenuOpenLabel = locale === "zh-CN" ? "打开更多设置" : "Open more settings";
-  const utilityMenuCloseLabel = locale === "zh-CN" ? "收起更多设置" : "Close more settings";
+  const moreMenuOpenLabel = locale === "zh-CN" ? "打开设置菜单" : "Open settings menu";
+  const moreMenuCloseLabel = locale === "zh-CN" ? "收起设置菜单" : "Close settings menu";
   const authSwitchPrefix = authMode === "signIn" ? (locale === "zh-CN" ? "没有账号？" : "No account?") : locale === "zh-CN" ? "已有账号？" : "Already have an account?";
   const authSwitchAction = authMode === "signIn" ? (locale === "zh-CN" ? "创建账号" : "Create one") : locale === "zh-CN" ? "返回登录" : "Back to sign in";
   const guestBadge = locale === "zh-CN" ? "访客模式" : "Guest";
   const effectiveEnergyBalance = energyBalance ?? currentEnergyBalance;
+  const themeLabel = locale === "zh-CN" ? "主题" : "Theme";
+  const appearanceLabel = locale === "zh-CN" ? "外观" : "Appearance";
 
   useEffect(() => {
     setCurrentEnergyBalance(energyBalance);
@@ -130,24 +121,11 @@ export function AppNavbar({
 
     async function loadSession() {
       try {
-        const authClient = await getAuthClient();
-        const sessionResult = await authClient.getSession();
-
-        if (!sessionResult.data) {
-          const anonymousResult = await authClient.signIn.anonymous();
-          if (anonymousResult.error) {
-            throw new Error(anonymousResult.error.message || "AUTH_INIT_FAILED");
-          }
-        }
-
-        const response = await fetch("/api/session");
-        const data = (await response.json()) as { user?: SessionUser };
-        const energyResponse = await fetch("/api/energy");
-        const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
+        const sessionContext = await getClientSessionContext();
 
         if (mounted) {
-          setCurrentUser(data.user ?? null);
-          setCurrentEnergyBalance(energyResponse.ok && "energy" in energyData ? energyData.energy?.balance ?? null : null);
+          setCurrentUser(sessionContext.user);
+          setCurrentEnergyBalance(sessionContext.energy?.balance ?? null);
         }
       } catch {
         if (mounted) {
@@ -165,22 +143,9 @@ export function AppNavbar({
   }, []);
 
   useEffect(() => {
-    function syncMobileMenu() {
-      if (window.innerWidth > 760) {
-        setMobileMenuOpen(false);
-      }
-    }
-
-    syncMobileMenu();
-    window.addEventListener("resize", syncMobileMenu);
-    return () => window.removeEventListener("resize", syncMobileMenu);
-  }, []);
-
-  useEffect(() => {
     if (authDialogOpen) {
-      setMobileMenuOpen(false);
       setTaskMenuOpen(false);
-      setUtilityMenuOpen(false);
+      setMoreMenuOpen(false);
     }
   }, [authDialogOpen]);
 
@@ -190,8 +155,8 @@ export function AppNavbar({
         setTaskMenuOpen(false);
       }
 
-      if (!utilityMenuRef.current?.contains(event.target as Node)) {
-        setUtilityMenuOpen(false);
+      if (!moreMenuRef.current?.contains(event.target as Node)) {
+        setMoreMenuOpen(false);
       }
     }
 
@@ -204,16 +169,12 @@ export function AppNavbar({
     setTheme(nextTheme);
     document.documentElement.dataset.theme = nextTheme;
     window.localStorage.setItem("theme-mode", nextTheme);
-    setUtilityMenuOpen(false);
   }
 
   async function refreshSession() {
-    const response = await fetch("/api/session");
-    const data = (await response.json()) as { user?: SessionUser };
-    const energyResponse = await fetch("/api/energy");
-    const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
-    setCurrentUser(data.user ?? null);
-    setCurrentEnergyBalance(energyResponse.ok && "energy" in energyData ? energyData.energy?.balance ?? null : null);
+    const sessionContext = await getClientSessionContext({ forceRefresh: true });
+    setCurrentUser(sessionContext.user);
+    setCurrentEnergyBalance(sessionContext.energy?.balance ?? null);
     await onSessionUpdated?.();
   }
 
@@ -250,6 +211,7 @@ export function AppNavbar({
         }
       }
 
+      invalidateClientSessionContext();
       await refreshSession();
       setAuthDialogOpen(false);
       setSignInPassword("");
@@ -285,6 +247,7 @@ export function AppNavbar({
         throw new Error(signOutResult.error.message || copy.genericError);
       }
 
+      invalidateClientSessionContext();
       const anonymousResult = await authClient.signIn.anonymous();
       if (anonymousResult.error) {
         throw new Error(anonymousResult.error.message || copy.genericError);
@@ -352,112 +315,112 @@ export function AppNavbar({
           )}
         </div>
 
-        <button
-          type="button"
-          className={`aroundNavMenuButton${mobileMenuOpen ? " is-open" : ""}`}
-          aria-expanded={mobileMenuOpen}
-          aria-controls="app-navbar-menu"
-          aria-label={mobileMenuOpen ? mobileMenuCloseLabel : mobileMenuOpenLabel}
-          onClick={() => setMobileMenuOpen((value) => !value)}
-        >
-          <i className="ai-dots-horizontal" aria-hidden="true" />
-        </button>
-
-        <div id="app-navbar-menu" className={`aroundNavControls${mobileMenuOpen ? " is-open" : ""}`}>
+        <div className="aroundNavControls">
           <div className="aroundAuthArea">
+            <div className="aroundAccountCluster">
+              <Pill className="aroundUserChip aroundUserBadge">
+                {currentUser?.isAnonymous !== false ? guestBadge : formatUser(currentUser, copy)}
+              </Pill>
+              {energyLabel ? (
+                <Pill className="aroundUserChip aroundEnergyBadge">
+                  <span className="aroundEnergyIcon" aria-hidden="true" />
+                  <span className="srOnly">{energyLabel}</span>
+                  <span>{effectiveEnergyBalance ?? "--"}</span>
+                </Pill>
+              ) : null}
+            </div>
+
             {currentUser?.isAnonymous !== false ? (
-              <>
-                <div className="aroundAccountCluster">
-                  {energyLabel ? (
-                    <Pill className="aroundUserChip aroundEnergyBadge">
-                      <span className="aroundEnergyIcon" aria-hidden="true" />
-                      <span className="srOnly">{energyLabel}</span>
-                      <span>{effectiveEnergyBalance ?? "--"}</span>
-                    </Pill>
-                  ) : null}
-                  <Pill className="aroundUserChip aroundUserBadge">{guestBadge}</Pill>
-                </div>
-                <ActionButton
-                  className="aroundPrimaryAction"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    openAuth("signIn");
-                  }}
-                >
-                  {copy.login}
-                </ActionButton>
-              </>
+              <ActionButton
+                className="aroundPrimaryAction"
+                onClick={() => {
+                  setMoreMenuOpen(false);
+                  openAuth("signIn");
+                }}
+              >
+                {copy.login}
+              </ActionButton>
             ) : (
-              <>
-                <div className="aroundAccountCluster">
-                  {energyLabel ? (
-                    <Pill className="aroundUserChip aroundEnergyBadge">
-                      <span className="aroundEnergyIcon" aria-hidden="true" />
-                      <span className="srOnly">{energyLabel}</span>
-                      <span>{effectiveEnergyBalance ?? "--"}</span>
-                    </Pill>
-                  ) : null}
-                  <Pill className="aroundUserChip aroundUserBadge">{formatUser(currentUser, copy)}</Pill>
-                </div>
-                <ActionButton
-                  className="ghostAction"
-                  onClick={async () => {
-                    setMobileMenuOpen(false);
-                    await handleSignOut();
-                  }}
-                >
-                  {copy.authSignOut}
-                </ActionButton>
-              </>
+              <ActionButton
+                className="ghostAction"
+                onClick={async () => {
+                  setMoreMenuOpen(false);
+                  await handleSignOut();
+                }}
+              >
+                {copy.authSignOut}
+              </ActionButton>
             )}
           </div>
 
-          <div className="aroundUtilityMenu" ref={utilityMenuRef}>
-            <button
-              type="button"
-              className={`aroundUtilityMenuButton${utilityMenuOpen ? " is-open" : ""}`}
-              aria-haspopup="menu"
-              aria-expanded={utilityMenuOpen}
-              aria-label={utilityMenuOpen ? utilityMenuCloseLabel : utilityMenuOpenLabel}
-              onClick={() => setUtilityMenuOpen((value) => !value)}
-            >
-              <i className="ai-settings" aria-hidden="true" />
-            </button>
+          <div className="aroundUtilityMenu" ref={moreMenuRef}>
+          <button
+            type="button"
+            className={`aroundNavMenuButton${moreMenuOpen ? " is-open" : ""}`}
+            aria-expanded={moreMenuOpen}
+            aria-controls="app-navbar-menu"
+            aria-label={moreMenuOpen ? moreMenuCloseLabel : moreMenuOpenLabel}
+            onClick={() => {
+              setTaskMenuOpen(false);
+              setMoreMenuOpen((value) => !value);
+            }}
+          >
+            <i className="ai-settings-filled" aria-hidden="true" />
+          </button>
 
-            <div className={`aroundUtilityDropdown${utilityMenuOpen ? " is-open" : ""}`} role="menu">
-              <label className="aroundLanguageSelect">
-                <span>{copy.languageLabel}:</span>
-                <select
-                  value={locale}
-                  onChange={(event) => {
-                    onLocaleChange(event.target.value as Locale);
-                    setUtilityMenuOpen(false);
+          <div id="app-navbar-menu" className={`aroundUtilityDropdown aroundMoreDropdown${moreMenuOpen ? " is-open" : ""}`} role="menu">
+            <div className="aroundMenuSection">
+              <div className="aroundMenuSectionLabel">{copy.languageLabel}</div>
+              <div className="aroundSegmentedControl">
+                <button
+                  type="button"
+                  className={`aroundSegmentButton${locale === "zh-CN" ? " is-active" : ""}`}
+                  onClick={() => {
+                    onLocaleChange("zh-CN");
+                    setMoreMenuOpen(false);
                   }}
                 >
-                  <option value="zh-CN">简体中文</option>
-                  <option value="en">English</option>
-                </select>
-              </label>
-
-              <div className="form-switch mode-switch aroundModeSwitch" data-theme-toggle="mode">
-                <input
-                  id={themeSwitchId}
-                  className="form-check-input"
-                  type="checkbox"
-                  checked={theme === "dark"}
-                  onChange={toggleTheme}
-                  aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-                />
-                <label className="form-check-label" htmlFor={themeSwitchId}>
-                  <i className="ai-sun fs-lg" />
-                </label>
-                <label className="form-check-label" htmlFor={themeSwitchId}>
-                  <i className="ai-moon fs-lg" />
-                </label>
+                  简体中文
+                </button>
+                <button
+                  type="button"
+                  className={`aroundSegmentButton${locale === "en" ? " is-active" : ""}`}
+                  onClick={() => {
+                    onLocaleChange("en");
+                    setMoreMenuOpen(false);
+                  }}
+                >
+                  English
+                </button>
               </div>
+            </div>
 
+            <div className="aroundMenuSection">
+              <div className="aroundMenuRow">
+                <div>
+                  <div className="aroundMenuSectionLabel">{appearanceLabel}</div>
+                  <div className="aroundMenuValue">{themeLabel}</div>
+                </div>
+                <div className="form-switch mode-switch aroundModeSwitch" data-theme-toggle="mode">
+                  <input
+                    id={themeSwitchId}
+                    className="form-check-input"
+                    type="checkbox"
+                    checked={theme === "dark"}
+                    onChange={toggleTheme}
+                    aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+                  />
+                  <label className="form-check-label" htmlFor={themeSwitchId}>
+                    <i className="ai-sun fs-lg" />
+                  </label>
+                  <label className="form-check-label" htmlFor={themeSwitchId}>
+                    <i className="ai-moon fs-lg" />
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
         </div>
       </Surface>
 

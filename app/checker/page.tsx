@@ -2,15 +2,11 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
+import { getClientSessionContext } from "@/lib/auth-client-session";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
 import { AiProvider, CorrectionNote, Locale, TargetBand, WritingCheckResult } from "@/lib/types";
 
 const LOCALE_STORAGE_KEY = "app-locale";
-
-async function getAuthClient() {
-  const { authClient } = await import("@/lib/auth-client");
-  return authClient;
-}
 
 const TASK2_PLACEHOLDER = {
   prompt:
@@ -587,25 +583,11 @@ export default function HomePage() {
 
     async function loadSessionContext() {
       try {
-        const authClient = await getAuthClient();
-        const sessionResult = await authClient.getSession();
-        if (!sessionResult.data) {
-          const anonymousResult = await authClient.signIn.anonymous();
-          if (anonymousResult.error) {
-            throw new Error(anonymousResult.error.message || "AUTH_INIT_FAILED");
-          }
-        }
-
-        const energyResponse = await fetch("/api/energy");
-        const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
-
-        if (!energyResponse.ok || isErrorPayload(energyData)) {
-          return;
-        }
+        const sessionContext = await getClientSessionContext();
 
         if (mounted) {
-          setEnergy(energyData.energy);
-          setReviewCost(energyData.cost);
+          setEnergy(sessionContext.energy);
+          setReviewCost(sessionContext.reviewCost ?? 1);
         }
       } catch {
         // Ignore preload failures.
@@ -664,15 +646,9 @@ export default function HomePage() {
   }, [confirmDialogOpen]);
 
   async function refreshSessionContext() {
-    const energyResponse = await fetch("/api/energy");
-    const energyData = (await energyResponse.json()) as EnergyPayload | { error?: string };
-
-    if (!energyResponse.ok || isErrorPayload(energyData)) {
-      throw new Error(t.genericError);
-    }
-
-    setEnergy(energyData.energy);
-    setReviewCost(energyData.cost);
+    const sessionContext = await getClientSessionContext({ forceRefresh: true });
+    setEnergy(sessionContext.energy);
+    setReviewCost(sessionContext.reviewCost ?? 1);
   }
 
   async function runCheck() {

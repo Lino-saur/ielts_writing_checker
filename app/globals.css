@@ -216,8 +216,6 @@ a {
 
 .aroundTaskMenu,
 .aroundUtilityMenu,
-.aroundNavControls,
-.aroundAuthArea,
 .aroundLanguageSelect {
   display: flex;
   align-items: center;
@@ -225,6 +223,7 @@ a {
 
 .aroundTaskMenu {
   position: relative;
+  justify-self: start;
 }
 
 .aroundUtilityMenu {
@@ -235,9 +234,9 @@ a {
 .aroundTaskMenuButton {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 42px;
-  padding: 0 16px;
+  padding: 0 14px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface-pill);
@@ -281,10 +280,11 @@ a {
   position: absolute;
   top: calc(100% + 10px);
   left: 0;
+  right: auto;
   z-index: 16;
   display: none;
   min-width: 188px;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface-elevated);
@@ -293,14 +293,14 @@ a {
 
 .aroundTaskDropdown.is-open {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .aroundTaskDropdown a {
   display: flex;
   align-items: center;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 0 12px;
   border-radius: 12px;
   color: var(--muted-strong);
   font-size: 0.88rem;
@@ -320,14 +320,17 @@ a {
 }
 
 .aroundNavControls {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 12px;
   min-width: 0;
+  margin-left: auto;
 }
 
 .aroundPrimaryAction {
   min-height: 42px;
-  padding-inline: 13px;
+  padding-inline: 14px;
   border: 1px solid rgba(var(--accent-rgb), 0.2);
   white-space: nowrap;
   border-radius: 999px;
@@ -346,7 +349,7 @@ a {
 }
 
 .aroundNavMenuButton {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 44px;
@@ -423,7 +426,7 @@ a {
   z-index: 16;
   display: none;
   min-width: 220px;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface-elevated);
@@ -432,7 +435,69 @@ a {
 
 .aroundUtilityDropdown.is-open {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+}
+
+.aroundMoreDropdown {
+  width: min(320px, calc(100vw - 32px));
+  padding: 12px;
+  gap: 12px;
+}
+
+.aroundMenuSection {
+  display: grid;
+  gap: 12px;
+}
+
+.aroundMenuSection + .aroundMenuSection {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.aroundMenuSectionLabel {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.aroundSegmentedControl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.aroundSegmentButton {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-pill);
+  color: var(--muted-strong);
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+
+.aroundSegmentButton:hover,
+.aroundSegmentButton.is-active {
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.26);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.aroundMenuRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.aroundMenuValue {
+  color: var(--muted-strong);
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .aroundModeSwitch {
@@ -441,7 +506,7 @@ a {
   justify-content: center;
   min-height: 42px;
   margin: 0;
-  padding: 0 13px;
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface-pill);
@@ -541,7 +606,7 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
 
 .aroundAuthArea {
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   flex-wrap: nowrap;
 }
@@ -551,17 +616,13 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-subtle);
 }
 
 .aroundUserChip {
   display: inline-flex;
   align-items: center;
   min-height: 42px;
-  padding: 0 13px;
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface-pill);
@@ -578,8 +639,8 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
 }
 
 .aroundEnergyBadge {
-  background: transparent;
-  border-color: transparent;
+  background: var(--surface-pill);
+  border-color: var(--line);
   color: var(--muted-strong);
   gap: 8px;
 }
@@ -601,13 +662,14 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
 
 .aroundAccountCluster .aroundUserBadge,
 .aroundAccountCluster .aroundEnergyBadge {
-  min-height: 34px;
+  min-height: 42px;
   padding-inline: 12px;
   box-shadow: none;
 }
 
-.aroundAccountCluster .aroundUserBadge {
-  border-color: rgba(var(--accent-rgb), 0.18);
+.aroundAuthArea .ghostAction {
+  min-height: 42px;
+  padding: 0 14px;
 }
 
 .pageBackdrop {
@@ -2658,11 +2720,6 @@ html[data-theme="dark"] .authSwitchButton {
     padding: 14px 16px;
   }
 
-  .aroundTaskMenu,
-  .aroundNavControls {
-    justify-content: flex-start;
-  }
-
   .aroundNavBrand {
     min-width: 0;
   }
@@ -2673,89 +2730,41 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .aroundTaskMenuButton,
-  .aroundNavMenuButton,
-  .aroundUtilityMenuButton {
+  .aroundNavMenuButton {
     min-height: 40px;
   }
 
   .aroundTaskMenuButton {
     gap: 8px;
-    padding-inline: 14px;
+    padding-inline: 12px;
     font-size: 0.86rem;
-  }
-
-  .aroundNavMenuButton {
-    display: inline-flex;
-  }
-
-  .aroundNavControls {
-    display: none;
-    grid-column: 1 / -1;
-    width: 100%;
-  }
-
-  .aroundNavControls.is-open {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-    padding: 14px;
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    background: var(--surface-elevated);
-    box-shadow: var(--shadow-sm);
   }
 
   .aroundModeSwitch {
     min-height: 44px;
-    width: 100%;
-    padding: 0 14px;
   }
 
-  .aroundLanguageSelect,
-  .aroundUtilityMenuButton {
-    width: 100%;
-    padding-inline: 14px;
-  }
-
-  .aroundUtilityMenuButton {
-    justify-content: center;
+  .aroundNavControls {
+    gap: 8px;
   }
 
   .aroundAuthArea {
-    width: 100%;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
+    gap: 12px;
   }
 
   .aroundAccountCluster {
-    flex: 1 1 auto;
+    gap: 8px;
   }
 
-  .aroundUserChip {
-    justify-content: center;
-    white-space: normal;
-    text-align: center;
+  .aroundAccountCluster .aroundUserBadge,
+  .aroundAccountCluster .aroundEnergyBadge {
+    min-height: 40px;
+    padding-inline: 12px;
   }
 
-  .aroundPrimaryAction {
-    flex: 1 1 auto;
-    justify-content: center;
-  }
-
-  .aroundUtilityMenu {
-    width: 100%;
-  }
-
-  .aroundUtilityDropdown {
-    position: static;
-    min-width: 0;
-  }
-
-  .aroundAuthArea .ghostAction,
-  .aroundAuthArea .uiButtonPrimary {
-    width: auto;
+  .aroundAuthArea .ghostAction {
+    min-height: 40px;
+    padding-inline: 12px;
   }
 }
 
@@ -2787,14 +2796,38 @@ html[data-theme="dark"] .authSwitchButton {
     font-size: 0.82rem;
   }
 
-  .aroundUtilityMenuButton {
-    width: 40px;
-    height: 40px;
-    padding-inline: 0;
-  }
-
   .aroundTaskDropdown {
     min-width: 188px;
+  }
+
+  .aroundMoreDropdown {
+    width: min(320px, calc(100vw - 28px));
+  }
+
+  .aroundNavControls {
+    gap: 8px;
+  }
+
+  .aroundAuthArea {
+    min-width: 0;
+    gap: 10px;
+  }
+
+  .aroundAccountCluster {
+    max-width: 100%;
+  }
+
+  .aroundUserChip {
+    min-height: 38px;
+    padding-inline: 10px;
+    font-size: 0.78rem;
+  }
+
+  .aroundPrimaryAction,
+  .aroundAuthArea .ghostAction {
+    min-height: 38px;
+    padding-inline: 10px;
+    font-size: 0.78rem;
   }
 
   .pageShell {
@@ -2805,24 +2838,6 @@ html[data-theme="dark"] .authSwitchButton {
     top: 12px;
     width: calc(100% - 24px);
     align-items: flex-start;
-  }
-
-  .aroundAuthArea {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .aroundAccountCluster {
-    width: 100%;
-    justify-content: center;
-    flex-wrap: wrap;
-    border-radius: 22px;
-  }
-
-  .aroundPrimaryAction,
-  .aroundAuthArea .ghostAction,
-  .aroundAuthArea .uiButtonPrimary {
-    width: 100%;
   }
 
   .siteHeader,
