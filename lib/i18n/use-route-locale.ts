@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Locale } from "@/lib/types";
+import { useParams, usePathname, useRouter } from "next/navigation";
+import type { Locale } from "@/lib/types";
 import { DEFAULT_LOCALE, LOCALE_COOKIE_KEY, LOCALE_STORAGE_KEY, isSupportedLocale } from "./config";
 
 function replaceLocaleInPath(pathname: string, nextLocale: Locale) {
@@ -23,7 +23,6 @@ function replaceLocaleInPath(pathname: string, nextLocale: Locale) {
 export function useRouteLocale() {
   const params = useParams();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
 
   const locale = useMemo<Locale>(() => {
@@ -37,7 +36,7 @@ export function useRouteLocale() {
     }
 
     const nextPathname = replaceLocaleInPath(pathname, nextLocale);
-    const query = searchParams.toString();
+    const query = typeof window !== "undefined" ? window.location.search.slice(1) : "";
     const nextHref = query ? `${nextPathname}?${query}` : nextPathname;
 
     window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
