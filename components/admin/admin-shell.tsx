@@ -6,6 +6,8 @@ import styles from "./admin-shell.module.css";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isFeedbackPage = pathname.startsWith("/admin/feedback");
+  const isEnergyPage = pathname.startsWith("/admin/energy");
 
   if (pathname === "/admin/login" || pathname === "/admin/unauthorized") {
     return <div className={styles.shell}>{children}</div>;
@@ -23,8 +25,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
           <nav className={styles.nav}>
             <span className={styles.navSection}>Workspace</span>
-            <Link href="/admin/feedback" className={`${styles.navLink} ${styles.navLinkActive}`}>
+            <Link
+              href="/admin/feedback"
+              className={`${styles.navLink} ${isFeedbackPage ? styles.navLinkActive : ""}`}
+            >
               Feedback Inbox
+            </Link>
+            <Link
+              href="/admin/energy"
+              className={`${styles.navLink} ${isEnergyPage ? styles.navLinkActive : ""}`}
+            >
+              Energy Grant
             </Link>
             <span className={styles.navSection}>App</span>
             <Link href="/" className={styles.navLink}>

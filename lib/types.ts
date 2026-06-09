@@ -81,6 +81,9 @@ export type WritingCheckResult = {
 export type FeedbackKind = "review" | "product" | "bug" | "feature_request";
 export type FeedbackStatus = "new" | "reviewing" | "closed";
 export type AdminUserStatus = "active" | "disabled";
+export type RechargeProvider = "manual" | "stripe" | "wechat" | "alipay";
+export type RechargeOrderStatus = "pending" | "paid" | "failed" | "cancelled";
+export type RechargePaymentMode = "redirect" | "qr_code" | "sdk" | "pending";
 
 export type FeedbackPayload = {
   kind: FeedbackKind;
@@ -124,4 +127,46 @@ export type AdminUserEntry = {
   status: AdminUserStatus;
   createdAt: string;
   updatedAt: string;
+};
+
+export type RechargeProduct = {
+  id: string;
+  code: string;
+  name: string;
+  energyAmount: number;
+  bonusEnergyAmount: number;
+  priceCents: number;
+  currency: string;
+  status: "active" | "inactive";
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RechargeOrder = {
+  id: string;
+  userId: string;
+  productId: string;
+  productCode: string;
+  productName: string;
+  provider: RechargeProvider;
+  status: RechargeOrderStatus;
+  amountCents: number;
+  currency: string;
+  energyAmount: number;
+  bonusEnergyAmount: number;
+  totalEnergyAmount: number;
+  providerOrderId: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RechargePaymentSession = {
+  provider: RechargeProvider;
+  mode: RechargePaymentMode;
+  redirectUrl: string | null;
+  qrCodeUrl: string | null;
+  clientPayload: Record<string, string | number | boolean | null> | null;
+  message?: string;
 };

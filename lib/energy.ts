@@ -157,9 +157,16 @@ export async function consumeEnergy(userId: string, amount = REVIEW_ENERGY_COST)
   }
 }
 
-export async function rechargeEnergy(userId: string, amount: number): Promise<EnergyState> {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error("INVALID_RECHARGE_AMOUNT");
+export async function grantEnergy(
+  userId: string,
+  amount: number,
+  options?: {
+    source?: string;
+    orderId?: string | null;
+  }
+): Promise<EnergyState> {
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("INVALID_ENERGY_AMOUNT");
   }
 
   const client = await db.connect();
@@ -210,7 +217,6 @@ export async function rechargeEnergy(userId: string, amount: number): Promise<En
     }
 
     const state = mapEnergyRow(existing.rows[0]);
-
     const updatedAt = new Date().toISOString();
     const nextState: EnergyState = {
       balance: state.balance + amount,
@@ -227,9 +233,18 @@ export async function rechargeEnergy(userId: string, amount: number): Promise<En
     );
 
     await client.query(
-      `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, source, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [randomUUID(), userId, "recharge", amount, nextState.balance, "manual", updatedAt]
+      `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, order_id, source, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        randomUUID(),
+        userId,
+        "recharge",
+        amount,
+        nextState.balance,
+        options?.orderId || null,
+        options?.source || "admin",
+        updatedAt
+      ]
     );
 
     await client.query("COMMIT");

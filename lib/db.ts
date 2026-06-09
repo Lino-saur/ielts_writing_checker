@@ -53,9 +53,25 @@ export async function ensureDatabase() {
         type TEXT NOT NULL,
         amount INTEGER NOT NULL,
         balance_after INTEGER NOT NULL,
+        order_id TEXT,
         source TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL
       );
+    `);
+
+    await db.query(`
+      ALTER TABLE energy_transactions
+      ADD COLUMN IF NOT EXISTS order_id TEXT;
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS energy_transactions_user_created_idx
+      ON energy_transactions (user_id, created_at DESC);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS energy_transactions_order_id_idx
+      ON energy_transactions (order_id);
     `);
 
     await db.query(`
@@ -129,6 +145,75 @@ export async function ensureDatabase() {
     await db.query(`
       CREATE INDEX IF NOT EXISTS admin_users_email_idx
       ON admin_users (email);
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS recharge_products (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        energy_amount INTEGER NOT NULL,
+        bonus_energy_amount INTEGER NOT NULL DEFAULT 0,
+        price_cents INTEGER NOT NULL,
+        currency TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS recharge_orders (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        product_code TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        status TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL,
+        currency TEXT NOT NULL,
+        energy_amount INTEGER NOT NULL,
+        bonus_energy_amount INTEGER NOT NULL DEFAULT 0,
+        total_energy_amount INTEGER NOT NULL,
+        provider_order_id TEXT,
+        paid_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS recharge_products_status_sort_idx
+      ON recharge_products (status, sort_order ASC, created_at ASC);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS recharge_orders_user_created_idx
+      ON recharge_orders (user_id, created_at DESC);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS recharge_orders_status_created_idx
+      ON recharge_orders (status, created_at DESC);
+    `);
+
+    await db.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS recharge_orders_provider_order_id_idx
+      ON recharge_orders (provider, provider_order_id)
+      WHERE provider_order_id IS NOT NULL;
+    `);
+
+    await db.query(`
+      INSERT INTO recharge_products (
+        id, code, name, energy_amount, bonus_energy_amount, price_cents, currency, status, sort_order, created_at, updated_at
+      )
+      VALUES
+        ('prod_energy_30', 'energy_30', '30 Energy', 30, 0, 990, 'USD', 'active', 10, NOW(), NOW()),
+        ('prod_energy_80', 'energy_80', '80 Energy', 80, 10, 2490, 'USD', 'active', 20, NOW(), NOW()),
+        ('prod_energy_200', 'energy_200', '200 Energy', 200, 40, 5990, 'USD', 'active', 30, NOW(), NOW())
+      ON CONFLICT (code) DO NOTHING;
     `);
   })();
 
