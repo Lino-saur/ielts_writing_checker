@@ -2056,6 +2056,14 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   gap: 14px;
 }
 
+.reviseHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .reviseLayoutSwitch {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3007,6 +3015,10 @@ html[data-theme="dark"] .authSwitchButton {
   .revisePanelHeader {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .reviseHeaderActions {
+    justify-content: stretch;
   }
 
   .reviseLayoutSwitch {

@@ -237,6 +237,7 @@ export default function HomePage() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [exportingRevision, setExportingRevision] = useState(false);
 
   const { checker: t, navbar } = getMessages(locale);
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
@@ -468,6 +469,48 @@ export default function HomePage() {
       setFeedbackError(t.genericError);
     } finally {
       setFeedbackSubmitting(false);
+    }
+  }
+
+  async function exportRevisionDoc() {
+    if (!result || exportingRevision) {
+      return;
+    }
+
+    setExportingRevision(true);
+
+    try {
+      const response = await fetch("/api/export/revision", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          prompt,
+          essay,
+          locale,
+          result
+        })
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error || "EXPORT_FAILED");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `ielts-writing-revision-${new Date().toISOString().slice(0, 10)}.docx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      showError(t.exportRevisionFailed);
+    } finally {
+      setExportingRevision(false);
     }
   }
 
@@ -723,23 +766,33 @@ export default function HomePage() {
                   <article className="feedbackSection reviseEssayPanel">
                     <div className="revisePanelHeader">
                       <p className="sectionLabel">{t.reviseTitle}</p>
-                      <div className="reviseLayoutSwitch" role="group" aria-label="Revise layout">
-                        <button
+                      <div className="reviseHeaderActions">
+                        <ActionButton
                           type="button"
-                          className={`reviseLayoutButton${reviseLayout === "split" ? " is-active" : ""}`}
-                          onClick={() => setReviseLayout("split")}
+                          variant="secondary"
+                          onClick={() => void exportRevisionDoc()}
+                          disabled={exportingRevision}
                         >
-                          <i className="ai-layout-column" aria-hidden="true" />
-                          <span>{t.layoutSplit}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`reviseLayoutButton${reviseLayout === "stack" ? " is-active" : ""}`}
-                          onClick={() => setReviseLayout("stack")}
-                        >
-                          <i className="ai-layout-row" aria-hidden="true" />
-                          <span>{t.layoutStack}</span>
-                        </button>
+                          {exportingRevision ? t.exportingRevisionDoc : t.exportRevisionDoc}
+                        </ActionButton>
+                        <div className="reviseLayoutSwitch" role="group" aria-label="Revise layout">
+                          <button
+                            type="button"
+                            className={`reviseLayoutButton${reviseLayout === "split" ? " is-active" : ""}`}
+                            onClick={() => setReviseLayout("split")}
+                          >
+                            <i className="ai-layout-column" aria-hidden="true" />
+                            <span>{t.layoutSplit}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`reviseLayoutButton${reviseLayout === "stack" ? " is-active" : ""}`}
+                            onClick={() => setReviseLayout("stack")}
+                          >
+                            <i className="ai-layout-row" aria-hidden="true" />
+                            <span>{t.layoutStack}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <p className="revisionHint">{t.reviseBody}</p>
