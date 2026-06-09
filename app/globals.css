@@ -2159,6 +2159,144 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   margin-top: 10px;
 }
 
+.resultFeedbackPanel {
+  display: grid;
+  gap: 18px;
+}
+
+.resultFeedbackHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.resultFeedbackHeader p:last-child {
+  margin-bottom: 0;
+}
+
+.resultFeedbackForm {
+  display: grid;
+  gap: 14px;
+}
+
+.feedbackChoiceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.feedbackChoiceButton {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--muted-strong);
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.feedbackChoiceButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.feedbackChoiceButton.is-active {
+  border-color: rgba(var(--accent-rgb), 0.28);
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-deep);
+}
+
+.feedbackChoiceButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.feedbackCommentField {
+  display: grid;
+  gap: 8px;
+}
+
+.feedbackCommentField span {
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.feedbackCommentField textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  color: var(--ink);
+  background: var(--surface-muted);
+  resize: vertical;
+}
+
+.feedbackCommentField textarea::placeholder {
+  color: var(--muted);
+}
+
+.resultFeedbackActions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.aroundMenuActionButton {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+
+.aroundMenuActionButton:hover {
+  border-color: rgba(var(--accent-rgb), 0.22);
+  background: rgba(var(--accent-rgb), 0.08);
+  transform: translateY(-1px);
+}
+
+.feedbackTypeSelect,
+.feedbackDialogTextarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: var(--ink);
+  background: var(--surface-muted);
+}
+
+.feedbackTypeSelect {
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+.feedbackDialogTextarea {
+  min-height: 144px;
+  padding: 14px 16px;
+  resize: vertical;
+}
+
+.feedbackDialogTextarea::placeholder {
+  color: var(--muted);
+}
+
 .revisionBlock {
   display: grid;
   gap: 10px;

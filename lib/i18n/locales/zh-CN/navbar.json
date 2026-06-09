@@ -32,5 +32,16 @@
   "switchToLightMode": "切换到浅色模式",
   "hidePassword": "隐藏密码",
   "showPassword": "显示密码",
-  "submitting": "提交中..."
+  "submitting": "提交中...",
+  "feedbackEntry": "意见反馈",
+  "feedbackTitle": "产品意见反馈",
+  "feedbackHint": "提交产品层面的 bug、使用阻碍，或者希望新增的功能。",
+  "feedbackTypeLabel": "反馈类型",
+  "feedbackTypeProduct": "通用意见",
+  "feedbackTypeBug": "问题反馈",
+  "feedbackTypeFeatureRequest": "功能建议",
+  "feedbackCommentLabel": "详细说明",
+  "feedbackCommentPlaceholder": "描述你遇到的问题或建议；如果有预期行为，也可以一并写明。",
+  "feedbackSubmit": "提交反馈",
+  "feedbackSubmitted": "反馈已提交"
 }

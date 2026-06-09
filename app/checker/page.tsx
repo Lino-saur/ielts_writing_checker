@@ -6,7 +6,7 @@ import { getClientSessionContext } from "@/lib/auth-client-session";
 import { CheckerMessages, getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
-import { AiProvider, CorrectionNote, TargetBand, WritingCheckResult } from "@/lib/types";
+import type { AiProvider, CorrectionNote, FeedbackPayload, TargetBand, WritingCheckResult } from "@/lib/types";
 
 const TASK2_PLACEHOLDER = {
   prompt:
@@ -34,6 +34,7 @@ type EnergyPayload = {
 type ErrorSource = "auth" | "general";
 type ReportView = "overview" | "revise";
 type ReviseLayout = "split" | "stack";
+type FeedbackChoice = "helpful" | "notHelpful";
 
 function ScoreCard({
   label,
@@ -231,6 +232,11 @@ export default function HomePage() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [reportView, setReportView] = useState<ReportView>("overview");
   const [reviseLayout, setReviseLayout] = useState<ReviseLayout>("split");
+  const [feedbackChoice, setFeedbackChoice] = useState<FeedbackChoice | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const { checker: t, navbar } = getMessages(locale);
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
@@ -322,6 +328,11 @@ export default function HomePage() {
     setReportView("overview");
     setReviseLayout("split");
     setActiveEditIndex(null);
+    setFeedbackChoice(null);
+    setFeedbackComment("");
+    setFeedbackSubmitting(false);
+    setFeedbackSubmitted(false);
+    setFeedbackError(null);
   }, [result]);
 
   useEffect(() => {
@@ -405,6 +416,58 @@ export default function HomePage() {
       showError(submissionError instanceof Error ? submissionError.message : t.genericError);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function submitFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!result || !feedbackChoice || feedbackSubmitting || feedbackSubmitted) {
+      return;
+    }
+
+    setFeedbackSubmitting(true);
+    setFeedbackError(null);
+
+    const payload: FeedbackPayload = {
+      kind: "review",
+      helpful: feedbackChoice === "helpful",
+      comment: feedbackComment.trim(),
+      page: "/checker",
+      taskType: result.taskType,
+      targetBand: result.targetBand,
+      providerUsed: result.providerUsed,
+      feedbackMode: result.feedbackMode,
+      estimatedBand: result.estimatedBand,
+      wordCount: result.wordCount,
+      context: {
+        strengthCount: result.strengths.length,
+        priorityFixCount: result.priorityFixes.length,
+        correctionCount: result.correctionNotes.length,
+        highlightedSentenceCount: result.highlightedSentences.length
+      }
+    };
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error || "REQUEST_FAILED");
+      }
+
+      setFeedbackSubmitted(true);
+    } catch {
+      setFeedbackError(t.genericError);
+    } finally {
+      setFeedbackSubmitting(false);
     }
   }
 
@@ -726,6 +789,61 @@ export default function HomePage() {
                   </aside>
                 </section>
               )}
+
+              <article className="feedbackSection resultFeedbackPanel">
+                <div className="resultFeedbackHeader">
+                  <div>
+                    <p className="sectionLabel">{t.feedbackTitle}</p>
+                    <p>{t.feedbackBody}</p>
+                  </div>
+                  {feedbackSubmitted ? <Pill>{t.feedbackSubmitted}</Pill> : null}
+                </div>
+
+                <form className="resultFeedbackForm" onSubmit={submitFeedback}>
+                  <div className="feedbackChoiceRow" role="group" aria-label={t.feedbackTitle}>
+                    <button
+                      type="button"
+                      className={`feedbackChoiceButton${feedbackChoice === "helpful" ? " is-active" : ""}`}
+                      onClick={() => setFeedbackChoice("helpful")}
+                      disabled={feedbackSubmitting || feedbackSubmitted}
+                    >
+                      {t.feedbackHelpful}
+                    </button>
+                    <button
+                      type="button"
+                      className={`feedbackChoiceButton${feedbackChoice === "notHelpful" ? " is-active" : ""}`}
+                      onClick={() => setFeedbackChoice("notHelpful")}
+                      disabled={feedbackSubmitting || feedbackSubmitted}
+                    >
+                      {t.feedbackNotHelpful}
+                    </button>
+                  </div>
+
+                  <label className="feedbackCommentField">
+                    <span>{t.feedbackCommentLabel}</span>
+                    <textarea
+                      value={feedbackComment}
+                      onChange={(event) => setFeedbackComment(event.target.value)}
+                      rows={4}
+                      maxLength={2000}
+                      placeholder={t.feedbackCommentPlaceholder}
+                      disabled={feedbackSubmitting || feedbackSubmitted}
+                    />
+                  </label>
+
+                  {feedbackError ? <p className="errorBox">{feedbackError}</p> : null}
+
+                  <div className="resultFeedbackActions">
+                    <ActionButton
+                      type="submit"
+                      variant="secondary"
+                      disabled={!feedbackChoice || feedbackSubmitting || feedbackSubmitted}
+                    >
+                      {feedbackSubmitting ? t.feedbackSubmitting : feedbackSubmitted ? t.feedbackSubmitted : t.feedbackSubmit}
+                    </ActionButton>
+                  </div>
+                </form>
+              </article>
             </Surface>
           </Surface>
           </div>

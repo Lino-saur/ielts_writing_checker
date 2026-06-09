@@ -7,9 +7,9 @@ import {
   invalidateClientSessionContext,
   type ClientSessionContext
 } from "@/lib/auth-client-session";
-import { NavbarMessages } from "@/lib/i18n/messages";
+import type { NavbarMessages } from "@/lib/i18n/messages";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
-import { Locale } from "@/lib/types";
+import type { FeedbackKind, Locale } from "@/lib/types";
 
 type AppNavbarProps = {
   locale: Locale;
@@ -23,6 +23,7 @@ type AppNavbarProps = {
 
 type AuthMode = "signIn" | "signUp";
 type ThemeMode = "light" | "dark";
+type ProductFeedbackKind = Exclude<FeedbackKind, "review">;
 
 async function getAuthClient() {
   const { authClient } = await import("@/lib/auth-client");
@@ -67,6 +68,12 @@ export function AppNavbar({
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [signInPasswordVisible, setSignInPasswordVisible] = useState(false);
   const [signUpPasswordVisible, setSignUpPasswordVisible] = useState(false);
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [feedbackKind, setFeedbackKind] = useState<ProductFeedbackKind>("product");
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const homeHref = useMemo(() => `/${locale}`, [locale]);
   const checkerTask1Href = useMemo(() => `/${locale}/checker?task=task1`, [locale]);
@@ -121,11 +128,11 @@ export function AppNavbar({
   }, []);
 
   useEffect(() => {
-    if (authDialogOpen) {
+    if (authDialogOpen || feedbackDialogOpen) {
       setTaskMenuOpen(false);
       setMoreMenuOpen(false);
     }
-  }, [authDialogOpen]);
+  }, [authDialogOpen, feedbackDialogOpen]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -160,6 +167,14 @@ export function AppNavbar({
     setAuthMode(mode);
     setAuthError(null);
     setAuthDialogOpen(true);
+  }
+
+  function openFeedbackDialog() {
+    setFeedbackKind("product");
+    setFeedbackComment("");
+    setFeedbackError(null);
+    setFeedbackSubmitted(false);
+    setFeedbackDialogOpen(true);
   }
 
   async function submitAuth(mode: AuthMode) {
@@ -234,6 +249,45 @@ export function AppNavbar({
       await refreshSession();
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : copy.genericError);
+    }
+  }
+
+  async function handleFeedbackSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!feedbackComment.trim() || feedbackSubmitting || feedbackSubmitted) {
+      return;
+    }
+
+    setFeedbackSubmitting(true);
+    setFeedbackError(null);
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          kind: feedbackKind,
+          helpful: null,
+          comment: feedbackComment.trim(),
+          page: typeof window !== "undefined" ? window.location.pathname : "/"
+        })
+      });
+
+      const data = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error || copy.genericError);
+      }
+
+      setFeedbackSubmitted(true);
+      setFeedbackComment("");
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : copy.genericError);
+    } finally {
+      setFeedbackSubmitting(false);
     }
   }
 
@@ -371,6 +425,19 @@ export function AppNavbar({
                   English
                 </button>
               </div>
+            </div>
+
+            <div className="aroundMenuSection">
+              <button
+                type="button"
+                className="aroundMenuActionButton"
+                onClick={() => {
+                  setMoreMenuOpen(false);
+                  openFeedbackDialog();
+                }}
+              >
+                {copy.feedbackEntry}
+              </button>
             </div>
 
             <div className="aroundMenuSection">
@@ -541,6 +608,75 @@ export function AppNavbar({
                   {authSwitchAction}
                 </button>
               </p>
+            </section>
+          </Surface>
+        </div>
+      ) : null}
+
+      {feedbackDialogOpen ? (
+        <div className="authDialogBackdrop" onClick={() => !feedbackSubmitting && setFeedbackDialogOpen(false)}>
+          <Surface
+            className={`authDialog ${locale === "zh-CN" ? "authDialogCn" : "authDialogEn"}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="authDialogHeader">
+              <div className="authCardIntro">
+                <h2>{copy.feedbackTitle}</h2>
+                <p className="authHint">{copy.feedbackHint}</p>
+              </div>
+              <button
+                type="button"
+                className="authDialogClose"
+                onClick={() => setFeedbackDialogOpen(false)}
+                disabled={feedbackSubmitting}
+              >
+                <i className="ai-cross" aria-hidden="true" />
+                <span className="srOnly">{copy.authClose}</span>
+              </button>
+            </div>
+
+            <section className="authCardInner">
+              <form className="authForm" onSubmit={handleFeedbackSubmit}>
+                <label className="authField">
+                  <span>{copy.feedbackTypeLabel}</span>
+                  <select
+                    className="feedbackTypeSelect"
+                    value={feedbackKind}
+                    onChange={(event) => setFeedbackKind(event.target.value as ProductFeedbackKind)}
+                    disabled={feedbackSubmitting || feedbackSubmitted}
+                  >
+                    <option value="product">{copy.feedbackTypeProduct}</option>
+                    <option value="bug">{copy.feedbackTypeBug}</option>
+                    <option value="feature_request">{copy.feedbackTypeFeatureRequest}</option>
+                  </select>
+                </label>
+
+                <label className="authField">
+                  <span>{copy.feedbackCommentLabel}</span>
+                  <textarea
+                    className="feedbackDialogTextarea"
+                    value={feedbackComment}
+                    onChange={(event) => setFeedbackComment(event.target.value)}
+                    rows={6}
+                    maxLength={2000}
+                    placeholder={copy.feedbackCommentPlaceholder}
+                    disabled={feedbackSubmitting || feedbackSubmitted}
+                    required
+                  />
+                </label>
+
+                {feedbackError ? <p className="errorBox">{feedbackError}</p> : null}
+                {feedbackSubmitted ? <Pill>{copy.feedbackSubmitted}</Pill> : null}
+
+                <ActionButton
+                  type="submit"
+                  variant="primary"
+                  fullWidth
+                  disabled={!feedbackComment.trim() || feedbackSubmitting || feedbackSubmitted}
+                >
+                  {feedbackSubmitting ? copy.submitting : feedbackSubmitted ? copy.feedbackSubmitted : copy.feedbackSubmit}
+                </ActionButton>
+              </form>
             </section>
           </Surface>
         </div>

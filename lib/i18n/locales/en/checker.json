@@ -108,5 +108,14 @@
   "layoutSplit": "Side by side",
   "layoutStack": "Stacked",
   "editPrompt": "Edit prompt",
-  "doneEditing": "Done editing"
+  "doneEditing": "Done editing",
+  "feedbackTitle": "Review this review",
+  "feedbackBody": "Store a quick signal about whether this scoring result was useful.",
+  "feedbackHelpful": "Helpful",
+  "feedbackNotHelpful": "Not helpful",
+  "feedbackCommentLabel": "Extra notes",
+  "feedbackCommentPlaceholder": "Optional: tell us what felt inaccurate, unclear or useful.",
+  "feedbackSubmit": "Send feedback",
+  "feedbackSubmitting": "Sending...",
+  "feedbackSubmitted": "Feedback saved"
 }

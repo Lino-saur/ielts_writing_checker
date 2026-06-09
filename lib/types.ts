@@ -77,3 +77,51 @@ export type WritingCheckResult = {
   feedbackMode: "ai" | "heuristic";
   providerUsed: ActiveProvider;
 };
+
+export type FeedbackKind = "review" | "product" | "bug" | "feature_request";
+export type FeedbackStatus = "new" | "reviewing" | "closed";
+export type AdminUserStatus = "active" | "disabled";
+
+export type FeedbackPayload = {
+  kind: FeedbackKind;
+  helpful: boolean | null;
+  category?: string | null;
+  comment?: string;
+  page: string;
+  taskType?: TaskType;
+  targetBand?: TargetBand;
+  providerUsed?: ActiveProvider;
+  feedbackMode?: "ai" | "heuristic";
+  estimatedBand?: number;
+  wordCount?: number;
+  context?: Record<string, unknown>;
+};
+
+export type FeedbackEntry = {
+  id: string;
+  userId: string;
+  kind: FeedbackKind;
+  status: FeedbackStatus;
+  helpful: boolean | null;
+  category: string | null;
+  comment: string;
+  page: string;
+  taskType: TaskType | null;
+  targetBand: number | null;
+  providerUsed: ActiveProvider | null;
+  feedbackMode: "ai" | "heuristic" | null;
+  estimatedBand: number | null;
+  wordCount: number | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type AdminUserEntry = {
+  id: string;
+  authUserId: string;
+  email: string | null;
+  displayName: string | null;
+  status: AdminUserStatus;
+  createdAt: string;
+  updatedAt: string;
+};

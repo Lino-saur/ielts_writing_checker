@@ -108,5 +108,14 @@
   "layoutSplit": "左右布局",
   "layoutStack": "上下布局",
   "editPrompt": "编辑题目",
-  "doneEditing": "完成编辑"
+  "doneEditing": "完成编辑",
+  "feedbackTitle": "评价这次批改",
+  "feedbackBody": "记录一个轻量反馈，判断这次评分结果是否真的有帮助。",
+  "feedbackHelpful": "有帮助",
+  "feedbackNotHelpful": "没帮助",
+  "feedbackCommentLabel": "补充说明",
+  "feedbackCommentPlaceholder": "可选：写下哪里不准、不清楚，或者哪里最有帮助。",
+  "feedbackSubmit": "提交反馈",
+  "feedbackSubmitting": "提交中...",
+  "feedbackSubmitted": "已保存反馈"
 }

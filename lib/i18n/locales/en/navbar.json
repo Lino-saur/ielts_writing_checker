@@ -32,5 +32,16 @@
   "switchToLightMode": "Switch to light mode",
   "hidePassword": "Hide password",
   "showPassword": "Show password",
-  "submitting": "Submitting..."
+  "submitting": "Submitting...",
+  "feedbackEntry": "Send feedback",
+  "feedbackTitle": "Product feedback",
+  "feedbackHint": "Share bugs, friction points, or feature ideas about the product itself.",
+  "feedbackTypeLabel": "Feedback type",
+  "feedbackTypeProduct": "General",
+  "feedbackTypeBug": "Bug report",
+  "feedbackTypeFeatureRequest": "Feature request",
+  "feedbackCommentLabel": "Details",
+  "feedbackCommentPlaceholder": "Describe the issue or suggestion. Include what you expected if relevant.",
+  "feedbackSubmit": "Submit feedback",
+  "feedbackSubmitted": "Feedback sent"
 }

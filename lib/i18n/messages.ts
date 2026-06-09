@@ -42,6 +42,17 @@ export type NavbarMessages = Record<string, string> & {
   hidePassword: string;
   showPassword: string;
   submitting: string;
+  feedbackEntry: string;
+  feedbackTitle: string;
+  feedbackHint: string;
+  feedbackTypeLabel: string;
+  feedbackTypeProduct: string;
+  feedbackTypeBug: string;
+  feedbackTypeFeatureRequest: string;
+  feedbackCommentLabel: string;
+  feedbackCommentPlaceholder: string;
+  feedbackSubmit: string;
+  feedbackSubmitted: string;
 };
 
 export type LandingMessages = Record<string, string>;

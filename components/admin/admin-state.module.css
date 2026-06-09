@@ -1,0 +1,67 @@
+.wrap {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+}
+
+.card {
+  width: min(560px, 100%);
+  padding: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+}
+
+.eyebrow {
+  color: #6366f1;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 10px 0 0;
+  color: #0f172a;
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+}
+
+.body {
+  margin: 14px 0 0;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 14px;
+  color: #3730a3;
+  background: rgba(99, 102, 241, 0.08);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  color: #475569;
+  background: rgba(241, 245, 249, 0.95);
+  font-weight: 700;
+  cursor: pointer;
+}

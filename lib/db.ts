@@ -57,6 +57,79 @@ export async function ensureDatabase() {
         created_at TIMESTAMPTZ NOT NULL
       );
     `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS feedback_entries (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'new',
+        helpful BOOLEAN,
+        category TEXT,
+        comment TEXT NOT NULL DEFAULT '',
+        page TEXT NOT NULL,
+        task_type TEXT,
+        target_band NUMERIC(3, 1),
+        provider_used TEXT,
+        feedback_mode TEXT,
+        estimated_band NUMERIC(3, 1),
+        word_count INTEGER,
+        payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      ALTER TABLE feedback_entries
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'new';
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id TEXT PRIMARY KEY,
+        auth_user_id TEXT NOT NULL UNIQUE,
+        email TEXT,
+        display_name TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      ALTER TABLE admin_users
+      ADD COLUMN IF NOT EXISTS email TEXT;
+    `);
+
+    await db.query(`
+      ALTER TABLE admin_users
+      ADD COLUMN IF NOT EXISTS display_name TEXT;
+    `);
+
+    await db.query(`
+      ALTER TABLE admin_users
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+    `);
+
+    await db.query(`
+      ALTER TABLE admin_users
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    `);
+
+    await db.query(`
+      ALTER TABLE admin_users
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    `);
+
+    await db.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS admin_users_auth_user_id_idx
+      ON admin_users (auth_user_id);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS admin_users_email_idx
+      ON admin_users (email);
+    `);
   })();
 
   globalForDb.__ieltsDbInitPromise = initPromise;
