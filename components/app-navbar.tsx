@@ -7,36 +7,14 @@ import {
   invalidateClientSessionContext,
   type ClientSessionContext
 } from "@/lib/auth-client-session";
+import { NavbarMessages } from "@/lib/i18n/messages";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
-
-type Locale = "en" | "zh-CN";
-
-type NavbarCopy = {
-  brand: string;
-  task1: string;
-  task2: string;
-  languageLabel: string;
-  userLabel: string;
-  guestUser: string;
-  login: string;
-  signInTab: string;
-  signUpTab: string;
-  authName: string;
-  authEmail: string;
-  authPassword: string;
-  authSubmitSignIn: string;
-  authSubmitSignUp: string;
-  authHintSignIn: string;
-  authHintSignUp: string;
-  authClose: string;
-  authSignOut: string;
-  genericError: string;
-};
+import { Locale } from "@/lib/types";
 
 type AppNavbarProps = {
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
-  copy: NavbarCopy;
+  copy: NavbarMessages;
   onSessionUpdated?: () => Promise<void> | void;
   taskMenuMode?: "all" | "task2Only";
   energyBalance?: number | null;
@@ -51,7 +29,7 @@ async function getAuthClient() {
   return authClient;
 }
 
-function formatUser(user: ClientSessionContext["user"], copy: NavbarCopy) {
+function formatUser(user: ClientSessionContext["user"], copy: NavbarMessages) {
   if (!user) {
     return `${copy.userLabel}: --`;
   }
@@ -90,18 +68,18 @@ export function AppNavbar({
   const [signInPasswordVisible, setSignInPasswordVisible] = useState(false);
   const [signUpPasswordVisible, setSignUpPasswordVisible] = useState(false);
 
-  const homeHref = useMemo(() => `/?lang=${locale}`, [locale]);
-  const checkerTask1Href = useMemo(() => `/checker?task=task1&lang=${locale}`, [locale]);
-  const checkerTask2Href = useMemo(() => `/checker?task=task2&lang=${locale}`, [locale]);
-  const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : locale === "zh-CN" ? "写作任务" : "Writing tasks";
-  const moreMenuOpenLabel = locale === "zh-CN" ? "打开设置菜单" : "Open settings menu";
-  const moreMenuCloseLabel = locale === "zh-CN" ? "收起设置菜单" : "Close settings menu";
-  const authSwitchPrefix = authMode === "signIn" ? (locale === "zh-CN" ? "没有账号？" : "No account?") : locale === "zh-CN" ? "已有账号？" : "Already have an account?";
-  const authSwitchAction = authMode === "signIn" ? (locale === "zh-CN" ? "创建账号" : "Create one") : locale === "zh-CN" ? "返回登录" : "Back to sign in";
-  const guestBadge = locale === "zh-CN" ? "访客模式" : "Guest";
+  const homeHref = useMemo(() => `/${locale}`, [locale]);
+  const checkerTask1Href = useMemo(() => `/${locale}/checker?task=task1`, [locale]);
+  const checkerTask2Href = useMemo(() => `/${locale}/checker?task=task2`, [locale]);
+  const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : copy.writingTasks;
+  const moreMenuOpenLabel = copy.openSettingsMenu;
+  const moreMenuCloseLabel = copy.closeSettingsMenu;
+  const authSwitchPrefix = authMode === "signIn" ? copy.noAccount : copy.alreadyHaveAccount;
+  const authSwitchAction = authMode === "signIn" ? copy.createOne : copy.backToSignIn;
+  const guestBadge = copy.guestBadge;
   const effectiveEnergyBalance = energyBalance ?? currentEnergyBalance;
-  const themeLabel = locale === "zh-CN" ? "主题" : "Theme";
-  const appearanceLabel = locale === "zh-CN" ? "外观" : "Appearance";
+  const themeLabel = copy.themeLabel;
+  const appearanceLabel = copy.appearanceLabel;
 
   useEffect(() => {
     setCurrentEnergyBalance(energyBalance);
@@ -408,7 +386,7 @@ export function AppNavbar({
                     type="checkbox"
                     checked={theme === "dark"}
                     onChange={toggleTheme}
-                    aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+                    aria-label={theme === "light" ? copy.switchToDarkMode : copy.switchToLightMode}
                   />
                   <label className="form-check-label" htmlFor={themeSwitchId}>
                     <i className="ai-sun fs-lg" />
@@ -474,7 +452,7 @@ export function AppNavbar({
                         type="button"
                         className="authPasswordToggle"
                         onClick={() => setSignInPasswordVisible((value) => !value)}
-                        aria-label={signInPasswordVisible ? "Hide password" : "Show password"}
+                        aria-label={signInPasswordVisible ? copy.hidePassword : copy.showPassword}
                       >
                         <i className={signInPasswordVisible ? "ai-hide" : "ai-show"} aria-hidden="true" />
                       </button>
@@ -484,7 +462,7 @@ export function AppNavbar({
                   {authError ? <p className="errorBox">{authError}</p> : null}
 
                   <ActionButton type="submit" variant="primary" fullWidth disabled={authSubmitting}>
-                    {authSubmitting ? "Submitting..." : copy.authSubmitSignIn}
+                    {authSubmitting ? copy.submitting : copy.authSubmitSignIn}
                   </ActionButton>
                 </form>
               ) : (
@@ -534,7 +512,7 @@ export function AppNavbar({
                         type="button"
                         className="authPasswordToggle"
                         onClick={() => setSignUpPasswordVisible((value) => !value)}
-                        aria-label={signUpPasswordVisible ? "Hide password" : "Show password"}
+                        aria-label={signUpPasswordVisible ? copy.hidePassword : copy.showPassword}
                       >
                         <i className={signUpPasswordVisible ? "ai-hide" : "ai-show"} aria-hidden="true" />
                       </button>
@@ -544,7 +522,7 @@ export function AppNavbar({
                   {authError ? <p className="errorBox">{authError}</p> : null}
 
                   <ActionButton type="submit" variant="primary" fullWidth disabled={authSubmitting}>
-                    {authSubmitting ? "Submitting..." : copy.authSubmitSignUp}
+                    {authSubmitting ? copy.submitting : copy.authSubmitSignUp}
                   </ActionButton>
                 </form>
               )}

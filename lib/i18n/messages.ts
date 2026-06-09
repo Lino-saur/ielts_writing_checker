@@ -1,0 +1,72 @@
+import { Locale } from "@/lib/types";
+import { DEFAULT_LOCALE } from "./config";
+import checkerEn from "./locales/en/checker.json";
+import checkerZhCN from "./locales/zh-CN/checker.json";
+import landingEn from "./locales/en/landing.json";
+import landingZhCN from "./locales/zh-CN/landing.json";
+import navbarEn from "./locales/en/navbar.json";
+import navbarZhCN from "./locales/zh-CN/navbar.json";
+
+export type NavbarMessages = Record<string, string> & {
+  brand: string;
+  task1: string;
+  task2: string;
+  languageLabel: string;
+  userLabel: string;
+  guestUser: string;
+  login: string;
+  signInTab: string;
+  signUpTab: string;
+  authName: string;
+  authEmail: string;
+  authPassword: string;
+  authSubmitSignIn: string;
+  authSubmitSignUp: string;
+  authHintSignIn: string;
+  authHintSignUp: string;
+  authClose: string;
+  authSignOut: string;
+  genericError: string;
+  writingTasks: string;
+  openSettingsMenu: string;
+  closeSettingsMenu: string;
+  noAccount: string;
+  createOne: string;
+  alreadyHaveAccount: string;
+  backToSignIn: string;
+  guestBadge: string;
+  themeLabel: string;
+  appearanceLabel: string;
+  switchToDarkMode: string;
+  switchToLightMode: string;
+  hidePassword: string;
+  showPassword: string;
+  submitting: string;
+};
+
+export type LandingMessages = Record<string, string>;
+export type CheckerMessages = Record<string, string>;
+
+const navbarMessages: Record<Locale, NavbarMessages> = {
+  en: navbarEn,
+  "zh-CN": navbarZhCN
+};
+
+const landingMessages: Record<Locale, LandingMessages> = {
+  en: landingEn,
+  "zh-CN": landingZhCN
+};
+
+const checkerMessages: Record<Locale, CheckerMessages> = {
+  en: checkerEn,
+  "zh-CN": checkerZhCN
+};
+
+export function getMessages(locale: Locale) {
+  const resolvedLocale = locale in navbarMessages ? locale : DEFAULT_LOCALE;
+  return {
+    navbar: navbarMessages[resolvedLocale],
+    landing: landingMessages[resolvedLocale],
+    checker: checkerMessages[resolvedLocale]
+  };
+}

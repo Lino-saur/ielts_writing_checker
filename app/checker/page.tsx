@@ -3,10 +3,10 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { getClientSessionContext } from "@/lib/auth-client-session";
+import { CheckerMessages, getMessages } from "@/lib/i18n/messages";
+import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
-import { AiProvider, CorrectionNote, Locale, TargetBand, WritingCheckResult } from "@/lib/types";
-
-const LOCALE_STORAGE_KEY = "app-locale";
+import { AiProvider, CorrectionNote, TargetBand, WritingCheckResult } from "@/lib/types";
 
 const TASK2_PLACEHOLDER = {
   prompt:
@@ -14,264 +14,6 @@ const TASK2_PLACEHOLDER = {
   essay:
     "Some people thinks unpaid community service should be compulsory in high school programmes, I am agree with this opinion because it can helps students become more responsibility and know the society better.\n\nFirstly, students nowadays is always study in classroom and they dont have many chance to touch real life, so community service are a good ways for them to learning how other people live. For example help old peoples in a care home or cleaning the streets can let student understand the value of hard working. This kind of activity also make them more kindness, and they will not only thinking about themself.\n\nSecondly, unpaid work can improving many useful skills, such as communicate with others, teamwork and solve problems. When students join in a charity event, they need talk with different people and maybe organize some small things, these experience is very helpful for their future job. Also, if they only focus on exam, they may becomes selfish and lack of social ability.\n\nHowever some people may said compulsory community service is not good because students already have many homework and exams. This is true in some ways, but I think school can just ask them do few hours every month, it will not be too much pressure. If the activity is designed good, student will feel interesting and meaningful, not just a boring task.\n\nIn conclusion, I strongly agree unpaid community service should be a compulsory part of high school, because it teach students responsibility, kindness and useful skills. But school should not make it too heavy, otherwise students will hate it and the purpose will lost."
 };
-
-const UI_COPY = {
-  en: {
-    brand: "IELTS Writing Checker",
-    languageLabel: "Language",
-    heroEyebrow: "AI Writing Review",
-    heroTitle: "IELTS Writing Checker",
-    heroDescription: "Rubric-based feedback with inline revision reasons.",
-    heroDescriptionStrong:
-      "A cleaner review desk for IELTS Task 2, shaped like a polished SaaS workspace.",
-    navBadge: "Around-inspired interface",
-    navFeatures: "Features",
-    navTemplates: "Templates",
-    navWorkspace: "Workspace",
-    heroPrimaryCta: "Start Reviewing",
-    heroSecondaryCta: "Guest Session",
-    heroKicker: "Landing page direction inspired by Around Index.",
-    statAccuracyLabel: "Feedback model",
-    statAccuracyValue: "Band rubric",
-    statSessionsLabel: "Session mode",
-    statSessionsValue: "Anonymous or account",
-    statFocusLabel: "Revision style",
-    statFocusValue: "Inline explanations",
-    featureOneTitle: "Exam-ready structure",
-    featureOneBody: "Separate prompt, target band and essay input so the review flow stays disciplined.",
-    featureTwoTitle: "Visible reasoning",
-    featureTwoBody: "Corrections stay anchored in the essay, with sentence-level reasons on demand.",
-    featureThreeTitle: "Practical scoring",
-    featureThreeBody: "Band breakdown, highlights and priority fixes are grouped into a report that is quick to scan.",
-    editorEyebrow: "Writing workspace",
-    resultEyebrow: "Review output",
-    previewLabel: "Live review setup",
-    previewBody: "Adjust the target band and keep track of energy before you submit.",
-    socialProofTitle: "Used to shape a faster IELTS writing workflow",
-    galleryEyebrow: "Landing blocks",
-    galleryTitle: "Homepage sections with placeholder visuals",
-    galleryDescription:
-      "The page is designed as a product landing page first, with the checker embedded as the main conversion section below.",
-    galleryCardOneTitle: "Hero showcase",
-    galleryCardOneBody: "Bold heading, intro copy and layered UI placeholders.",
-    galleryCardTwoTitle: "Feature storytelling",
-    galleryCardTwoBody: "Three editorial cards to explain value without crowding the hero.",
-    galleryCardThreeTitle: "Template library",
-    galleryCardThreeBody: "A grid of product directions presented like Around landing previews.",
-    galleryCardFourTitle: "Workflow section",
-    galleryCardFourBody: "A process strip that turns product capability into a guided user path.",
-    storyEyebrow: "Why this layout",
-    storyTitle: "A landing page first, an evaluation tool second",
-    storyBody:
-      "Around index pages sell a visual system before they explain every detail. This homepage now follows that pattern: strong entry, curated sections, then the functional product desk.",
-    storyPointOne: "Large hero with layered mockups and placeholder media blocks.",
-    storyPointTwo: "Section rhythm that alternates between grids, story content and a focused CTA.",
-    storyPointThree: "The working checker remains available lower on the page for real use.",
-    processEyebrow: "Review flow",
-    processTitle: "A simpler path from draft to revision",
-    processStepOneTitle: "Paste the task",
-    processStepOneBody: "Paste the Task 2 prompt first, then set the band target before review.",
-    processStepTwoTitle: "Run the check",
-    processStepTwoBody: "Use AI scoring, energy tracking and session-aware access in one place.",
-    processStepThreeTitle: "Study the report",
-    processStepThreeBody: "Read strengths, fixes, highlighted sentences and inline reasons together.",
-    ctaTitle: "Scroll into the live checker when you want to test the flow.",
-    ctaBody: "The sections above frame the product like a landing page. The workspace below is still fully interactive.",
-    userLabel: "User",
-    guestUser: "Guest",
-    login: "Log In",
-    signInTab: "Sign In",
-    signUpTab: "Sign Up",
-    authName: "Name",
-    authEmail: "Email",
-    authPassword: "Password",
-    authSubmitSignIn: "Continue",
-    authSubmitSignUp: "Create Account",
-    authHintSignIn: "Access your saved reviews.",
-    authHintSignUp: "Create an account to save progress.",
-    authClose: "Close",
-    authSignOut: "Sign Out",
-    energy: "Energy",
-    energyCost: "Cost",
-    insufficientEnergy: "Not enough energy for a review.",
-    confirmReviewTitle: "Use energy to run this review?",
-    confirmReviewBody: "This check will consume energy from your current balance.",
-    confirmReviewConfirm: "Confirm review",
-    confirmReviewCancel: "Cancel",
-    modesLabel: "Modes",
-    aiReview: "AI Review",
-    heuristicReady: "Fallback Review",
-    coverage: "Task 2",
-    task1: "Task 1",
-    task2: "Task 2",
-    providerDeepSeek: "DeepSeek",
-    targetBand: "Target Band",
-    prompt: "Prompt",
-    essay: "Essay",
-    wordCount: "Word count",
-    checking: "Checking...",
-    checkWriting: "Check Writing",
-    estimatedBand: "Estimated Band",
-    aiMode: "AI mode",
-    heuristicMode: "Heuristic mode",
-    providerUsed: "Provider",
-    taskAchievement: "Task Achievement",
-    coherence: "Coherence & Cohesion",
-    lexical: "Lexical Resource",
-    grammar: "Grammar Range & Accuracy",
-    strengths: "Strengths",
-    highlightedSentences: "Highlighted Sentences",
-    highlightedSentence: "Sentence",
-    highlightedReason: "Why It Works",
-    priorityFixes: "Priority Fixes",
-    annotatedEssay: "Revision",
-    correctionOriginal: "Original",
-    correctionCorrected: "Corrected",
-    correctionReason: "Reason",
-    revisionBundle: "Inline Revision",
-    tapForReason: "Click a revision to see why it was changed.",
-    ready: "Ready",
-    emptyTitle: "Run the first review",
-    emptyDescription:
-      "Paste the Task 2 prompt and essay, then run the checker to get rubric-based feedback.",
-    genericError: "Something went wrong.",
-    overviewTab: "Overview",
-    reviseTab: "Revise",
-    reviseTitle: "Revise against feedback",
-    reviseBody: "Keep the draft in view and inspect each suggestion where it appears.",
-    reviseEmpty: "Select a highlighted revision to inspect the change.",
-    reviseOriginal: "Original",
-    reviseSuggested: "Suggested",
-    layoutSplit: "Side by side",
-    layoutStack: "Stacked"
-  },
-  "zh-CN": {
-    brand: "IELTS Writing Checker",
-    languageLabel: "语言",
-    heroEyebrow: "AI 写作评估",
-    heroTitle: "IELTS 写作批改器",
-    heroDescription: "按评分标准返回反馈，并在文中直接说明修改原因。",
-    heroDescriptionStrong: "把 IELTS Task 2 批改工作台整理成更完整、更克制的 Around 风格界面。",
-    navBadge: "Around 风格界面",
-    navFeatures: "能力",
-    navTemplates: "模板区",
-    navWorkspace: "工作台",
-    heroPrimaryCta: "开始批改",
-    heroSecondaryCta: "当前访客会话",
-    heroKicker: "首页结构参考 Around Index Page 的节奏来做。",
-    statAccuracyLabel: "反馈框架",
-    statAccuracyValue: "按 Band 标准",
-    statSessionsLabel: "会话模式",
-    statSessionsValue: "访客或正式账号",
-    statFocusLabel: "批改形式",
-    statFocusValue: "文中解释修改原因",
-    featureOneTitle: "更像考试场景",
-    featureOneBody: "题目、目标分和作文输入被拆开，批改流程更清晰，不容易混乱。",
-    featureTwoTitle: "修改理由可见",
-    featureTwoBody: "批改痕迹直接留在文中，点开就能看到句子级修改原因。",
-    featureThreeTitle: "结果更可执行",
-    featureThreeBody: "分项评分、亮点和优先修改点被整理成一份更容易快速扫读的报告。",
-    editorEyebrow: "写作工作台",
-    resultEyebrow: "批改结果",
-    previewLabel: "当前批改配置",
-    previewBody: "可随时调整目标分与语言，并在提交前确认能量消耗。",
-    socialProofTitle: "用于组织 IELTS 写作产品首页节奏的展示区",
-    galleryEyebrow: "首页模块",
-    galleryTitle: "带占位视觉的 Landing Page 内容区",
-    galleryDescription: "这个首页先作为产品落地页成立，再把批改器工作台作为下方核心转化区接住。",
-    galleryCardOneTitle: "Hero 展示区",
-    galleryCardOneBody: "大标题、导语和分层 UI 占位视觉，先把第一屏立住。",
-    galleryCardTwoTitle: "能力讲述区",
-    galleryCardTwoBody: "用三张编辑感更强的卡片解释价值，不把信息全塞进首屏。",
-    galleryCardThreeTitle: "模板预览区",
-    galleryCardThreeBody: "像 Around 首页一样，用卡片网格展示不同方向的落地页块。",
-    galleryCardFourTitle: "流程说明区",
-    galleryCardFourBody: "把产品能力整理成一条更清楚的用户路径。",
-    storyEyebrow: "布局思路",
-    storyTitle: "先让它像一个落地页，再让它像一个工具",
-    storyBody:
-      "Around 的首页会先建立品牌感和视觉系统，再解释细节。这里也沿用这个顺序：先首屏、再内容区、最后落到真正可用的批改工作台。",
-    storyPointOne: "首屏使用更大的标题、分层 mockup 和占位图块。",
-    storyPointTwo: "区块节奏在卡片网格、故事段落和 CTA 之间切换，避免单调。",
-    storyPointThree: "真正可用的批改器工作台仍然保留在页面下半部分。",
-    processEyebrow: "使用路径",
-    processTitle: "从草稿到修改的路径更直接",
-    processStepOneTitle: "粘贴题目",
-    processStepOneBody: "先粘贴 Task 2 题目，再设置目标分。",
-    processStepTwoTitle: "运行批改",
-    processStepTwoBody: "AI 评分、能量计费和会话逻辑都在同一个入口里完成。",
-    processStepThreeTitle: "查看报告",
-    processStepThreeBody: "优点、重点修改项、精彩句子和文中解释放在一起看。",
-    ctaTitle: "继续向下滚动，就可以直接进入真实可用的批改器。",
-    ctaBody: "上面的区块负责呈现落地页气质，下面的工作台负责真正承接使用。",
-    userLabel: "用户",
-    guestUser: "访客",
-    login: "登录",
-    signInTab: "登录",
-    signUpTab: "注册",
-    authName: "昵称",
-    authEmail: "邮箱",
-    authPassword: "密码",
-    authSubmitSignIn: "继续登录",
-    authSubmitSignUp: "创建账号",
-    authHintSignIn: "登录后查看你的批改记录。",
-    authHintSignUp: "创建账号以保存进度。",
-    authClose: "关闭",
-    authSignOut: "退出登录",
-    energy: "能量",
-    energyCost: "消耗",
-    insufficientEnergy: "当前能量不足，无法继续批阅。",
-    confirmReviewTitle: "确认消耗能量开始批改？",
-    confirmReviewBody: "本次批改会从当前账号能量中扣除对应消耗。",
-    confirmReviewConfirm: "确认批改",
-    confirmReviewCancel: "取消",
-    modesLabel: "模式",
-    aiReview: "AI 评分",
-    heuristicReady: "本地评分",
-    coverage: "Task 2",
-    task1: "Task 1",
-    task2: "Task 2",
-    providerDeepSeek: "DeepSeek",
-    targetBand: "目标分数",
-    prompt: "题目",
-    essay: "作文",
-    wordCount: "词数",
-    checking: "评分中...",
-    checkWriting: "开始批改",
-    estimatedBand: "预估分数",
-    aiMode: "AI 模式",
-    heuristicMode: "本地启发式模式",
-    providerUsed: "当前平台",
-    taskAchievement: "任务回应",
-    coherence: "连贯与衔接",
-    lexical: "词汇资源",
-    grammar: "语法范围与准确性",
-    strengths: "优点",
-    highlightedSentences: "精彩句子",
-    highlightedSentence: "原句",
-    highlightedReason: "精彩原因",
-    priorityFixes: "优先修改点",
-    annotatedEssay: "批改痕迹",
-    correctionOriginal: "原句",
-    correctionCorrected: "修改后",
-    correctionReason: "修改原因",
-    revisionBundle: "文中批改",
-    tapForReason: "点击文中的修改处，可查看原因。",
-    ready: "已就绪",
-    emptyTitle: "开始第一次批改",
-    emptyDescription: "粘贴 Task 2 题目和作文，然后运行批改以获取按评分标准生成的反馈。",
-    genericError: "发生了一些问题。",
-    overviewTab: "总览",
-    reviseTab: "修改",
-    reviseTitle: "结合批改结果修改原文",
-    reviseBody: "保持原文在主视图里，点开文中的修改处查看建议。",
-    reviseEmpty: "点击一处文中修改，右侧查看对应建议。",
-    reviseOriginal: "原句",
-    reviseSuggested: "建议改法",
-    layoutSplit: "左右布局",
-    layoutStack: "上下布局"
-  }
-} as const;
 
 function isErrorPayload(value: unknown): value is { error?: string } {
   return typeof value === "object" && value !== null && "error" in value;
@@ -366,7 +108,7 @@ function renderAnnotatedEssay(
   correctionNotes: CorrectionNote[],
   activeEditIndex: number | null,
   onToggleEdit: (index: number) => void,
-  t: (typeof UI_COPY)["en"] | (typeof UI_COPY)["zh-CN"]
+  t: CheckerMessages
 ) {
   const { parts } = parseAnnotatedEssay(text, correctionNotes);
 
@@ -472,8 +214,7 @@ function renderAnnotatedEssay(
 export default function HomePage() {
   const activeEditRef = useRef<HTMLDivElement | null>(null);
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
-  const localeHydratedRef = useRef(false);
-  const [locale, setLocale] = useState<Locale>("zh-CN");
+  const [locale, setLocale] = useRouteLocale();
   const provider: AiProvider = "deepseek";
   const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
   const [prompt, setPrompt] = useState(TASK2_PLACEHOLDER.prompt);
@@ -491,16 +232,10 @@ export default function HomePage() {
   const [reportView, setReportView] = useState<ReportView>("overview");
   const [reviseLayout, setReviseLayout] = useState<ReviseLayout>("split");
 
-  const t = UI_COPY[locale];
+  const { checker: t, navbar } = getMessages(locale);
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
   const wordCountTone = wordCount < 220 ? "low" : wordCount <= 320 ? "ready" : "extended";
-  const promptEditLabel = promptEditing
-    ? locale === "zh-CN"
-      ? "完成编辑"
-      : "Done editing"
-    : locale === "zh-CN"
-      ? "编辑题目"
-      : "Edit prompt";
+  const promptEditLabel = promptEditing ? t.doneEditing : t.editPrompt;
   const parsedRevision = result ? parseAnnotatedEssay(result.annotatedEssay, result.correctionNotes) : null;
   const activeCorrection = parsedRevision && activeEditIndex !== null ? parsedRevision.edits[activeEditIndex] ?? null : null;
 
@@ -538,45 +273,6 @@ export default function HomePage() {
       document.removeEventListener("touchstart", handlePointerDown);
     };
   }, [activeEditIndex]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const langParam = params.get("lang");
-    const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-    const nextLocale =
-      langParam === "en" || langParam === "zh-CN"
-        ? langParam
-        : storedLocale === "en" || storedLocale === "zh-CN"
-          ? storedLocale
-          : "zh-CN";
-
-    setLocale(nextLocale);
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
-    localeHydratedRef.current = true;
-
-    if (params.get("lang") !== nextLocale || params.get("task") !== "task2") {
-      params.set("lang", nextLocale);
-      params.set("task", "task2");
-      const nextQuery = params.toString();
-      window.history.replaceState({}, "", nextQuery ? `/checker?${nextQuery}` : "/checker");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!localeHydratedRef.current) {
-      return;
-    }
-
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
-    const params = new URLSearchParams(window.location.search);
-
-    if (params.get("lang") !== locale || params.get("task") !== "task2") {
-      params.set("lang", locale);
-      params.set("task", "task2");
-      const nextQuery = params.toString();
-      window.history.replaceState({}, "", nextQuery ? `/checker?${nextQuery}` : "/checker");
-    }
-  }, [locale]);
 
   useEffect(() => {
     let mounted = true;
@@ -732,8 +428,8 @@ export default function HomePage() {
       {error && errorSource === "auth" ? (
         <div className="topErrorBanner" role="alert" aria-live="polite">
           <span>{error}</span>
-          <button type="button" className="topErrorDismiss" onClick={clearError} aria-label={t.authClose}>
-            {t.authClose}
+          <button type="button" className="topErrorDismiss" onClick={clearError} aria-label={navbar.authClose}>
+            {navbar.authClose}
           </button>
         </div>
       ) : null}
@@ -750,7 +446,7 @@ export default function HomePage() {
               </div>
               <button type="button" className="authDialogClose" onClick={() => setConfirmDialogOpen(false)}>
                 <i className="ai-cross" aria-hidden="true" />
-                <span className="srOnly">{t.authClose}</span>
+                <span className="srOnly">{navbar.authClose}</span>
               </button>
             </div>
 
@@ -761,7 +457,7 @@ export default function HomePage() {
                   ·
                 </span>
                 <strong>
-                  {reviewCost} {locale === "zh-CN" ? "点能量" : "energy"}
+                  {reviewCost} {t.energyUnit}
                 </strong>
               </div>
 
@@ -788,7 +484,7 @@ export default function HomePage() {
       <AppNavbar
         locale={locale}
         onLocaleChange={setLocale}
-        copy={t}
+        copy={navbar}
         onSessionUpdated={refreshSessionContext}
         taskMenuMode="task2Only"
         energyBalance={energy?.balance ?? null}
@@ -873,10 +569,10 @@ export default function HomePage() {
                 </div>
                 <div className="resultMeta">
                   <Pill>
-                    {locale === "zh-CN" ? "目标" : "Target"} {result.targetBand.toFixed(1)}
+                    {t.targetChipLabel} {result.targetBand.toFixed(1)}
                   </Pill>
                   <Pill>
-                    {result.wordCount} {locale === "zh-CN" ? "词" : "words"}
+                    {result.wordCount} {t.wordsUnit}
                   </Pill>
                   <Pill>{result.feedbackMode === "ai" ? t.aiMode : t.heuristicMode}</Pill>
                 </div>
