@@ -28,6 +28,10 @@ type AppNavbarProps = {
 type AuthMode = "signIn" | "signUp";
 type ThemeMode = "light" | "dark";
 type ProductFeedbackKind = Exclude<FeedbackKind, "review">;
+type AuthErrorLike = {
+  message?: string;
+  code?: string;
+};
 
 async function getAuthClient() {
   const { authClient } = await import("@/lib/auth-client");
@@ -41,6 +45,23 @@ function formatUser(user: ClientSessionContext["user"], copy: NavbarMessages) {
 
   const identity = user.name?.trim() || user.email?.trim() || copy.userLabel;
   return `${copy.userLabel}: ${identity}`;
+}
+
+function normalizeAuthError(error: AuthErrorLike | null | undefined, fallback: string) {
+  const normalized = new Error(error?.message || fallback) as Error & { code?: string };
+  normalized.code = error?.code;
+  return normalized;
+}
+
+function isEmailVerificationError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const normalizedMessage = error.message.toLowerCase();
+  const errorCode = "code" in error ? String((error as { code?: unknown }).code || "") : "";
+
+  return errorCode === "EMAIL_NOT_VERIFIED" || normalizedMessage.includes("not verified");
 }
 
 export function AppNavbar({
@@ -67,6 +88,14 @@ export function AppNavbar({
   const [signUpPassword, setSignUpPassword] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [authVerifyingAutoLogin, setAuthVerifyingAutoLogin] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [verificationSending, setVerificationSending] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [activeTask, setActiveTask] = useState<string | null>(null);
   const [taskMenuOpen, setTaskMenuOpen] = useState(false);
@@ -97,6 +126,15 @@ export function AppNavbar({
   const effectiveEnergyBalance = energyBalance ?? currentEnergyBalance;
   const themeLabel = copy.themeLabel;
   const appearanceLabel = copy.appearanceLabel;
+  const resendVerificationEmail = (signInEmail.trim() || verificationEmail).trim();
+  const canResendVerification =
+    authMode === "signIn" &&
+    Boolean(
+      verificationEmail ||
+        (authError === copy.authVerificationRequired && signInEmail.trim()) ||
+        authNotice === copy.authVerificationPending ||
+        authNotice === copy.authVerificationSent
+    );
 
   useEffect(() => {
     setCurrentEnergyBalance(energyBalance);
@@ -109,6 +147,27 @@ export function AppNavbar({
     document.documentElement.dataset.theme = nextTheme;
     const currentUrl = new URL(window.location.href);
     setActiveTask(currentUrl.pathname === "/checker" ? currentUrl.searchParams.get("task") : null);
+
+    if (currentUrl.searchParams.get("auth_verified") === "1") {
+      currentUrl.searchParams.delete("auth_verified");
+      window.history.replaceState({}, "", currentUrl.toString());
+      setAuthVerifyingAutoLogin(true);
+      invalidateClientSessionContext();
+      void refreshSession()
+        .then(() => {
+          setAuthVerifyingAutoLogin(false);
+          setAuthDialogOpen(false);
+          setAuthError(null);
+          setAuthNotice(null);
+          setVerificationEmail("");
+        })
+        .catch(() => {
+          setAuthVerifyingAutoLogin(false);
+          setAuthMode("signIn");
+          setAuthNotice(copy.authVerificationSuccess);
+          setAuthDialogOpen(true);
+        });
+    }
   }, []);
 
   useEffect(() => {
@@ -138,11 +197,11 @@ export function AppNavbar({
   }, []);
 
   useEffect(() => {
-    if (authDialogOpen || feedbackDialogOpen || rechargeDialogOpen) {
+    if (authDialogOpen || feedbackDialogOpen || rechargeDialogOpen || deleteDialogOpen) {
       setTaskMenuOpen(false);
       setMoreMenuOpen(false);
     }
-  }, [authDialogOpen, feedbackDialogOpen, rechargeDialogOpen]);
+  }, [authDialogOpen, feedbackDialogOpen, rechargeDialogOpen, deleteDialogOpen]);
 
   useEffect(() => {
     if (!authRequest) {
@@ -196,6 +255,7 @@ export function AppNavbar({
   function openAuth(mode: AuthMode) {
     setAuthMode(mode);
     setAuthError(null);
+    setAuthNotice(null);
     setAuthDialogOpen(true);
   }
 
@@ -214,42 +274,118 @@ export function AppNavbar({
     setRechargeDialogOpen(true);
   }
 
+  function openDeleteDialog() {
+    setDeletePassword("");
+    setDeleteError(null);
+    setDeleteDialogOpen(true);
+  }
+
+  function getVerificationCallbackUrl() {
+    const callbackUrl = new URL(window.location.href);
+    callbackUrl.searchParams.set("auth_verified", "1");
+    return callbackUrl.toString();
+  }
+
+  async function sendVerificationEmail(email: string) {
+    const response = await fetch("/api/auth/send-verification-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email,
+        callbackURL: getVerificationCallbackUrl()
+      })
+    });
+
+    const data = (await response.json()) as { error?: { message?: string } | string };
+
+    if (!response.ok) {
+      const message =
+        typeof data.error === "string"
+          ? data.error
+          : typeof data.error?.message === "string"
+            ? data.error.message
+            : copy.genericError;
+      throw new Error(message);
+    }
+  }
+
+  async function handleResendVerificationEmail() {
+    if (!resendVerificationEmail || verificationSending) {
+      return;
+    }
+
+    setVerificationSending(true);
+    setAuthError(null);
+
+    try {
+      await sendVerificationEmail(resendVerificationEmail);
+      setVerificationEmail(resendVerificationEmail);
+      setAuthNotice(copy.authVerificationSent);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : copy.genericError);
+    } finally {
+      setVerificationSending(false);
+    }
+  }
+
   async function submitAuth(mode: AuthMode) {
     setAuthSubmitting(true);
     setAuthError(null);
+    setAuthNotice(null);
 
     try {
       const authClient = await getAuthClient();
       if (mode === "signIn") {
         const result = await authClient.signIn.email({
           email: signInEmail.trim(),
-          password: signInPassword
+          password: signInPassword,
+          callbackURL: getVerificationCallbackUrl()
         });
 
         if (result.error) {
-          throw new Error(result.error.message || copy.genericError);
+          throw normalizeAuthError(result.error, copy.genericError);
         }
       } else {
+        const normalizedEmail = signUpEmail.trim();
         const result = await authClient.signUp.email({
           name: signUpName.trim(),
-          email: signUpEmail.trim(),
-          password: signUpPassword
+          email: normalizedEmail,
+          password: signUpPassword,
+          callbackURL: getVerificationCallbackUrl()
         });
 
         if (result.error) {
-          throw new Error(result.error.message || copy.genericError);
+          throw normalizeAuthError(result.error, copy.genericError);
         }
+
+        setAuthMode("signIn");
+        setVerificationEmail(normalizedEmail);
+        setSignInEmail(normalizedEmail);
+        setSignInPassword("");
+        setSignUpPassword("");
+        setSignInPasswordVisible(false);
+        setSignUpPasswordVisible(false);
+        setAuthNotice(copy.authVerificationPending);
+        return;
       }
 
       invalidateClientSessionContext();
       await refreshSession();
       setAuthDialogOpen(false);
+      setVerificationEmail("");
       setSignInPassword("");
       setSignUpPassword("");
       setSignInPasswordVisible(false);
       setSignUpPasswordVisible(false);
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : copy.genericError);
+      if (isEmailVerificationError(error)) {
+        setVerificationEmail(signInEmail.trim());
+        setAuthError(copy.authVerificationRequired);
+      } else {
+        setAuthError(error instanceof Error ? error.message : copy.genericError);
+      }
     } finally {
       setAuthSubmitting(false);
     }
@@ -269,6 +405,7 @@ export function AppNavbar({
 
   async function handleSignOut() {
     setAuthError(null);
+    setAuthNotice(null);
     setAuthSubmitting(true);
 
     try {
@@ -284,6 +421,58 @@ export function AppNavbar({
       setAuthError(error instanceof Error ? error.message : copy.genericError);
     } finally {
       setAuthSubmitting(false);
+    }
+  }
+
+  async function handleDeleteAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!deletePassword || deleteSubmitting) {
+      return;
+    }
+
+    setDeleteSubmitting(true);
+    setDeleteError(null);
+
+    try {
+      const response = await fetch("/api/auth/delete-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          password: deletePassword
+        })
+      });
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        error?: { message?: string } | string;
+      };
+
+      if (!response.ok) {
+        const message =
+          typeof data.error === "string"
+            ? data.error
+            : typeof data.error?.message === "string"
+              ? data.error.message
+              : copy.genericError;
+        throw new Error(message);
+      }
+
+      invalidateClientSessionContext();
+      await refreshSession();
+      setDeleteDialogOpen(false);
+      setDeletePassword("");
+      if (typeof window !== "undefined") {
+        window.alert(copy.authDeleteSuccess);
+        window.location.assign(homeHref);
+      }
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : copy.genericError);
+    } finally {
+      setDeleteSubmitting(false);
     }
   }
 
@@ -530,6 +719,21 @@ export function AppNavbar({
               </button>
             </div>
 
+            {currentUser ? (
+              <div className="aroundMenuSection">
+                <button
+                  type="button"
+                  className="aroundMenuActionButton aroundMenuActionDanger"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    openDeleteDialog();
+                  }}
+                >
+                  {copy.authDeleteAccount}
+                </button>
+              </div>
+            ) : null}
+
             <div className="aroundMenuSection">
               <div className="aroundMenuRow">
                 <div>
@@ -558,6 +762,19 @@ export function AppNavbar({
         </div>
         </div>
       </Surface>
+
+      {authVerifyingAutoLogin ? (
+        <div className="authDialogBackdrop">
+          <Surface className={`authDialog confirmDialog authStatusDialog ${locale === "zh-CN" ? "authDialogCn" : "authDialogEn"}`}>
+            <div className="confirmDialogHeader">
+              <div className="confirmDialogIntro">
+                <h2>{copy.authVerificationSuccess}</h2>
+                <p className="authHint">{copy.authVerificationAutoSigningIn}</p>
+              </div>
+            </div>
+          </Surface>
+        </div>
+      ) : null}
 
       {authDialogOpen ? (
         <div className="authDialogBackdrop" onClick={() => !authSubmitting && setAuthDialogOpen(false)}>
@@ -616,7 +833,18 @@ export function AppNavbar({
                     </div>
                   </label>
 
+                  {authNotice ? <p className="authInfoBox">{authNotice}</p> : null}
                   {authError ? <p className="errorBox">{authError}</p> : null}
+                  {canResendVerification ? (
+                    <button
+                      type="button"
+                      className="authInlineAction"
+                      onClick={handleResendVerificationEmail}
+                      disabled={verificationSending || authSubmitting}
+                    >
+                      {verificationSending ? copy.authResendVerificationSending : copy.authResendVerification}
+                    </button>
+                  ) : null}
 
                   <ActionButton type="submit" variant="primary" fullWidth disabled={authSubmitting}>
                     {authSubmitting ? copy.submitting : copy.authSubmitSignIn}
@@ -676,6 +904,7 @@ export function AppNavbar({
                     </div>
                   </label>
 
+                  {authNotice ? <p className="authInfoBox">{authNotice}</p> : null}
                   {authError ? <p className="errorBox">{authError}</p> : null}
 
                   <ActionButton type="submit" variant="primary" fullWidth disabled={authSubmitting}>
@@ -691,6 +920,7 @@ export function AppNavbar({
                   className="authSwitchButton"
                   onClick={() => {
                     setAuthError(null);
+                    setAuthNotice(null);
                     setAuthMode(authMode === "signIn" ? "signUp" : "signIn");
                   }}
                   disabled={authSubmitting}
@@ -699,6 +929,61 @@ export function AppNavbar({
                 </button>
               </p>
             </section>
+          </Surface>
+        </div>
+      ) : null}
+
+      {deleteDialogOpen ? (
+        <div className="authDialogBackdrop" onClick={() => !deleteSubmitting && setDeleteDialogOpen(false)}>
+          <Surface
+            className={`authDialog confirmDialog ${locale === "zh-CN" ? "authDialogCn" : "authDialogEn"}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="confirmDialogHeader">
+              <div className="confirmDialogIntro">
+                <h2>{copy.authDeleteDialogTitle}</h2>
+                <p className="authHint">{copy.authDeleteDialogHint}</p>
+              </div>
+              <button
+                type="button"
+                className="authDialogClose"
+                onClick={() => setDeleteDialogOpen(false)}
+                disabled={deleteSubmitting}
+              >
+                <i className="ai-cross" aria-hidden="true" />
+                <span className="srOnly">{copy.authClose}</span>
+              </button>
+            </div>
+
+            <form className="confirmDialogBody" onSubmit={handleDeleteAccount}>
+              <p className="confirmDangerText">{copy.authDeleteDialogWarning}</p>
+
+              <label className="authField confirmDeleteField">
+                <span>{copy.authDeleteConfirmLabel}</span>
+                <div className="authInputWrap authPasswordWrap">
+                  <i className="ai-lock-closed" aria-hidden="true" />
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(event) => setDeletePassword(event.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="current-password"
+                  />
+                </div>
+              </label>
+
+              {deleteError ? <p className="errorBox">{deleteError}</p> : null}
+
+              <div className="confirmDialogActions">
+                <ActionButton type="button" variant="secondary" onClick={() => setDeleteDialogOpen(false)} disabled={deleteSubmitting}>
+                  {copy.authDeleteCancel}
+                </ActionButton>
+                <ActionButton type="submit" variant="primary" disabled={deleteSubmitting}>
+                  {deleteSubmitting ? copy.authDeleting : copy.authDeleteSubmit}
+                </ActionButton>
+              </div>
+            </form>
           </Surface>
         </div>
       ) : null}

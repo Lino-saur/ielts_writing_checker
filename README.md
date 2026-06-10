@@ -43,6 +43,8 @@ DEEPSEEK_API_KEY=your_deepseek_key_here
 BETTER_AUTH_SECRET=your_long_random_secret
 BETTER_AUTH_URL=http://localhost:3000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+RESEND_API_KEY=your_resend_api_key
+AUTH_EMAIL_FROM=IELTS Writing Checker <no-reply@example.com>
 
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
 ```
@@ -83,6 +85,8 @@ Set these environment variables in Vercel:
 - `OPENAI_API_KEY`
 - `DEEPSEEK_API_KEY`
 - `NEXT_PUBLIC_APP_URL`
+- `RESEND_API_KEY`
+- `AUTH_EMAIL_FROM`
 
 Recommended production setup:
 
@@ -90,6 +94,7 @@ Recommended production setup:
 - Host Postgres on Neon.
 - Use `BETTER_AUTH_URL=https://your-app.vercel.app`.
 - Use a Neon connection string with `sslmode=require`.
+- Configure `RESEND_API_KEY` and `AUTH_EMAIL_FROM` so sign-up verification emails can be delivered.
 
 ## API
 

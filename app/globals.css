@@ -1913,6 +1913,15 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   background: var(--danger-soft);
 }
 
+.authInfoBox {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
+  border-radius: 14px;
+  color: var(--ink);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
 .reportPaper {
   border: 1px solid var(--line);
   border-radius: 28px;
@@ -2292,6 +2301,15 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   transform: translateY(-1px);
 }
 
+.aroundMenuActionDanger {
+  color: var(--danger-ink);
+}
+
+.aroundMenuActionDanger:hover {
+  border-color: rgba(232, 34, 34, 0.2);
+  background: var(--danger-soft);
+}
+
 .feedbackTypeSelect,
 .feedbackDialogTextarea {
   width: 100%;
@@ -2616,6 +2634,10 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   padding: 24px 18px 24px;
 }
 
+.authStatusDialog {
+  width: min(100%, 420px);
+}
+
 .confirmDialogHeader {
   display: flex;
   align-items: flex-start;
@@ -2657,6 +2679,18 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   display: grid;
   gap: 20px;
   justify-items: center;
+}
+
+.confirmDeleteField {
+  width: 100%;
+}
+
+.confirmDangerText {
+  margin: 0;
+  color: var(--danger-ink);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  text-align: center;
 }
 
 .confirmEnergyRow {
@@ -2847,6 +2881,23 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
 
 .authForm .uiButtonBlock {
   margin-top: 2px;
+}
+
+.authInlineAction {
+  align-self: flex-start;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent-deep);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.authInlineAction:hover:not(:disabled) {
+  color: var(--ink);
 }
 
 .authSwitchButton:hover:not(:disabled) {
