@@ -401,6 +401,11 @@ export default function HomePage() {
           return;
         }
 
+        if (isErrorPayload(data) && data.error === "AI_REVIEW_FAILED") {
+          window.alert(t.aiReviewFailedAlert);
+          return;
+        }
+
         throw new Error(isErrorPayload(data) ? data.error || "Request failed." : "Request failed.");
       }
 
@@ -680,7 +685,7 @@ export default function HomePage() {
                   <Pill>
                     {result.wordCount} {t.wordsUnit}
                   </Pill>
-                  <Pill>{result.feedbackMode === "ai" ? t.aiMode : t.heuristicMode}</Pill>
+                  <Pill>{t.aiMode}</Pill>
                 </div>
               </div>
               <div className="reportModeSwitch" role="tablist" aria-label="Review modes">

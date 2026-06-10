@@ -45,11 +45,11 @@ function validateFeedbackBody(body: RequestBody) {
     throw new Error("INVALID_FEEDBACK_TARGET_BAND");
   }
 
-  if (body.providerUsed != null && body.providerUsed !== "deepseek" && body.providerUsed !== "heuristic") {
+  if (body.providerUsed != null && body.providerUsed !== "deepseek") {
     throw new Error("INVALID_FEEDBACK_PROVIDER");
   }
 
-  if (body.feedbackMode != null && body.feedbackMode !== "ai" && body.feedbackMode !== "heuristic") {
+  if (body.feedbackMode != null && body.feedbackMode !== "ai") {
     throw new Error("INVALID_FEEDBACK_MODE");
   }
 

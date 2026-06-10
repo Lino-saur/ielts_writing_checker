@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error.";
-    const status = message === "UNAUTHORIZED" ? 401 : 500;
+    const status = message === "UNAUTHORIZED" ? 401 : message === "AI_REVIEW_FAILED" ? 502 : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

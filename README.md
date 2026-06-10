@@ -14,7 +14,6 @@ AI-powered IELTS writing checker for Task 1 and Task 2 with rubric-based scoring
 - Shows strengths, highlighted sentences, priority fixes, and inline revisions.
 - Binds review energy to a Better Auth user session.
 - Uses `DeepSeek` for AI feedback.
-- Falls back to a local heuristic scorer when the AI call fails.
 
 ## Stack
 
@@ -112,7 +111,6 @@ Returns the current user session's energy balance and review cost.
 
 ## Notes
 
-- The heuristic mode is intentionally simple. It keeps the app usable when AI output fails, but it is not a substitute for a real IELTS examiner.
 - Review energy is tied to the Better Auth session user, including anonymous users.
 - PostgreSQL is required for deployment. Local file-based SQLite is no longer used.
 - Neon(DB), Vercel(Deploy) and Spaceship(Domain)

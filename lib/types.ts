@@ -2,7 +2,7 @@ export type TaskType = "task1" | "task2";
 
 export type AiProvider = "deepseek";
 
-export type ActiveProvider = "deepseek" | "heuristic";
+export type ActiveProvider = "deepseek";
 
 export type Locale = "en" | "zh-CN";
 
@@ -44,7 +44,7 @@ export type WritingScoreResult = {
   strengths: string[];
   highlightedSentences: HighlightedSentence[];
   priorityFixes: ImprovementItem[];
-  feedbackMode: "ai" | "heuristic";
+  feedbackMode: "ai";
   providerUsed: ActiveProvider;
 };
 
@@ -54,7 +54,7 @@ export type WritingRevisionResult = {
   targetBand: TargetBand;
   annotatedEssay: string;
   correctionNotes: CorrectionNote[];
-  feedbackMode: "ai" | "heuristic";
+  feedbackMode: "ai";
   providerUsed: ActiveProvider;
 };
 
@@ -74,7 +74,7 @@ export type WritingCheckResult = {
   priorityFixes: ImprovementItem[];
   annotatedEssay: string;
   correctionNotes: CorrectionNote[];
-  feedbackMode: "ai" | "heuristic";
+  feedbackMode: "ai";
   providerUsed: ActiveProvider;
 };
 
@@ -94,7 +94,7 @@ export type FeedbackPayload = {
   taskType?: TaskType;
   targetBand?: TargetBand;
   providerUsed?: ActiveProvider;
-  feedbackMode?: "ai" | "heuristic";
+  feedbackMode?: "ai";
   estimatedBand?: number;
   wordCount?: number;
   context?: Record<string, unknown>;
@@ -112,7 +112,7 @@ export type FeedbackEntry = {
   taskType: TaskType | null;
   targetBand: number | null;
   providerUsed: ActiveProvider | null;
-  feedbackMode: "ai" | "heuristic" | null;
+  feedbackMode: "ai" | null;
   estimatedBand: number | null;
   wordCount: number | null;
   payload: Record<string, unknown>;
