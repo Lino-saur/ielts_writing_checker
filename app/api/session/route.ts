@@ -9,8 +9,7 @@ export async function GET() {
       user: {
         id: session.user.id,
         name: session.user.name,
-        email: session.user.email,
-        isAnonymous: Boolean(session.user.isAnonymous)
+        email: session.user.email
       }
     });
   } catch (error) {

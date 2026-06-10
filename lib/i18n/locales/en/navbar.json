@@ -4,7 +4,6 @@
   "task2": "Task 2",
   "languageLabel": "Language",
   "userLabel": "User",
-  "guestUser": "Guest",
   "login": "Log In",
   "signInTab": "Sign In",
   "signUpTab": "Sign Up",
@@ -25,7 +24,6 @@
   "createOne": "Create one",
   "alreadyHaveAccount": "Already have an account?",
   "backToSignIn": "Back to sign in",
-  "guestBadge": "Guest",
   "themeLabel": "Theme",
   "appearanceLabel": "Appearance",
   "switchToDarkMode": "Switch to dark mode",
@@ -43,5 +41,16 @@
   "feedbackCommentLabel": "Details",
   "feedbackCommentPlaceholder": "Describe the issue or suggestion. Include what you expected if relevant.",
   "feedbackSubmit": "Submit feedback",
-  "feedbackSubmitted": "Feedback sent"
+  "feedbackSubmitted": "Feedback sent",
+  "rechargeEntry": "Top up",
+  "rechargeTitle": "Top-up is in development",
+  "rechargeHint": "Leave your contact details and we will notify you when top-up goes live.",
+  "rechargeMessage": "This feature is under development. Leave your contact details and we will notify you after launch.",
+  "rechargeContactLabel": "Contact details",
+  "rechargeContactPlaceholder": "Leave your email, phone number, or WeChat so we can contact you after launch.",
+  "rechargeSubmit": "Submit contact",
+  "rechargeSubmitted": "Saved. We will reach out after launch",
+  "rechargeRewardAlert": "Your first successful top-up feedback earns 10 bonus energy. Limited to once per user, so feel free to share it.",
+  "rechargeRewardToastGranted": "Feedback submitted. You just received 10 bonus energy.",
+  "rechargeRewardToastAlreadyClaimed": "Feedback submitted. Your top-up feedback reward has already been claimed, and we will still notify you after launch."
 }

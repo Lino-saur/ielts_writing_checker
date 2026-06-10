@@ -144,17 +144,6 @@ export async function listRechargeProducts() {
 }
 
 export function buildRechargePaymentSession(order: RechargeOrder): RechargePaymentSession {
-  if (order.provider === "stripe") {
-    return {
-      provider: order.provider,
-      mode: "redirect",
-      redirectUrl: null,
-      qrCodeUrl: null,
-      clientPayload: null,
-      message: "Stripe Checkout session integration pending."
-    };
-  }
-
   if (order.provider === "wechat") {
     return {
       provider: order.provider,
@@ -187,6 +176,24 @@ export function buildRechargePaymentSession(order: RechargeOrder): RechargePayme
   };
 }
 
+export async function setRechargeOrderProviderOrderId(orderId: string, providerOrderId: string) {
+  await ensureDatabase();
+
+  const updatedAt = new Date().toISOString();
+  const result = await db.query<RechargeOrderRow>(
+    `UPDATE recharge_orders
+     SET provider_order_id = $2,
+         updated_at = $3
+     WHERE id = $1
+       AND status = 'pending'
+     RETURNING id, user_id, product_id, product_code, product_name, provider, status, amount_cents, currency,
+               energy_amount, bonus_energy_amount, total_energy_amount, provider_order_id, paid_at, created_at, updated_at`,
+    [orderId, providerOrderId, updatedAt]
+  );
+
+  return result.rows[0] ? mapRechargeOrder(result.rows[0]) : null;
+}
+
 export async function createRechargeOrder(input: {
   userId: string;
   productCode: string;
@@ -198,7 +205,7 @@ export async function createRechargeOrder(input: {
     throw new Error("RECHARGE_PRODUCT_NOT_FOUND");
   }
 
-  const provider = input.provider ?? "stripe";
+  const provider = input.provider ?? "wechat";
   const orderId = randomUUID();
   const now = new Date().toISOString();
 

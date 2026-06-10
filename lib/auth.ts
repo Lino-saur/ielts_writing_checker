@@ -1,5 +1,4 @@
 import { betterAuth } from "better-auth";
-import { anonymous } from "better-auth/plugins";
 import { db } from "./db";
 
 const DEV_FALLBACK_SECRET = "replace-this-dev-secret-before-production-32-chars";
@@ -12,11 +11,5 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: true
-  },
-  plugins: [
-    anonymous({
-      emailDomainName: "guest.ielts.local",
-      generateName: () => `Guest-${crypto.randomUUID().slice(0, 8)}`
-    })
-  ]
+  }
 });

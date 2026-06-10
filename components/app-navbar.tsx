@@ -19,6 +19,10 @@ type AppNavbarProps = {
   taskMenuMode?: "all" | "task2Only";
   energyBalance?: number | null;
   energyLabel?: string;
+  authRequest?: {
+    mode: AuthMode;
+    id: number;
+  } | null;
 };
 
 type AuthMode = "signIn" | "signUp";
@@ -35,7 +39,7 @@ function formatUser(user: ClientSessionContext["user"], copy: NavbarMessages) {
     return `${copy.userLabel}: --`;
   }
 
-  const identity = user.isAnonymous ? copy.guestUser : user.name?.trim() || user.email?.trim() || copy.userLabel;
+  const identity = user.name?.trim() || user.email?.trim() || copy.userLabel;
   return `${copy.userLabel}: ${identity}`;
 }
 
@@ -46,7 +50,8 @@ export function AppNavbar({
   onSessionUpdated,
   taskMenuMode = "all",
   energyBalance = null,
-  energyLabel
+  energyLabel,
+  authRequest = null
 }: AppNavbarProps) {
   const themeSwitchId = useId();
   const taskMenuRef = useRef<HTMLDivElement | null>(null);
@@ -74,6 +79,12 @@ export function AppNavbar({
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [rechargeDialogOpen, setRechargeDialogOpen] = useState(false);
+  const [rechargeContact, setRechargeContact] = useState("");
+  const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
+  const [rechargeSubmitted, setRechargeSubmitted] = useState(false);
+  const [rechargeError, setRechargeError] = useState<string | null>(null);
+  const [rechargeToast, setRechargeToast] = useState<string | null>(null);
 
   const homeHref = useMemo(() => `/${locale}`, [locale]);
   const checkerTask1Href = useMemo(() => `/${locale}/checker?task=task1`, [locale]);
@@ -83,7 +94,6 @@ export function AppNavbar({
   const moreMenuCloseLabel = copy.closeSettingsMenu;
   const authSwitchPrefix = authMode === "signIn" ? copy.noAccount : copy.alreadyHaveAccount;
   const authSwitchAction = authMode === "signIn" ? copy.createOne : copy.backToSignIn;
-  const guestBadge = copy.guestBadge;
   const effectiveEnergyBalance = energyBalance ?? currentEnergyBalance;
   const themeLabel = copy.themeLabel;
   const appearanceLabel = copy.appearanceLabel;
@@ -128,11 +138,31 @@ export function AppNavbar({
   }, []);
 
   useEffect(() => {
-    if (authDialogOpen || feedbackDialogOpen) {
+    if (authDialogOpen || feedbackDialogOpen || rechargeDialogOpen) {
       setTaskMenuOpen(false);
       setMoreMenuOpen(false);
     }
-  }, [authDialogOpen, feedbackDialogOpen]);
+  }, [authDialogOpen, feedbackDialogOpen, rechargeDialogOpen]);
+
+  useEffect(() => {
+    if (!authRequest) {
+      return;
+    }
+
+    openAuth(authRequest.mode);
+  }, [authRequest]);
+
+  useEffect(() => {
+    if (!rechargeToast) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setRechargeToast(null);
+    }, 3200);
+
+    return () => window.clearTimeout(timer);
+  }, [rechargeToast]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -175,6 +205,13 @@ export function AppNavbar({
     setFeedbackError(null);
     setFeedbackSubmitted(false);
     setFeedbackDialogOpen(true);
+  }
+
+  function openRechargeDialog() {
+    setRechargeContact("");
+    setRechargeError(null);
+    setRechargeSubmitted(false);
+    setRechargeDialogOpen(true);
   }
 
   async function submitAuth(mode: AuthMode) {
@@ -232,6 +269,7 @@ export function AppNavbar({
 
   async function handleSignOut() {
     setAuthError(null);
+    setAuthSubmitting(true);
 
     try {
       const authClient = await getAuthClient();
@@ -241,14 +279,11 @@ export function AppNavbar({
       }
 
       invalidateClientSessionContext();
-      const anonymousResult = await authClient.signIn.anonymous();
-      if (anonymousResult.error) {
-        throw new Error(anonymousResult.error.message || copy.genericError);
-      }
-
       await refreshSession();
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : copy.genericError);
+    } finally {
+      setAuthSubmitting(false);
     }
   }
 
@@ -288,6 +323,51 @@ export function AppNavbar({
       setFeedbackError(error instanceof Error ? error.message : copy.genericError);
     } finally {
       setFeedbackSubmitting(false);
+    }
+  }
+
+  async function handleRechargeSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!rechargeContact.trim() || rechargeSubmitting || rechargeSubmitted) {
+      return;
+    }
+
+    setRechargeSubmitting(true);
+    setRechargeError(null);
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          kind: "feature_request",
+          category: "recharge_waitlist",
+          helpful: null,
+          comment: rechargeContact.trim(),
+          context: {
+            source: "recharge_waitlist"
+          },
+          page: typeof window !== "undefined" ? window.location.pathname : "/"
+        })
+      });
+
+      const data = (await response.json()) as { error?: string; rewardGranted?: boolean };
+
+      if (!response.ok) {
+        throw new Error(data.error || copy.genericError);
+      }
+
+      setRechargeSubmitted(true);
+      setRechargeContact("");
+      setRechargeToast(data.rewardGranted ? copy.rechargeRewardToastGranted : copy.rechargeRewardToastAlreadyClaimed);
+      await refreshSession();
+    } catch (error) {
+      setRechargeError(error instanceof Error ? error.message : copy.genericError);
+    } finally {
+      setRechargeSubmitting(false);
     }
   }
 
@@ -350,19 +430,29 @@ export function AppNavbar({
         <div className="aroundNavControls">
           <div className="aroundAuthArea">
             <div className="aroundAccountCluster">
-              <Pill className="aroundUserChip aroundUserBadge">
-                {currentUser?.isAnonymous !== false ? guestBadge : formatUser(currentUser, copy)}
-              </Pill>
-              {energyLabel ? (
+              {currentUser ? <Pill className="aroundUserChip aroundUserBadge">{formatUser(currentUser, copy)}</Pill> : null}
+              {currentUser && energyLabel ? (
                 <Pill className="aroundUserChip aroundEnergyBadge">
                   <span className="aroundEnergyIcon" aria-hidden="true" />
                   <span className="srOnly">{energyLabel}</span>
                   <span>{effectiveEnergyBalance ?? "--"}</span>
                 </Pill>
               ) : null}
+              {currentUser ? (
+                <button
+                  type="button"
+                  className="ghostAction"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    openRechargeDialog();
+                  }}
+                >
+                  {copy.rechargeEntry}
+                </button>
+              ) : null}
             </div>
 
-            {currentUser?.isAnonymous !== false ? (
+            {!currentUser ? (
               <ActionButton
                 className="aroundPrimaryAction"
                 onClick={() => {
@@ -679,6 +769,77 @@ export function AppNavbar({
               </form>
             </section>
           </Surface>
+        </div>
+      ) : null}
+
+      {rechargeDialogOpen ? (
+        <div className="authDialogBackdrop" onClick={() => !rechargeSubmitting && setRechargeDialogOpen(false)}>
+          <Surface
+            className={`authDialog ${locale === "zh-CN" ? "authDialogCn" : "authDialogEn"}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="authDialogHeader">
+              <div className="authCardIntro">
+                <h2>{copy.rechargeTitle}</h2>
+                <p className="authHint">{copy.rechargeHint}</p>
+              </div>
+              <button
+                type="button"
+                className="authDialogClose"
+                onClick={() => setRechargeDialogOpen(false)}
+                disabled={rechargeSubmitting}
+              >
+                <i className="ai-cross" aria-hidden="true" />
+                <span className="srOnly">{copy.authClose}</span>
+              </button>
+            </div>
+
+            <section className="authCardInner">
+              <form className="authForm" onSubmit={handleRechargeSubmit}>
+                <div className="rechargeRewardAlert" role="note">
+                  <strong>+10</strong>
+                  <span>{copy.rechargeRewardAlert}</span>
+                </div>
+
+                <p className="authHint">{copy.rechargeMessage}</p>
+
+                <label className="authField">
+                  <span>{copy.rechargeContactLabel}</span>
+                  <textarea
+                    className="feedbackDialogTextarea"
+                    value={rechargeContact}
+                    onChange={(event) => setRechargeContact(event.target.value)}
+                    rows={4}
+                    maxLength={500}
+                    placeholder={copy.rechargeContactPlaceholder}
+                    disabled={rechargeSubmitting || rechargeSubmitted}
+                    required
+                  />
+                </label>
+
+                {rechargeError ? <p className="errorBox">{rechargeError}</p> : null}
+                {rechargeSubmitted ? <Pill>{copy.rechargeSubmitted}</Pill> : null}
+
+                <ActionButton
+                  type="submit"
+                  variant="primary"
+                  fullWidth
+                  disabled={!rechargeContact.trim() || rechargeSubmitting || rechargeSubmitted}
+                >
+                  {rechargeSubmitting ? copy.submitting : rechargeSubmitted ? copy.rechargeSubmitted : copy.rechargeSubmit}
+                </ActionButton>
+              </form>
+            </section>
+          </Surface>
+        </div>
+      ) : null}
+
+      {rechargeToast ? (
+        <div className="rewardToast" role="status" aria-live="polite">
+          <span>{rechargeToast}</span>
+          <button type="button" className="rewardToastClose" onClick={() => setRechargeToast(null)} aria-label={copy.authClose}>
+            <i className="ai-cross" aria-hidden="true" />
+          </button>
         </div>
       ) : null}
     </>

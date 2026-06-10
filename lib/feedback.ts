@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { db, ensureDatabase } from "./db";
 import type { FeedbackEntry, FeedbackPayload, FeedbackStatus } from "./types";
+
+const RECHARGE_WAITLIST_CATEGORY = "recharge_waitlist";
+const RECHARGE_WAITLIST_REWARD = 10;
+const DEFAULT_ENERGY_BALANCE = 20;
 
 type CreateFeedbackInput = FeedbackPayload & {
   userId: string;
@@ -23,6 +28,13 @@ type FeedbackRow = {
   word_count: number | null;
   payload_json: Record<string, unknown> | null;
   created_at: Date | string;
+};
+
+type EnergyRow = {
+  balance: number;
+  total_consumed: number;
+  total_recharged: number;
+  updated_at: Date | string;
 };
 
 export type FeedbackListFilters = {
@@ -60,51 +72,141 @@ export async function createFeedback(input: CreateFeedbackInput) {
   const createdAt = new Date().toISOString();
   const comment = input.comment?.trim() ?? "";
   const category = input.category?.trim() || null;
+  const client = await db.connect();
 
-  await db.query(
-    `INSERT INTO feedback_entries (
-      id,
-      user_id,
-      kind,
-      status,
-      helpful,
-      category,
-      comment,
-      page,
-      task_type,
-      target_band,
-      provider_used,
-      feedback_mode,
-      estimated_band,
-      word_count,
-      payload_json,
-      created_at
-    )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, $16)`,
-    [
-      randomUUID(),
-      input.userId,
-      input.kind,
-      "new",
-      input.helpful,
-      category,
-      comment,
-      input.page,
-      input.taskType ?? null,
-      input.targetBand ?? null,
-      input.providerUsed ?? null,
-      input.feedbackMode ?? null,
-      input.estimatedBand ?? null,
-      input.wordCount ?? null,
-      JSON.stringify(input.context ?? {}),
-      createdAt
-    ]
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `INSERT INTO feedback_entries (
+        id,
+        user_id,
+        kind,
+        status,
+        helpful,
+        category,
+        comment,
+        page,
+        task_type,
+        target_band,
+        provider_used,
+        feedback_mode,
+        estimated_band,
+        word_count,
+        payload_json,
+        created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, $16)`,
+      [
+        randomUUID(),
+        input.userId,
+        input.kind,
+        "new",
+        input.helpful,
+        category,
+        comment,
+        input.page,
+        input.taskType ?? null,
+        input.targetBand ?? null,
+        input.providerUsed ?? null,
+        input.feedbackMode ?? null,
+        input.estimatedBand ?? null,
+        input.wordCount ?? null,
+        JSON.stringify(input.context ?? {}),
+        createdAt
+      ]
+    );
+
+    let rewardGranted = false;
+
+    if (category === RECHARGE_WAITLIST_CATEGORY) {
+      rewardGranted = await grantRechargeWaitlistReward(client, input.userId, createdAt);
+    }
+
+    await client.query("COMMIT");
+
+    return {
+      ok: true,
+      createdAt,
+      rewardGranted,
+      rewardAmount: rewardGranted ? RECHARGE_WAITLIST_REWARD : 0
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function grantRechargeWaitlistReward(
+  client: PoolClient,
+  userId: string,
+  createdAt: string
+) {
+  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`recharge-waitlist:${userId}`]);
+
+  const existingReward = await client.query<{ id: string }>(
+    `SELECT id
+     FROM energy_transactions
+     WHERE user_id = $1 AND source = $2
+     LIMIT 1`,
+    [userId, RECHARGE_WAITLIST_CATEGORY]
   );
 
-  return {
-    ok: true,
-    createdAt
-  };
+  if (existingReward.rows[0]) {
+    return false;
+  }
+
+  let existingAccount = await client.query<EnergyRow>(
+    `SELECT balance, total_consumed, total_recharged, updated_at
+     FROM energy_accounts
+     WHERE user_id = $1
+     FOR UPDATE`,
+    [userId]
+  );
+
+  if (!existingAccount.rows[0]) {
+    await client.query(
+      `INSERT INTO energy_accounts (user_id, balance, total_consumed, total_recharged, updated_at)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [userId, DEFAULT_ENERGY_BALANCE, 0, DEFAULT_ENERGY_BALANCE, createdAt]
+    );
+
+    await client.query(
+      `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, source, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [randomUUID(), userId, "recharge", DEFAULT_ENERGY_BALANCE, DEFAULT_ENERGY_BALANCE, "bootstrap", createdAt]
+    );
+
+    existingAccount = await client.query<EnergyRow>(
+      `SELECT balance, total_consumed, total_recharged, updated_at
+       FROM energy_accounts
+       WHERE user_id = $1
+       FOR UPDATE`,
+      [userId]
+    );
+  }
+
+  const current = existingAccount.rows[0];
+  const nextBalance = Number(current.balance) + RECHARGE_WAITLIST_REWARD;
+  const nextTotalRecharged = Number(current.total_recharged) + RECHARGE_WAITLIST_REWARD;
+
+  await client.query(
+    `UPDATE energy_accounts
+     SET balance = $1, total_recharged = $2, updated_at = $3
+     WHERE user_id = $4`,
+    [nextBalance, nextTotalRecharged, createdAt, userId]
+  );
+
+  await client.query(
+    `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, source, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [randomUUID(), userId, "recharge", RECHARGE_WAITLIST_REWARD, nextBalance, RECHARGE_WAITLIST_CATEGORY, createdAt]
+  );
+
+  return true;
 }
 
 export async function listFeedbackEntries(filters: FeedbackListFilters = {}) {

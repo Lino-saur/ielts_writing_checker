@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
-import { buildRechargePaymentSession, createRechargeOrder, listRechargeOrdersForUser } from "@/lib/recharge";
+import { initializeRechargePayment } from "@/lib/payments";
+import { createRechargeOrder, listRechargeOrdersForUser, markRechargeOrderFailed } from "@/lib/recharge";
 import type { RechargeProvider } from "@/lib/types";
 
 type CreateOrderBody = {
@@ -9,11 +10,11 @@ type CreateOrderBody = {
 };
 
 function normalizeProvider(provider?: RechargeProvider) {
-  if (provider === "stripe" || provider === "wechat" || provider === "alipay" || provider === "manual") {
+  if (provider === "wechat" || provider === "alipay" || provider === "manual") {
     return provider;
   }
 
-  return "stripe" satisfies RechargeProvider;
+  return "wechat" satisfies RechargeProvider;
 }
 
 export async function GET() {
@@ -32,10 +33,6 @@ export async function POST(request: Request) {
   try {
     const session = await requireSession();
 
-    if (session.user.isAnonymous) {
-      return NextResponse.json({ error: "AUTH_REQUIRED_FOR_RECHARGE" }, { status: 401 });
-    }
-
     const body = (await request.json()) as CreateOrderBody;
     const productCode = body.productCode?.trim();
 
@@ -49,10 +46,17 @@ export async function POST(request: Request) {
       provider: normalizeProvider(body.provider)
     });
 
-    return NextResponse.json({
-      order,
-      payment: buildRechargePaymentSession(order)
-    });
+    try {
+      const initialized = await initializeRechargePayment(order);
+
+      return NextResponse.json({
+        order: initialized.order,
+        payment: initialized.payment
+      });
+    } catch (error) {
+      await markRechargeOrderFailed(order.id);
+      throw error;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error.";
     const status =

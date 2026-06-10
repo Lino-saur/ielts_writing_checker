@@ -4,7 +4,6 @@ export type AdminEnergyUser = {
   id: string;
   email: string | null;
   name: string | null;
-  isAnonymous: boolean;
 };
 
 export type AdminEnergyGrantEntry = {
@@ -36,8 +35,6 @@ type UserRow = {
   email: string | null;
   name?: string | null;
   display_name?: string | null;
-  isAnonymous?: boolean | null;
-  is_anonymous?: boolean | null;
 };
 
 function quoteIdentifier(value: string) {
@@ -65,11 +62,6 @@ async function loadUsersByWhere(whereSql: string, params: Array<string | number 
   }
 
   const nameColumn = columns.has("name") ? "name" : columns.has("display_name") ? "display_name" : null;
-  const anonymousColumn = columns.has("isAnonymous")
-    ? "isAnonymous"
-    : columns.has("is_anonymous")
-      ? "is_anonymous"
-      : null;
   const orderColumn = columns.has("updatedAt")
     ? "updatedAt"
     : columns.has("updated_at")
@@ -83,10 +75,7 @@ async function loadUsersByWhere(whereSql: string, params: Array<string | number 
   const selectColumns = [
     `${quoteIdentifier("id")} AS id`,
     `${quoteIdentifier("email")} AS email`,
-    nameColumn ? `${quoteIdentifier(nameColumn)} AS ${quoteIdentifier(nameColumn)}` : `NULL::TEXT AS name`,
-    anonymousColumn
-      ? `${quoteIdentifier(anonymousColumn)} AS ${quoteIdentifier(anonymousColumn)}`
-      : `FALSE AS is_anonymous`
+    nameColumn ? `${quoteIdentifier(nameColumn)} AS ${quoteIdentifier(nameColumn)}` : `NULL::TEXT AS name`
   ];
 
   const result = await db.query<UserRow>(
@@ -101,8 +90,7 @@ async function loadUsersByWhere(whereSql: string, params: Array<string | number 
   return result.rows.map((row) => ({
     id: row.id,
     email: row.email,
-    name: row.name ?? row.display_name ?? null,
-    isAnonymous: Boolean(row.isAnonymous ?? row.is_anonymous ?? false)
+    name: row.name ?? row.display_name ?? null
   }));
 }
 

@@ -13,7 +13,6 @@ export type NavbarMessages = Record<string, string> & {
   task2: string;
   languageLabel: string;
   userLabel: string;
-  guestUser: string;
   login: string;
   signInTab: string;
   signUpTab: string;
@@ -34,7 +33,6 @@ export type NavbarMessages = Record<string, string> & {
   createOne: string;
   alreadyHaveAccount: string;
   backToSignIn: string;
-  guestBadge: string;
   themeLabel: string;
   appearanceLabel: string;
   switchToDarkMode: string;
@@ -53,6 +51,17 @@ export type NavbarMessages = Record<string, string> & {
   feedbackCommentPlaceholder: string;
   feedbackSubmit: string;
   feedbackSubmitted: string;
+  rechargeEntry: string;
+  rechargeTitle: string;
+  rechargeHint: string;
+  rechargeMessage: string;
+  rechargeContactLabel: string;
+  rechargeContactPlaceholder: string;
+  rechargeSubmit: string;
+  rechargeSubmitted: string;
+  rechargeRewardAlert: string;
+  rechargeRewardToastGranted: string;
+  rechargeRewardToastAlreadyClaimed: string;
 };
 
 export type LandingMessages = Record<string, string>;

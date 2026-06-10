@@ -228,6 +228,8 @@ export default function HomePage() {
   const [energy, setEnergy] = useState<EnergyState | null>(null);
   const [reviewCost, setReviewCost] = useState(1);
   const [sessionReady, setSessionReady] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
   const [promptEditing, setPromptEditing] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [reportView, setReportView] = useState<ReportView>("overview");
@@ -289,11 +291,15 @@ export default function HomePage() {
         const sessionContext = await getClientSessionContext();
 
         if (mounted) {
+          setIsAuthenticated(Boolean(sessionContext.user));
           setEnergy(sessionContext.energy);
           setReviewCost(sessionContext.reviewCost ?? 1);
         }
       } catch {
         // Ignore preload failures.
+        if (mounted) {
+          setIsAuthenticated(false);
+        }
       } finally {
         if (mounted) {
           setSessionReady(true);
@@ -353,8 +359,15 @@ export default function HomePage() {
     };
   }, [confirmDialogOpen]);
 
+  useEffect(() => {
+    if (isAuthenticated && errorSource === "auth") {
+      clearError();
+    }
+  }, [errorSource, isAuthenticated]);
+
   async function refreshSessionContext() {
     const sessionContext = await getClientSessionContext({ forceRefresh: true });
+    setIsAuthenticated(Boolean(sessionContext.user));
     setEnergy(sessionContext.energy);
     setReviewCost(sessionContext.reviewCost ?? 1);
   }
@@ -389,7 +402,8 @@ export default function HomePage() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          showError(t.genericError, "auth");
+          setIsAuthenticated(false);
+          showError(t.authRequired, "auth");
           return;
         }
 
@@ -525,6 +539,12 @@ export default function HomePage() {
       return;
     }
 
+    if (!isAuthenticated) {
+      showError(t.authRequired, "auth");
+      setAuthRequest({ mode: "signIn", id: Date.now() });
+      return;
+    }
+
     setConfirmDialogOpen(true);
   }
 
@@ -539,9 +559,25 @@ export default function HomePage() {
       {error && errorSource === "auth" ? (
         <div className="topErrorBanner" role="alert" aria-live="polite">
           <span>{error}</span>
-          <button type="button" className="topErrorDismiss" onClick={clearError} aria-label={navbar.authClose}>
-            {navbar.authClose}
-          </button>
+          <div className="topErrorActions">
+            <button
+              type="button"
+              className="topErrorDismiss"
+              onClick={() => setAuthRequest({ mode: "signIn", id: Date.now() })}
+            >
+              {t.authRequiredLogin}
+            </button>
+            <button
+              type="button"
+              className="topErrorDismiss"
+              onClick={() => setAuthRequest({ mode: "signUp", id: Date.now() })}
+            >
+              {t.authRequiredSignUp}
+            </button>
+            <button type="button" className="topErrorDismiss" onClick={clearError} aria-label={navbar.authClose}>
+              {navbar.authClose}
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -600,6 +636,7 @@ export default function HomePage() {
         taskMenuMode="task2Only"
         energyBalance={energy?.balance ?? null}
         energyLabel={t.energy}
+        authRequest={authRequest}
       />
 
       <section className="checkerStudio" id="workspace">
@@ -663,7 +700,7 @@ export default function HomePage() {
                 <span>{t.wordCount}</span>
               </span>
               <ActionButton type="submit" variant="primary" disabled={loading || !sessionReady}>
-                {loading ? t.checking : t.checkWriting}
+                {loading ? t.checking : isAuthenticated ? t.checkWriting : t.checkWritingLocked}
               </ActionButton>
             </div>
           </div>

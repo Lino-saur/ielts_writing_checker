@@ -8,7 +8,6 @@ type UserSearchResult = {
   id: string;
   email: string | null;
   name: string | null;
-  isAnonymous: boolean;
 };
 
 type RecentGrant = {
@@ -231,7 +230,6 @@ export function EnergyGrantClient() {
                 <strong>{item.email || item.id}</strong>
                 <span>{item.name || "Unnamed user"}</span>
                 <span>{item.id}</span>
-                <span>{item.isAnonymous ? "Anonymous" : "Registered"}</span>
               </button>
             ))
           ) : (

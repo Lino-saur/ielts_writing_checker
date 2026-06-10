@@ -42,6 +42,7 @@ DEEPSEEK_API_KEY=your_deepseek_key_here
 
 BETTER_AUTH_SECRET=your_long_random_secret
 BETTER_AUTH_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
 ```
@@ -81,6 +82,7 @@ Set these environment variables in Vercel:
 - `BETTER_AUTH_URL`
 - `OPENAI_API_KEY`
 - `DEEPSEEK_API_KEY`
+- `NEXT_PUBLIC_APP_URL`
 
 Recommended production setup:
 
@@ -109,9 +111,17 @@ Request body:
 
 Returns the current user session's energy balance and review cost.
 
+### `POST /api/recharge/orders`
+
+Creates a recharge order and initializes a provider payment session.
+
+### `POST /api/payments/webhook`
+
+Accepts provider webhooks.
+
 ## Notes
 
-- Review energy is tied to the Better Auth session user, including anonymous users.
+- Review energy is tied to the signed-in Better Auth user.
 - PostgreSQL is required for deployment. Local file-based SQLite is no longer used.
 - Neon(DB), Vercel(Deploy) and Spaceship(Domain)
 

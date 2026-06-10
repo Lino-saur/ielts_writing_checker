@@ -4,7 +4,6 @@ type SessionUser = {
   id: string;
   name?: string | null;
   email?: string | null;
-  isAnonymous: boolean;
 };
 
 type SessionPayload = {
@@ -59,22 +58,35 @@ async function loadClientSessionContext() {
   const sessionResult = await authClient.getSession();
 
   if (!sessionResult.data) {
-    const anonymousResult = await authClient.signIn.anonymous();
-    if (anonymousResult.error) {
-      throw new Error(anonymousResult.error.message || "AUTH_INIT_FAILED");
-    }
+    return {
+      user: null,
+      energy: null,
+      reviewCost: null
+    } satisfies ClientSessionContext;
   }
 
-  const [sessionData, energyData] = await Promise.all([
-    fetchJson<SessionPayload>("/api/session"),
-    fetchJson<EnergyPayload>("/api/energy")
-  ]);
+  try {
+    const [sessionData, energyData] = await Promise.all([
+      fetchJson<SessionPayload>("/api/session"),
+      fetchJson<EnergyPayload>("/api/energy")
+    ]);
 
-  return {
-    user: sessionData.user ?? null,
-    energy: energyData.energy ?? null,
-    reviewCost: energyData.cost ?? null
-  } satisfies ClientSessionContext;
+    return {
+      user: sessionData.user ?? null,
+      energy: energyData.energy ?? null,
+      reviewCost: energyData.cost ?? null
+    } satisfies ClientSessionContext;
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return {
+        user: null,
+        energy: null,
+        reviewCost: null
+      } satisfies ClientSessionContext;
+    }
+
+    throw error;
+  }
 }
 
 let clientSessionContextPromise: Promise<ClientSessionContext> | null = null;

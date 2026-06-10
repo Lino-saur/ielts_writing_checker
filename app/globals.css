@@ -605,6 +605,8 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
 }
 
 .aroundAuthArea {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 12px;
   min-width: 0;
@@ -671,6 +673,7 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   min-height: 42px;
   padding: 0 14px;
 }
+
 
 .pageBackdrop {
   position: absolute;
@@ -743,6 +746,14 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   font-weight: 700;
   padding: 8px 12px;
   cursor: pointer;
+}
+
+.topErrorActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .siteHeader,
@@ -2484,6 +2495,71 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 252, 0.98)),
     var(--paper-strong);
   box-shadow: var(--shadow-md);
+}
+
+.rechargeRewardAlert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(46, 168, 117, 0.22);
+  border-radius: 18px;
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+
+.rechargeRewardAlert strong {
+  flex-shrink: 0;
+  min-width: 46px;
+  font-size: 1.1rem;
+  line-height: 1.1;
+}
+
+.rechargeRewardAlert span {
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.rewardToast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid rgba(46, 168, 117, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 42px rgba(24, 39, 75, 0.16);
+  color: var(--success-ink);
+  backdrop-filter: blur(12px);
+}
+
+.rewardToast span {
+  flex: 1;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.rewardToastClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(46, 168, 117, 0.12);
+  color: inherit;
+  cursor: pointer;
+}
+
+.rewardToastClose i {
+  font-size: 0.9rem;
 }
 
 .authHint,

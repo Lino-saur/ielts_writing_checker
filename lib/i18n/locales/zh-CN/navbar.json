@@ -4,7 +4,6 @@
   "task2": "Task 2",
   "languageLabel": "语言",
   "userLabel": "用户",
-  "guestUser": "访客",
   "login": "登录",
   "signInTab": "登录",
   "signUpTab": "注册",
@@ -25,7 +24,6 @@
   "createOne": "创建账号",
   "alreadyHaveAccount": "已有账号？",
   "backToSignIn": "返回登录",
-  "guestBadge": "访客模式",
   "themeLabel": "主题",
   "appearanceLabel": "外观",
   "switchToDarkMode": "切换到深色模式",
@@ -43,5 +41,16 @@
   "feedbackCommentLabel": "详细说明",
   "feedbackCommentPlaceholder": "描述你遇到的问题或建议；如果有预期行为，也可以一并写明。",
   "feedbackSubmit": "提交反馈",
-  "feedbackSubmitted": "反馈已提交"
+  "feedbackSubmitted": "反馈已提交",
+  "rechargeEntry": "充值",
+  "rechargeTitle": "充值功能开发中",
+  "rechargeHint": "正式上线前，先登记联系方式，我们会在充值能力可用后通知你。",
+  "rechargeMessage": "产品开发中，请留下您的联系方式，正式上线后通知。",
+  "rechargeContactLabel": "联系方式",
+  "rechargeContactPlaceholder": "请输入微信、邮箱或手机号，方便我们上线后联系你。",
+  "rechargeSubmit": "提交联系方式",
+  "rechargeSubmitted": "已登记，后续会通知你",
+  "rechargeRewardAlert": "首次成功提交充值反馈，可额外获赠 10 点能量。每位用户仅限 1 次，欢迎积极反馈。",
+  "rechargeRewardToastGranted": "反馈已提交，已为你赠送 10 点能量。",
+  "rechargeRewardToastAlreadyClaimed": "反馈已提交。你的充值反馈奖励已领取过，后续上线仍会通知你。"
 }

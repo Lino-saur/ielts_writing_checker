@@ -81,7 +81,7 @@ export type WritingCheckResult = {
 export type FeedbackKind = "review" | "product" | "bug" | "feature_request";
 export type FeedbackStatus = "new" | "reviewing" | "closed";
 export type AdminUserStatus = "active" | "disabled";
-export type RechargeProvider = "manual" | "stripe" | "wechat" | "alipay";
+export type RechargeProvider = "manual" | "wechat" | "alipay";
 export type RechargeOrderStatus = "pending" | "paid" | "failed" | "cancelled";
 export type RechargePaymentMode = "redirect" | "qr_code" | "sdk" | "pending";
 
