@@ -1,8 +1,14 @@
 export type TaskType = "task1" | "task2";
 
-export type AiProvider = "deepseek";
+export type TaskImageInput = {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+};
 
-export type ActiveProvider = "deepseek";
+export type AiProvider = "deepseek" | "gemini";
+
+export type ActiveProvider = "deepseek" | "gemini";
 
 export type Locale = "en" | "zh-CN";
 

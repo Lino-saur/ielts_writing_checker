@@ -6,6 +6,7 @@ function validateInput(input: CheckInput) {
     taskType: input.taskType,
     prompt: input.prompt.trim(),
     essay: input.essay.trim(),
+    taskImage: input.taskImage ?? null,
     provider: input.provider,
     locale: getLocale(input.locale),
     targetBand: getTargetBand(input.targetBand)
@@ -34,7 +35,8 @@ export async function evaluateWritingRevision(input: CheckInput): Promise<Writin
 
 export async function evaluateWriting(input: CheckInput): Promise<WritingCheckResult> {
   try {
-    const [score, revision] = await Promise.all([evaluateWritingScore(input), evaluateWritingRevision(input)]);
+    const cleanInput = validateInput(input);
+    const [score, revision] = await Promise.all([buildAiScoreFeedback(cleanInput), buildAiRevisionFeedback(cleanInput)]);
 
     return {
       taskType: score.taskType,

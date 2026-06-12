@@ -1,12 +1,21 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppNavbar } from "@/components/app-navbar";
 import { getClientSessionContext } from "@/lib/auth-client-session";
 import { CheckerMessages, getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
-import type { AiProvider, CorrectionNote, FeedbackPayload, TargetBand, WritingCheckResult } from "@/lib/types";
+import type { AiProvider, CorrectionNote, FeedbackPayload, TargetBand, TaskImageInput, TaskType, WritingCheckResult } from "@/lib/types";
+
+const TASK1_PLACEHOLDER = {
+  prompt:
+    "The table below gives information on consumer spending on different items in five different countries in 2002.",
+  essay:
+    "The table shows percentages of consumer expenditure for three categories of products and services in five countries in 2002.\n\nIt is clear that the largest proportion of consumer spending in each country went on food, drinks and tobacco.\n\nOn the other hand, the leisure/education category has the lowest percentages in the table. Out of the five countries, consumer spending on food, drinks and tobacco was noticeably higher in Turkey, at 32.14%, and Ireland, at nearly 29%. The proportion of spending on leisure and education was also highest in Turkey, at 4.35%, while expenditure on clothing and footwear was significantly higher in Italy, at 9%, than in any of the other countries.\n\nIt can be seen that Sweden had the lowest percentages of national consumer expenditure for food/drinks/tobacco and for clothing/footwear, at nearly 16% and just over 5% respectively. Spain had slightly higher figures for these categories, but the lowest figure for leisure/education, at only 1.98%."
+};
+
 
 const TASK2_PLACEHOLDER = {
   prompt:
@@ -215,11 +224,16 @@ function renderAnnotatedEssay(
 export default function HomePage() {
   const activeEditRef = useRef<HTMLDivElement | null>(null);
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
+  const taskImageInputRef = useRef<HTMLInputElement | null>(null);
   const [locale, setLocale] = useRouteLocale();
+  const searchParams = useSearchParams();
   const provider: AiProvider = "deepseek";
+  const [taskType, setTaskType] = useState<TaskType>("task2");
   const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
   const [prompt, setPrompt] = useState(TASK2_PLACEHOLDER.prompt);
   const [essay, setEssay] = useState(TASK2_PLACEHOLDER.essay);
+  const [taskImage, setTaskImage] = useState<TaskImageInput | null>(null);
+  const [taskImageUploading, setTaskImageUploading] = useState(false);
   const [result, setResult] = useState<WritingCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorSource, setErrorSource] = useState<ErrorSource>("general");
@@ -247,6 +261,22 @@ export default function HomePage() {
   const promptEditLabel = promptEditing ? t.doneEditing : t.editPrompt;
   const parsedRevision = result ? parseAnnotatedEssay(result.annotatedEssay, result.correctionNotes) : null;
   const activeCorrection = parsedRevision && activeEditIndex !== null ? parsedRevision.edits[activeEditIndex] ?? null : null;
+  const isTask1 = taskType === "task1";
+
+  async function toDataUrl(file: Blob) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+          return;
+        }
+        reject(new Error("IMAGE_READ_FAILED"));
+      };
+      reader.onerror = () => reject(reader.error || new Error("IMAGE_READ_FAILED"));
+      reader.readAsDataURL(file);
+    });
+  }
 
   function clearError() {
     setError(null);
@@ -257,6 +287,30 @@ export default function HomePage() {
     setError(message);
     setErrorSource(source);
   }
+
+  useEffect(() => {
+    const nextTask = searchParams.get("task") === "task1" ? "task1" : "task2";
+    setTaskType(nextTask);
+  }, [searchParams]);
+
+  useEffect(() => {
+    setResult(null);
+    setActiveEditIndex(null);
+    setFeedbackChoice(null);
+    setFeedbackComment("");
+    setFeedbackSubmitted(false);
+    setFeedbackError(null);
+
+    if (taskType === "task1") {
+      setPrompt(TASK1_PLACEHOLDER.prompt);
+      setEssay(TASK1_PLACEHOLDER.essay);
+      setTaskImage(null);
+    } else {
+      setPrompt(TASK2_PLACEHOLDER.prompt);
+      setEssay(TASK2_PLACEHOLDER.essay);
+      setTaskImage(null);
+    }
+  }, [taskType]);
 
   useEffect(() => {
     if (activeEditIndex === null) {
@@ -383,12 +437,13 @@ export default function HomePage() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          taskType: "task2",
+          taskType,
           provider,
           locale,
           targetBand,
           prompt,
-          essay
+          essay,
+          taskImage
         })
       });
 
@@ -436,6 +491,52 @@ export default function HomePage() {
       showError(submissionError instanceof Error ? submissionError.message : t.genericError);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleTask1ImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      setTaskImage(null);
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      showError(t.task1ImageTypeError);
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      showError(t.task1ImageSizeError);
+      event.target.value = "";
+      return;
+    }
+
+    setTaskImageUploading(true);
+    clearError();
+
+    try {
+      const dataUrl = await toDataUrl(file);
+
+      setTaskImage({
+        name: file.name,
+        mimeType: file.type || "image/png",
+        dataUrl
+      });
+    } catch {
+      showError(t.task1ImageReadError);
+      event.target.value = "";
+    } finally {
+      setTaskImageUploading(false);
+    }
+  }
+
+  function clearTask1Image() {
+    setTaskImage(null);
+    if (taskImageInputRef.current) {
+      taskImageInputRef.current.value = "";
     }
   }
 
@@ -545,6 +646,11 @@ export default function HomePage() {
       return;
     }
 
+    if (taskType === "task1" && !taskImage) {
+      showError(t.task1ImageRequired);
+      return;
+    }
+
     setConfirmDialogOpen(true);
   }
 
@@ -633,7 +739,7 @@ export default function HomePage() {
         onLocaleChange={setLocale}
         copy={navbar}
         onSessionUpdated={refreshSessionContext}
-        taskMenuMode="task2Only"
+        taskMenuMode="all"
         energyBalance={energy?.balance ?? null}
         energyLabel={t.energy}
         authRequest={authRequest}
@@ -662,6 +768,38 @@ export default function HomePage() {
               )}
             </div>
           </div>
+
+          {isTask1 ? (
+            <div className="checkerField checkerUploadBlock">
+              <div className="checkerPromptHeader">
+                <span>{t.task1ImageLabel}</span>
+              </div>
+              <div className="checkerPromptBody checkerUploadBody">
+                <p className="checkerUploadHint">{t.task1ImageHint}</p>
+                <input
+                  ref={taskImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void handleTask1ImageChange(event)}
+                  disabled={taskImageUploading}
+                />
+                {taskImage ? (
+                  <div className="checkerUploadMeta">
+                    <span>{taskImage.name}</span>
+                    <button type="button" className="checkerPromptEditButton" onClick={clearTask1Image}>
+                      {t.task1ImageRemove}
+                    </button>
+                  </div>
+                ) : null}
+                {taskImage ? (
+                  <div className="checkerUploadPreview">
+                    <img src={taskImage.dataUrl} alt={t.task1ImageLabel} className="checkerUploadPreviewImage" />
+                  </div>
+                ) : null}
+                {taskImageUploading ? <p className="checkerUploadStatus">{t.task1ImageProcessing}</p> : null}
+              </div>
+            </div>
+          ) : null}
 
           <div className="checkerDraftPanel">
             <div className="checkerDraftHeader">

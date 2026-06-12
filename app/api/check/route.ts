@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
 import { evaluateWriting } from "@/lib/ielts";
 import { consumeEnergy, getEnergyState, getReviewEnergyCost } from "@/lib/energy";
-import { AiProvider, Locale, TargetBand, TaskType } from "@/lib/types";
+import { AiProvider, Locale, TargetBand, TaskImageInput, TaskType } from "@/lib/types";
 
 type RequestBody = {
   taskType?: TaskType;
   prompt?: string;
   essay?: string;
+  taskImage?: TaskImageInput | null;
   provider?: AiProvider;
   locale?: Locale;
   targetBand?: TargetBand;
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
       taskType: body.taskType,
       prompt: body.prompt || "",
       essay: body.essay || "",
+      taskImage: body.taskImage || null,
       provider: body.provider,
       locale: body.locale,
       targetBand: body.targetBand

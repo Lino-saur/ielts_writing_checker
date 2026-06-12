@@ -10,6 +10,16 @@ import {
   countWords
 } from "./shared";
 
+type GeminiGenerateContentPayload = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
+    };
+  }>;
+};
+
 function getDeepSeekConfig(): ProviderConfig {
   return {
     name: "deepseek",
@@ -24,6 +34,27 @@ function getDeepSeekConfig(): ProviderConfig {
       max_tokens: 2200
     }
   };
+}
+
+function getGeminiConfig(): ProviderConfig {
+  return {
+    name: "gemini",
+    apiKey: process.env.GEMINI_API_KEY,
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/models",
+    model: process.env.GEMINI_MODEL || "gemini-3.5-flash"
+  };
+}
+
+function shouldUseGeminiVision(input: CheckInput) {
+  return input.taskType === "task1" && Boolean(input.taskImage);
+}
+
+function readGeminiText(payload: GeminiGenerateContentPayload) {
+  const parts = payload.candidates?.[0]?.content?.parts || [];
+  return parts
+    .map((part) => (typeof part.text === "string" ? part.text : ""))
+    .join("\n")
+    .trim();
 }
 
 async function runTaggedCompletion<T>(
@@ -203,13 +234,176 @@ async function runTaggedCompletion<T>(
   }
 }
 
+async function runGeminiVisionCompletion<T>(
+  input: CheckInput,
+  config: ProviderConfig,
+  options: {
+    kind: "score" | "revision";
+    systemPrompt: string;
+    prompt: string;
+    parse: (text: string) => T;
+    normalize: (parsed: T, input: CheckInput, providerName: ProviderConfig["name"]) => T;
+  }
+): Promise<T> {
+  if (!config.apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured.");
+  }
+
+  if (!input.taskImage) {
+    throw new Error("TASK1_IMAGE_REQUIRED");
+  }
+
+  const wordCount = countWords(input.essay);
+  const endpoint = `${config.endpoint}/${config.model}:generateContent?key=${config.apiKey}`;
+  const baseParts = [
+    {
+      inline_data: {
+        mime_type: input.taskImage.mimeType,
+        data: input.taskImage.dataUrl.replace(/^data:[^;]+;base64,/, "")
+      }
+    },
+    {
+      text: `${options.systemPrompt}\n\n${options.prompt}`
+    }
+  ];
+
+  console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][REQUEST]`, {
+    provider: config.name,
+    model: config.model,
+    taskType: input.taskType,
+    locale: input.locale,
+    wordCount,
+    promptLength: options.prompt.length,
+    essayLength: input.essay.length,
+    imageName: input.taskImage.name,
+    imageMimeType: input.taskImage.mimeType
+  });
+
+  async function requestCompletion(
+    textInstructions: string[],
+    phase: "first" | "retry" | "repair"
+  ) {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              ...baseParts,
+              ...textInstructions.map((text) => ({
+                text
+              }))
+            ]
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[IELTS_CHECK][HTTP_ERROR]", {
+        provider: config.name,
+        phase,
+        status: response.status,
+        bodyPreview: previewText(errorText)
+      });
+      throw new Error(`${config.name} request failed: ${response.status} ${errorText}`);
+    }
+
+    const payload = (await response.json()) as GeminiGenerateContentPayload;
+    const text = readGeminiText(payload);
+
+    if (!text) {
+      console.error("[IELTS_CHECK][EMPTY_RESPONSE]", {
+        provider: config.name,
+        phase,
+        payloadPreview: previewText(JSON.stringify(payload))
+      });
+      throw new Error(`${config.name} response was empty.`);
+    }
+
+    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][RAW_RESPONSE]`, {
+      provider: config.name,
+      phase,
+      rawLength: text.length,
+      rawPreview: previewText(text),
+      cleanedPreview: previewText(cleanModelText(text))
+    });
+
+    return text;
+  }
+
+  const firstText = await requestCompletion([], "first");
+
+  try {
+    const parsed = options.parse(firstText);
+    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+      provider: config.name,
+      phase: "first",
+      preview: previewText(JSON.stringify(parsed))
+    });
+    return options.normalize(parsed, input, config.name);
+  } catch (firstError) {
+    const retryText = await requestCompletion(
+      [
+        `Your previous reply was invalid for this exact reason: ${
+          firstError instanceof Error ? firstError.message : String(firstError)
+        }. Return ONLY the required sections in the exact same order, with the exact same section headers, and no JSON or markdown fences.`
+      ],
+      "retry"
+    );
+
+    try {
+      const parsed = options.parse(retryText);
+      console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+        provider: config.name,
+        phase: "retry",
+        preview: previewText(JSON.stringify(parsed))
+      });
+      return options.normalize(parsed, input, config.name);
+    } catch (retryError) {
+      const repairText = await requestCompletion(
+        [
+          `Do not rescore. Do not rewrite the evaluation. Only repair your previous answer so it exactly matches the required tagged-section template. The concrete problem to fix is: ${
+            retryError instanceof Error ? retryError.message : String(retryError)
+          }. Keep the content semantically the same.`
+        ],
+        "repair"
+      );
+
+      const parsed = options.parse(repairText);
+      console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+        provider: config.name,
+        phase: "repair",
+        preview: previewText(JSON.stringify(parsed))
+      });
+      return options.normalize(parsed, input, config.name);
+    }
+  }
+}
+
 export async function buildAiScoreFeedback(input: CheckInput): Promise<WritingScoreResult> {
   const minimumWords = input.taskType === "task1" ? 150 : 250;
   const systemPrompt = await loadBasePrompt();
+  const prompt = await buildScorePrompt(input, minimumWords, shouldUseGeminiVision(input) ? "gemini" : "deepseek");
+
+  if (shouldUseGeminiVision(input)) {
+    return runGeminiVisionCompletion(input, getGeminiConfig(), {
+      kind: "score",
+      systemPrompt,
+      prompt,
+      parse: parseScoreStructuredResponse,
+      normalize: normalizeScoreResult
+    });
+  }
+
   return runTaggedCompletion(input, getDeepSeekConfig(), {
     kind: "score",
     systemPrompt,
-    prompt: await buildScorePrompt(input, minimumWords, "deepseek"),
+    prompt,
     parse: parseScoreStructuredResponse,
     normalize: normalizeScoreResult
   });
@@ -218,10 +412,22 @@ export async function buildAiScoreFeedback(input: CheckInput): Promise<WritingSc
 export async function buildAiRevisionFeedback(input: CheckInput): Promise<WritingRevisionResult> {
   const minimumWords = input.taskType === "task1" ? 150 : 250;
   const systemPrompt = await loadBasePrompt();
+  const prompt = await buildRevisionPrompt(input, minimumWords);
+
+  if (shouldUseGeminiVision(input)) {
+    return runGeminiVisionCompletion(input, getGeminiConfig(), {
+      kind: "revision",
+      systemPrompt,
+      prompt,
+      parse: parseRevisionStructuredResponse,
+      normalize: normalizeRevisionResult
+    });
+  }
+
   return runTaggedCompletion(input, getDeepSeekConfig(), {
     kind: "revision",
     systemPrompt,
-    prompt: await buildRevisionPrompt(input, minimumWords),
+    prompt,
     parse: parseRevisionStructuredResponse,
     normalize: normalizeRevisionResult
   });

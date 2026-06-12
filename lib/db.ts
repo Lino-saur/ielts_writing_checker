@@ -1,7 +1,5 @@
 import { Pool } from "pg";
 
-const DEFAULT_DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:5432/ielts_writing_checker";
-
 type GlobalWithDb = typeof globalThis & {
   __ieltsPool?: Pool;
   __ieltsDbInitPromise?: Promise<void>;
@@ -10,7 +8,7 @@ type GlobalWithDb = typeof globalThis & {
 const globalForDb = globalThis as GlobalWithDb;
 
 function getConnectionString() {
-  return process.env.DATABASE_URL || DEFAULT_DATABASE_URL;
+  return process.env.DATABASE_URL;
 }
 
 export const db =

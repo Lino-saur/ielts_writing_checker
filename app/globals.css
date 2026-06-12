@@ -1729,6 +1729,47 @@ html[data-theme="dark"] .checkerPromptBlock {
   padding-left: 14px;
 }
 
+.checkerUploadBody {
+  display: grid;
+  gap: 12px;
+}
+
+.checkerUploadHint,
+.checkerUploadStatus {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.checkerUploadMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.checkerUploadPreview {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-subtle);
+}
+
+.checkerUploadPreviewImage {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .checkerPromptText {
   margin: 0;
   color: var(--ink);

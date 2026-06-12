@@ -627,18 +627,6 @@ export function AppNavbar({
                   <span>{effectiveEnergyBalance ?? "--"}</span>
                 </Pill>
               ) : null}
-              {currentUser ? (
-                <button
-                  type="button"
-                  className="ghostAction"
-                  onClick={() => {
-                    setMoreMenuOpen(false);
-                    openRechargeDialog();
-                  }}
-                >
-                  {copy.rechargeEntry}
-                </button>
-              ) : null}
             </div>
 
             {!currentUser ? (

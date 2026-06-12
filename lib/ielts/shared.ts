@@ -4,6 +4,7 @@ import {
   HighlightedSentence,
   Locale,
   TargetBand,
+  TaskImageInput,
   TaskType,
   WritingCheckResult,
   WritingRevisionResult,
@@ -14,6 +15,7 @@ export type CheckInput = {
   taskType: TaskType;
   prompt: string;
   essay: string;
+  taskImage?: TaskImageInput | null;
   provider?: AiProvider;
   locale?: Locale;
   targetBand?: TargetBand;
@@ -28,7 +30,7 @@ export type ChatCompletionsPayload = {
 };
 
 export type ProviderConfig = {
-  name: "deepseek";
+  name: "deepseek" | "gemini";
   apiKey?: string;
   endpoint: string;
   model: string;

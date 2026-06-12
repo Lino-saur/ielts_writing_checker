@@ -2,8 +2,6 @@ import { betterAuth } from "better-auth";
 import { db } from "./db";
 import { sendEmail } from "./email";
 
-const DEV_FALLBACK_SECRET = "replace-this-dev-secret-before-production-32-chars";
-
 function buildVerificationEmail(name: string | null | undefined, url: string) {
   const displayName = name?.trim() || "there";
   const subject = "Verify your email for IELTS Writing Checker";
@@ -37,8 +35,8 @@ function buildVerificationEmail(name: string | null | undefined, url: string) {
 
 export const auth = betterAuth({
   appName: "IELTS Writing Checker",
-  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
-  secret: process.env.BETTER_AUTH_SECRET || DEV_FALLBACK_SECRET,
+  baseURL: process.env.BETTER_AUTH_URL,
+  secret: process.env.BETTER_AUTH_SECRET,
   database: db,
   user: {
     deleteUser: {
