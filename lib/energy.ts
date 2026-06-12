@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { db, ensureDatabase } from "./db";
 
 export const REVIEW_ENERGY_COST = 1;
@@ -68,6 +69,45 @@ async function ensureEnergyAccount(userId: string): Promise<EnergyState> {
   return state;
 }
 
+async function lockEnergyAccount(client: PoolClient, userId: string) {
+  let existing = await client.query<EnergyRow>(
+    `SELECT balance, total_consumed, total_recharged, updated_at
+     FROM energy_accounts
+     WHERE user_id = $1
+     FOR UPDATE`,
+    [userId]
+  );
+
+  if (existing.rows[0]) {
+    return existing.rows[0];
+  }
+
+  const defaultState = createDefaultEnergyState();
+  await client.query(
+    `INSERT INTO energy_accounts (user_id, balance, total_consumed, total_recharged, updated_at)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (user_id) DO NOTHING`,
+    [userId, defaultState.balance, defaultState.totalConsumed, defaultState.totalRecharged, defaultState.updatedAt]
+  );
+
+  await client.query(
+    `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, source, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (id) DO NOTHING`,
+    [randomUUID(), userId, "recharge", defaultState.balance, defaultState.balance, "bootstrap", defaultState.updatedAt]
+  );
+
+  existing = await client.query<EnergyRow>(
+    `SELECT balance, total_consumed, total_recharged, updated_at
+     FROM energy_accounts
+     WHERE user_id = $1
+     FOR UPDATE`,
+    [userId]
+  );
+
+  return existing.rows[0];
+}
+
 export async function getEnergyState(userId: string): Promise<EnergyState> {
   return ensureEnergyAccount(userId);
 }
@@ -78,74 +118,7 @@ export async function consumeEnergy(userId: string, amount = REVIEW_ENERGY_COST)
   try {
     await ensureDatabase();
     await client.query("BEGIN");
-
-    let existing = await client.query<EnergyRow>(
-      `SELECT balance, total_consumed, total_recharged, updated_at
-       FROM energy_accounts
-       WHERE user_id = $1
-       FOR UPDATE`,
-      [userId]
-    );
-
-    if (!existing.rows[0]) {
-      const defaultState = createDefaultEnergyState();
-      await client.query(
-        `INSERT INTO energy_accounts (user_id, balance, total_consumed, total_recharged, updated_at)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (user_id) DO NOTHING`,
-        [userId, defaultState.balance, defaultState.totalConsumed, defaultState.totalRecharged, defaultState.updatedAt]
-      );
-
-      await client.query(
-        `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, source, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (id) DO NOTHING`,
-        [
-          randomUUID(),
-          userId,
-          "recharge",
-          defaultState.balance,
-          defaultState.balance,
-          "bootstrap",
-          defaultState.updatedAt
-        ]
-      );
-
-      existing = await client.query<EnergyRow>(
-        `SELECT balance, total_consumed, total_recharged, updated_at
-         FROM energy_accounts
-         WHERE user_id = $1
-         FOR UPDATE`,
-        [userId]
-      );
-    }
-
-    const state = mapEnergyRow(existing.rows[0]);
-
-    if (state.balance < amount) {
-      throw new Error("INSUFFICIENT_ENERGY");
-    }
-
-    const updatedAt = new Date().toISOString();
-    const nextState: EnergyState = {
-      balance: state.balance - amount,
-      totalConsumed: state.totalConsumed + amount,
-      totalRecharged: state.totalRecharged,
-      updatedAt
-    };
-
-    await client.query(
-      `UPDATE energy_accounts
-       SET balance = $1, total_consumed = $2, updated_at = $3
-       WHERE user_id = $4`,
-      [nextState.balance, nextState.totalConsumed, nextState.updatedAt, userId]
-    );
-
-    await client.query(
-      `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, source, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [randomUUID(), userId, "consume", amount, nextState.balance, "review", updatedAt]
-    );
+    const nextState = await consumeEnergyInTransaction(client, userId, amount);
 
     await client.query("COMMIT");
     return nextState;
@@ -155,6 +128,37 @@ export async function consumeEnergy(userId: string, amount = REVIEW_ENERGY_COST)
   } finally {
     client.release();
   }
+}
+
+export async function consumeEnergyInTransaction(client: PoolClient, userId: string, amount = REVIEW_ENERGY_COST) {
+  const state = mapEnergyRow(await lockEnergyAccount(client, userId));
+
+  if (state.balance < amount) {
+    throw new Error("INSUFFICIENT_ENERGY");
+  }
+
+  const updatedAt = new Date().toISOString();
+  const nextState: EnergyState = {
+    balance: state.balance - amount,
+    totalConsumed: state.totalConsumed + amount,
+    totalRecharged: state.totalRecharged,
+    updatedAt
+  };
+
+  await client.query(
+    `UPDATE energy_accounts
+     SET balance = $1, total_consumed = $2, updated_at = $3
+     WHERE user_id = $4`,
+    [nextState.balance, nextState.totalConsumed, nextState.updatedAt, userId]
+  );
+
+  await client.query(
+    `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, source, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [randomUUID(), userId, "consume", amount, nextState.balance, "review", updatedAt]
+  );
+
+  return nextState;
 }
 
 export async function grantEnergy(

@@ -12,6 +12,8 @@ AI-powered IELTS writing checker for Task 1 and Task 2 with rubric-based scoring
   - Lexical Resource
   - Grammatical Range and Accuracy
 - Shows strengths, highlighted sentences, priority fixes, and inline revisions.
+- Saves a per-user review history with the original prompt, essay, and Task 1 image.
+- Uploads Task 1 images directly from the browser to object storage using a short-lived signed URL.
 - Binds review energy to a Better Auth user session.
 - Uses `DeepSeek` for AI feedback.
 
@@ -47,6 +49,12 @@ RESEND_API_KEY=your_resend_api_key
 AUTH_EMAIL_FROM=IELTS Writing Checker <no-reply@example.com>
 
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
+
+REVIEW_IMAGE_STORAGE_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+REVIEW_IMAGE_STORAGE_REGION=auto
+REVIEW_IMAGE_STORAGE_BUCKET=ielts-writing-review-images
+REVIEW_IMAGE_STORAGE_ACCESS_KEY_ID=your_storage_access_key
+REVIEW_IMAGE_STORAGE_SECRET_ACCESS_KEY=your_storage_secret
 ```
 
 For local development against a local Postgres instance, you can also set:
@@ -73,7 +81,7 @@ npm run dev
 http://localhost:3000
 ```
 
-## Vercel + Neon
+## Vercel + Neon + Spaceship + Cloudflare
 
 This app is designed to run on Vercel with an external PostgreSQL database such as Neon.
 
@@ -87,6 +95,11 @@ Set these environment variables in Vercel:
 - `NEXT_PUBLIC_APP_URL`
 - `RESEND_API_KEY`
 - `AUTH_EMAIL_FROM`
+- `REVIEW_IMAGE_STORAGE_ENDPOINT`
+- `REVIEW_IMAGE_STORAGE_REGION`
+- `REVIEW_IMAGE_STORAGE_BUCKET`
+- `REVIEW_IMAGE_STORAGE_ACCESS_KEY_ID`
+- `REVIEW_IMAGE_STORAGE_SECRET_ACCESS_KEY`
 
 Recommended production setup:
 
@@ -116,6 +129,18 @@ Request body:
 
 Returns the current user session's energy balance and review cost.
 
+### `GET /api/reviews`
+
+Returns the current user's saved review history.
+
+### `GET /api/reviews/:id`
+
+Returns one saved review, including the original prompt, essay, and scored result.
+
+### `POST /api/review-images/upload-url`
+
+Returns a short-lived signed upload URL for direct browser image uploads.
+
 ### `POST /api/recharge/orders`
 
 Creates a recharge order and initializes a provider payment session.
@@ -129,6 +154,7 @@ Accepts provider webhooks.
 - Review energy is tied to the signed-in Better Auth user.
 - PostgreSQL is required for deployment. Local file-based SQLite is no longer used.
 - Neon(DB), Vercel(Deploy) and Spaceship(Domain)
+- The object storage bucket must allow browser `PUT` from your app origin with `Content-Type` in allowed headers.
 
 ## TODO
 

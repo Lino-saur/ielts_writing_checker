@@ -1,13 +1,13 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppNavbar } from "@/components/app-navbar";
 import { getClientSessionContext } from "@/lib/auth-client-session";
 import { CheckerMessages, getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
-import { ActionButton, Pill, Surface } from "@/components/ui-kit";
-import type { AiProvider, CorrectionNote, FeedbackPayload, TargetBand, TaskImageInput, TaskType, WritingCheckResult } from "@/lib/types";
+import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
+import type { AiProvider, CorrectionNote, FeedbackPayload, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
 
 const TASK1_PLACEHOLDER = {
   prompt:
@@ -44,6 +44,12 @@ type ErrorSource = "auth" | "general";
 type ReportView = "overview" | "revise";
 type ReviseLayout = "split" | "stack";
 type FeedbackChoice = "helpful" | "notHelpful";
+type UploadedTaskImage = {
+  objectKey: string;
+  name: string;
+  mimeType: string;
+  previewUrl: string;
+};
 
 function ScoreCard({
   label,
@@ -221,7 +227,7 @@ function renderAnnotatedEssay(
   });
 }
 
-export default function HomePage() {
+function CheckerPageContent() {
   const activeEditRef = useRef<HTMLDivElement | null>(null);
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
   const taskImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -232,7 +238,7 @@ export default function HomePage() {
   const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
   const [prompt, setPrompt] = useState(TASK2_PLACEHOLDER.prompt);
   const [essay, setEssay] = useState(TASK2_PLACEHOLDER.essay);
-  const [taskImage, setTaskImage] = useState<TaskImageInput | null>(null);
+  const [taskImage, setTaskImage] = useState<UploadedTaskImage | null>(null);
   const [taskImageUploading, setTaskImageUploading] = useState(false);
   const [result, setResult] = useState<WritingCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -262,21 +268,6 @@ export default function HomePage() {
   const parsedRevision = result ? parseAnnotatedEssay(result.annotatedEssay, result.correctionNotes) : null;
   const activeCorrection = parsedRevision && activeEditIndex !== null ? parsedRevision.edits[activeEditIndex] ?? null : null;
   const isTask1 = taskType === "task1";
-
-  async function toDataUrl(file: Blob) {
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          resolve(reader.result);
-          return;
-        }
-        reject(new Error("IMAGE_READ_FAILED"));
-      };
-      reader.onerror = () => reject(reader.error || new Error("IMAGE_READ_FAILED"));
-      reader.readAsDataURL(file);
-    });
-  }
 
   function clearError() {
     setError(null);
@@ -311,6 +302,14 @@ export default function HomePage() {
       setTaskImage(null);
     }
   }, [taskType]);
+
+  useEffect(() => {
+    return () => {
+      if (taskImage?.previewUrl) {
+        window.URL.revokeObjectURL(taskImage.previewUrl);
+      }
+    };
+  }, [taskImage]);
 
   useEffect(() => {
     if (activeEditIndex === null) {
@@ -443,7 +442,9 @@ export default function HomePage() {
           targetBand,
           prompt,
           essay,
-          taskImage
+          taskImageObjectKey: taskImage?.objectKey,
+          taskImageName: taskImage?.name,
+          taskImageMimeType: taskImage?.mimeType
         })
       });
 
@@ -472,6 +473,11 @@ export default function HomePage() {
 
         if (isErrorPayload(data) && data.error === "AI_REVIEW_FAILED") {
           window.alert(t.aiReviewFailedAlert);
+          return;
+        }
+
+        if (isErrorPayload(data) && data.error === "REVIEW_IMAGE_STORAGE_NOT_CONFIGURED") {
+          showError(t.task1HistoryStorageError);
           return;
         }
 
@@ -518,12 +524,49 @@ export default function HomePage() {
     clearError();
 
     try {
-      const dataUrl = await toDataUrl(file);
+      const signResponse = await fetch("/api/review-images/upload-url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          mimeType: file.type || "image/png"
+        })
+      });
+      const signData = (await signResponse.json()) as
+        | {
+            objectKey: string;
+            uploadUrl: string;
+            headers?: Record<string, string>;
+          }
+        | { error?: string };
 
+      if (!signResponse.ok || !("uploadUrl" in signData)) {
+        throw new Error("UPLOAD_URL_FAILED");
+      }
+
+      const uploadResponse = await fetch(signData.uploadUrl, {
+        method: "PUT",
+        headers: signData.headers || {
+          "Content-Type": file.type || "image/png"
+        },
+        body: file
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("UPLOAD_FAILED");
+      }
+
+      const previewUrl = window.URL.createObjectURL(file);
+      if (taskImage?.previewUrl) {
+        window.URL.revokeObjectURL(taskImage.previewUrl);
+      }
       setTaskImage({
+        objectKey: signData.objectKey,
         name: file.name,
         mimeType: file.type || "image/png",
-        dataUrl
+        previewUrl
       });
     } catch {
       showError(t.task1ImageReadError);
@@ -534,6 +577,9 @@ export default function HomePage() {
   }
 
   function clearTask1Image() {
+    if (taskImage?.previewUrl) {
+      window.URL.revokeObjectURL(taskImage.previewUrl);
+    }
     setTaskImage(null);
     if (taskImageInputRef.current) {
       taskImageInputRef.current.value = "";
@@ -793,7 +839,7 @@ export default function HomePage() {
                 ) : null}
                 {taskImage ? (
                   <div className="checkerUploadPreview">
-                    <img src={taskImage.dataUrl} alt={t.task1ImageLabel} className="checkerUploadPreviewImage" />
+                    <img src={taskImage.previewUrl} alt={t.task1ImageLabel} className="checkerUploadPreviewImage" />
                   </div>
                 ) : null}
                 {taskImageUploading ? <p className="checkerUploadStatus">{t.task1ImageProcessing}</p> : null}
@@ -853,14 +899,19 @@ export default function HomePage() {
                   <p className="sectionLabel">{t.estimatedBand}</p>
                   <h2>{result.estimatedBand.toFixed(1)}</h2>
                 </div>
-                <div className="resultMeta">
-                  <Pill>
-                    {t.targetChipLabel} {result.targetBand.toFixed(1)}
-                  </Pill>
-                  <Pill>
-                    {result.wordCount} {t.wordsUnit}
-                  </Pill>
-                  <Pill>{t.aiMode}</Pill>
+                <div className="resultHeroActions">
+                  <div className="resultMeta">
+                    <Pill>
+                      {t.targetChipLabel} {result.targetBand.toFixed(1)}
+                    </Pill>
+                    <Pill>
+                      {result.wordCount} {t.wordsUnit}
+                    </Pill>
+                    <Pill>{t.aiMode}</Pill>
+                  </div>
+                  <ActionLink href={`/${locale}/history`} variant="secondary">
+                    {t.viewHistory}
+                  </ActionLink>
                 </div>
               </div>
               <div className="reportModeSwitch" role="tablist" aria-label="Review modes">
@@ -1083,5 +1134,13 @@ export default function HomePage() {
         ) : null}
       </section>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <CheckerPageContent />
+    </Suspense>
   );
 }

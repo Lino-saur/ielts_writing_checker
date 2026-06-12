@@ -51,6 +51,7 @@ export const auth = betterAuth({
           await client.query("DELETE FROM energy_transactions WHERE user_id = $1", [user.id]);
           await client.query("DELETE FROM energy_accounts WHERE user_id = $1", [user.id]);
           await client.query("DELETE FROM recharge_orders WHERE user_id = $1", [user.id]);
+          await client.query("DELETE FROM writing_reviews WHERE user_id = $1", [user.id]);
           await client.query("COMMIT");
         } catch (error) {
           await client.query("ROLLBACK");

@@ -68,6 +68,7 @@ export type NavbarMessages = Record<string, string> & {
   feedbackSubmit: string;
   feedbackSubmitted: string;
   rechargeEntry: string;
+  historyEntry: string;
   rechargeTitle: string;
   rechargeHint: string;
   rechargeMessage: string;

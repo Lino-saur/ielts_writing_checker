@@ -118,6 +118,7 @@ export function AppNavbar({
   const homeHref = useMemo(() => `/${locale}`, [locale]);
   const checkerTask1Href = useMemo(() => `/${locale}/checker?task=task1`, [locale]);
   const checkerTask2Href = useMemo(() => `/${locale}/checker?task=task2`, [locale]);
+  const historyHref = useMemo(() => `/${locale}/history`, [locale]);
   const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : copy.writingTasks;
   const moreMenuOpenLabel = copy.openSettingsMenu;
   const moreMenuCloseLabel = copy.closeSettingsMenu;
@@ -693,6 +694,14 @@ export function AppNavbar({
                 </button>
               </div>
             </div>
+
+            {currentUser ? (
+              <div className="aroundMenuSection">
+                <Link href={historyHref} className="aroundMenuActionButton" onClick={() => setMoreMenuOpen(false)}>
+                  {copy.historyEntry}
+                </Link>
+              </div>
+            ) : null}
 
             <div className="aroundMenuSection">
               <button

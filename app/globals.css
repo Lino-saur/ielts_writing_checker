@@ -1975,6 +1975,14 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   border-bottom: 1px solid var(--line);
 }
 
+.resultHeroActions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .reportModeSwitch {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2083,6 +2091,123 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
 
 .correctionCard p + p {
   margin-top: 12px;
+}
+
+.historyHero {
+  margin-bottom: 18px;
+}
+
+.historyHeroCard {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+}
+
+.historyLayout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.historySidebar,
+.historyDetail,
+.historyEmptyState {
+  padding: 22px;
+}
+
+.historySidebar {
+  position: sticky;
+  top: 24px;
+}
+
+.historySidebarHeader {
+  margin-bottom: 14px;
+}
+
+.historyList {
+  display: grid;
+  gap: 12px;
+}
+
+.historyListItem {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-muted);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    transform 140ms ease,
+    background-color 140ms ease;
+}
+
+.historyListItem:hover,
+.historyListItem.is-active {
+  border-color: rgba(var(--accent-rgb), 0.34);
+  transform: translateY(-1px);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.historyListItemTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.historyListMeta {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.historyEmptyPanel h3,
+.historyEmptyState h2 {
+  margin-top: 0;
+}
+
+.historyAuthActions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.historyTextBlock,
+.historyEssayBlock {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.historyEssayBlock {
+  font-family:
+    "SFMono-Regular",
+    "Menlo",
+    "Consolas",
+    monospace;
+}
+
+.historyImagePanel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-muted);
+}
+
+.historyImage {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .revisionSection {
@@ -3006,6 +3131,7 @@ html[data-theme="dark"] .authSwitchButton {
 
 @media (max-width: 1080px) {
   .checkerWorkbench,
+  .historyLayout,
   .workspace,
   .featureStrip,
   .processGrid,
@@ -3015,6 +3141,10 @@ html[data-theme="dark"] .authSwitchButton {
 
   .reviseWorkspace {
     grid-template-columns: 1fr;
+  }
+
+  .historySidebar {
+    position: static;
   }
 
   .reviseLayoutSwitch {
@@ -3156,6 +3286,8 @@ html[data-theme="dark"] .authSwitchButton {
 
   .siteHeader,
   .resultHero,
+  .resultHeroActions,
+  .historyHeroCard,
   .previewHeader,
   .editorFooter,
   .authDialogHeader,
@@ -3194,6 +3326,9 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .heroContent,
+  .historySidebar,
+  .historyDetail,
+  .historyEmptyState,
   .previewCard,
   .checkerDraftPanel,
   .checkerReportShell,

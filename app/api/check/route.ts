@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
 import { evaluateWriting } from "@/lib/ielts";
-import { consumeEnergy, getEnergyState, getReviewEnergyCost } from "@/lib/energy";
+import { getEnergyState, getReviewEnergyCost } from "@/lib/energy";
 import { AiProvider, Locale, TargetBand, TaskImageInput, TaskType } from "@/lib/types";
+import { createWritingReview, loadTaskImageInputFromObject } from "@/lib/writing-reviews";
 
 type RequestBody = {
   taskType?: TaskType;
   prompt?: string;
   essay?: string;
   taskImage?: TaskImageInput | null;
+  taskImageObjectKey?: string;
+  taskImageName?: string;
+  taskImageMimeType?: string;
   provider?: AiProvider;
   locale?: Locale;
   targetBand?: TargetBand;
@@ -37,21 +41,39 @@ export async function POST(request: Request) {
       );
     }
 
+    const resolvedTaskImage =
+      body.taskImageObjectKey && body.taskImageName && body.taskImageMimeType
+        ? await loadTaskImageInputFromObject({
+            objectKey: body.taskImageObjectKey,
+            name: body.taskImageName,
+            mimeType: body.taskImageMimeType
+          })
+        : body.taskImage || null;
+
     const result = await evaluateWriting({
       taskType: body.taskType,
       prompt: body.prompt || "",
       essay: body.essay || "",
-      taskImage: body.taskImage || null,
+      taskImage: resolvedTaskImage,
       provider: body.provider,
       locale: body.locale,
       targetBand: body.targetBand
     });
 
-    const nextEnergy = await consumeEnergy(session.user.id, cost);
+    const savedReview = await createWritingReview({
+      userId: session.user.id,
+      prompt: body.prompt || "",
+      essay: body.essay || "",
+      taskImage: body.taskImage || null,
+      taskImageObjectKey: body.taskImageObjectKey || null,
+      taskImageName: body.taskImageName || null,
+      taskImageMimeType: body.taskImageMimeType || null,
+      result
+    });
 
     return NextResponse.json({
       result,
-      energy: nextEnergy,
+      energy: savedReview.energy,
       cost
     });
   } catch (error) {

@@ -84,6 +84,39 @@ export type WritingCheckResult = {
   providerUsed: ActiveProvider;
 };
 
+export type WritingReviewImage = {
+  name: string;
+  mimeType: string;
+  url: string;
+};
+
+export type WritingReviewListItem = {
+  id: string;
+  taskType: TaskType;
+  targetBand: number;
+  estimatedBand: number;
+  wordCount: number;
+  providerUsed: ActiveProvider;
+  hasImage: boolean;
+  createdAt: string;
+};
+
+export type WritingReviewDetail = {
+  id: string;
+  userId: string;
+  taskType: TaskType;
+  prompt: string;
+  essay: string;
+  targetBand: number;
+  estimatedBand: number;
+  wordCount: number;
+  providerUsed: ActiveProvider;
+  result: WritingCheckResult;
+  image: WritingReviewImage | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type FeedbackKind = "review" | "product" | "bug" | "feature_request";
 export type FeedbackStatus = "new" | "reviewing" | "closed";
 export type AdminUserStatus = "active" | "disabled";

@@ -49,10 +49,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname === "/" || pathname === "/checker") {
+  if (pathname === "/" || pathname === "/checker" || pathname === "/history") {
     const locale = detectLocale(request);
     const nextUrl = request.nextUrl.clone();
-    nextUrl.pathname = pathname === "/" ? `/${locale}` : `/${locale}/checker`;
+    nextUrl.pathname =
+      pathname === "/" ? `/${locale}` : pathname === "/checker" ? `/${locale}/checker` : `/${locale}/history`;
     nextUrl.search = search;
     return NextResponse.redirect(nextUrl);
   }

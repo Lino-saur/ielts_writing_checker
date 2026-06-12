@@ -204,6 +204,43 @@ export async function ensureDatabase() {
     `);
 
     await db.query(`
+      CREATE TABLE IF NOT EXISTS writing_reviews (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        task_type TEXT NOT NULL,
+        prompt_text TEXT NOT NULL,
+        essay_text TEXT NOT NULL,
+        result_json JSONB NOT NULL,
+        provider_used TEXT NOT NULL,
+        target_band NUMERIC(3, 1) NOT NULL,
+        estimated_band NUMERIC(3, 1) NOT NULL,
+        word_count INTEGER NOT NULL,
+        image_object_key TEXT,
+        image_name TEXT,
+        image_mime_type TEXT,
+        status TEXT NOT NULL DEFAULT 'completed',
+        error_code TEXT,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      ALTER TABLE writing_reviews
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'completed';
+    `);
+
+    await db.query(`
+      ALTER TABLE writing_reviews
+      ADD COLUMN IF NOT EXISTS error_code TEXT;
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS writing_reviews_user_created_idx
+      ON writing_reviews (user_id, created_at DESC);
+    `);
+
+    await db.query(`
       INSERT INTO recharge_products (
         id, code, name, energy_amount, bonus_energy_amount, price_cents, currency, status, sort_order, created_at, updated_at
       )
