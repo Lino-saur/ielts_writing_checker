@@ -15,6 +15,7 @@ AI-powered IELTS writing checker for Task 1 and Task 2 with rubric-based scoring
 - Saves a per-user review history with the original prompt, essay, and Task 1 image.
 - Uploads Task 1 images directly from the browser to object storage using a short-lived signed URL.
 - Binds review energy to a Better Auth user session.
+- Keeps signed-in sessions in a persistent auth cookie for up to 30 days unless the user signs out.
 - Uses `DeepSeek` for AI feedback.
 
 ## Stack
@@ -47,6 +48,8 @@ BETTER_AUTH_URL=http://localhost:3000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 RESEND_API_KEY=your_resend_api_key
 AUTH_EMAIL_FROM=IELTS Writing Checker <no-reply@example.com>
+SUPPORT_EMAIL_FROM=IELTS Writing Checker <support@example.com>
+RESEND_INBOUND_WEBHOOK_SECRET=your_random_webhook_token
 
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
 
@@ -95,6 +98,8 @@ Set these environment variables in Vercel:
 - `NEXT_PUBLIC_APP_URL`
 - `RESEND_API_KEY`
 - `AUTH_EMAIL_FROM`
+- `SUPPORT_EMAIL_FROM`
+- `RESEND_INBOUND_WEBHOOK_SECRET`
 - `REVIEW_IMAGE_STORAGE_ENDPOINT`
 - `REVIEW_IMAGE_STORAGE_REGION`
 - `REVIEW_IMAGE_STORAGE_BUCKET`
@@ -108,6 +113,9 @@ Recommended production setup:
 - Use `BETTER_AUTH_URL=https://your-app.vercel.app`.
 - Use a Neon connection string with `sslmode=require`.
 - Configure `RESEND_API_KEY` and `AUTH_EMAIL_FROM` so sign-up verification emails can be delivered.
+- Configure `RESEND_INBOUND_WEBHOOK_SECRET` and point your Resend receiving webhook to:
+  `https://your-domain.com/api/resend/inbound?token=YOUR_SECRET`
+- Use `/admin/support` to review inbound support emails and send replies from the admin workspace.
 
 ## API
 

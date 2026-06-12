@@ -43,6 +43,9 @@ export type NavbarMessages = Record<string, string> & {
   authDeleteSuccess: string;
   genericError: string;
   writingTasks: string;
+  actionGroup: string;
+  openActionMenu: string;
+  closeActionMenu: string;
   openSettingsMenu: string;
   closeSettingsMenu: string;
   noAccount: string;

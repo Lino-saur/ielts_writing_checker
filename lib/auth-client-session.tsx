@@ -1,5 +1,7 @@
 "use client";
 
+import { createContext, useContext, useMemo, useState } from "react";
+
 type SessionUser = {
   id: string;
   name?: string | null;
@@ -24,6 +26,13 @@ export type ClientSessionContext = {
   user: SessionUser | null;
   energy: NonNullable<EnergyPayload["energy"]> | null;
   reviewCost: number | null;
+};
+
+type AuthSessionValue = {
+  sessionContext: ClientSessionContext;
+  sessionResolved: boolean;
+  refreshSessionContext: () => Promise<ClientSessionContext>;
+  setSessionContext: (value: ClientSessionContext) => void;
 };
 
 async function getAuthClient() {
@@ -108,4 +117,63 @@ export function getClientSessionContext(options?: { forceRefresh?: boolean }) {
 
 export function invalidateClientSessionContext() {
   clientSessionContextPromise = null;
+}
+
+const DEFAULT_SESSION_CONTEXT: ClientSessionContext = {
+  user: null,
+  energy: null,
+  reviewCost: null
+};
+
+const AuthSessionContext = createContext<AuthSessionValue | null>(null);
+
+export function AuthSessionProvider({
+  children,
+  initialSessionContext
+}: {
+  children: React.ReactNode;
+  initialSessionContext: ClientSessionContext;
+}) {
+  const [sessionContext, setSessionContextState] = useState<ClientSessionContext>(initialSessionContext);
+  const [sessionResolved, setSessionResolved] = useState(true);
+
+  async function refreshSessionContext() {
+    const nextContext = await getClientSessionContext({ forceRefresh: true });
+    setSessionContextState(nextContext);
+    setSessionResolved(true);
+    return nextContext;
+  }
+
+  function setSessionContext(value: ClientSessionContext) {
+    setSessionContextState(value);
+    setSessionResolved(true);
+    clientSessionContextPromise = Promise.resolve(value);
+  }
+
+  const value = useMemo<AuthSessionValue>(
+    () => ({
+      sessionContext,
+      sessionResolved,
+      refreshSessionContext,
+      setSessionContext
+    }),
+    [sessionContext, sessionResolved]
+  );
+
+  return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
+}
+
+export function useAuthSession() {
+  const context = useContext(AuthSessionContext);
+
+  if (context) {
+    return context;
+  }
+
+  return {
+    sessionContext: DEFAULT_SESSION_CONTEXT,
+    sessionResolved: false,
+    refreshSessionContext: () => getClientSessionContext({ forceRefresh: true }),
+    setSessionContext: () => {}
+  } satisfies AuthSessionValue;
 }

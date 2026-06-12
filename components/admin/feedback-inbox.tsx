@@ -151,6 +151,8 @@ export function FeedbackInbox({ filters, items, stats }: FeedbackInboxProps) {
         {items.length ? (
           <div className={styles.listHead}>
             <span>Type</span>
+            <span>User</span>
+            <span>Email</span>
             <span>Message</span>
             <span>Signals</span>
             <span>Created</span>
@@ -165,10 +167,16 @@ export function FeedbackInbox({ filters, items, stats }: FeedbackInboxProps) {
                 <span className={`${styles.tag} ${getStatusClassName(item.status)}`}>{STATUS_LABELS[item.status]}</span>
               </div>
 
+              <div className={styles.user}>
+                <strong>{item.userName || "(no name)"}</strong>
+                <span>{item.userId}</span>
+              </div>
+
+              <div className={styles.email}>{item.userEmail || "(no email)"}</div>
+
               <div className={styles.body}>
                 <div className={styles.headline}>
                   <strong>{item.page}</strong>
-                  <span>{item.userId}</span>
                 </div>
                 <p className={styles.comment}>{item.comment || "(empty)"}</p>
               </div>

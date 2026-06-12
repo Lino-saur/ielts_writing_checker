@@ -30,6 +30,23 @@ type FeedbackRow = {
   created_at: Date | string;
 };
 
+type UserColumnRow = {
+  column_name: string;
+};
+
+type UserRow = {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  display_name?: string | null;
+};
+
+type FeedbackUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
+};
+
 type EnergyRow = {
   balance: number;
   total_consumed: number;
@@ -45,10 +62,65 @@ export type FeedbackListFilters = {
   limit?: number;
 };
 
-function mapFeedbackRow(row: FeedbackRow): FeedbackEntry {
+function quoteIdentifier(value: string) {
+  return `"${value.replace(/"/g, "\"\"")}"`;
+}
+
+async function getUserTableColumns() {
+  await ensureDatabase();
+
+  const result = await db.query<UserColumnRow>(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = current_schema()
+       AND table_name = 'user'`
+  );
+
+  return new Set(result.rows.map((row) => row.column_name));
+}
+
+async function getFeedbackUsersByIds(userIds: string[]) {
+  if (!userIds.length) {
+    return new Map<string, FeedbackUser>();
+  }
+
+  const columns = await getUserTableColumns();
+  if (!columns.has("id")) {
+    return new Map<string, FeedbackUser>();
+  }
+
+  const nameColumn = columns.has("name") ? "name" : columns.has("display_name") ? "display_name" : null;
+  const selectColumns = [
+    `${quoteIdentifier("id")} AS id`,
+    columns.has("email") ? `${quoteIdentifier("email")} AS email` : `NULL::TEXT AS email`,
+    nameColumn ? `${quoteIdentifier(nameColumn)} AS ${quoteIdentifier(nameColumn)}` : `NULL::TEXT AS name`
+  ];
+
+  const result = await db.query<UserRow>(
+    `SELECT ${selectColumns.join(", ")}
+     FROM ${quoteIdentifier("user")}
+     WHERE ${quoteIdentifier("id")} = ANY($1)`,
+    [userIds]
+  );
+
+  return new Map(
+    result.rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        email: row.email ?? null,
+        name: row.name ?? row.display_name ?? null
+      } satisfies FeedbackUser
+    ])
+  );
+}
+
+function mapFeedbackRow(row: FeedbackRow, user?: FeedbackUser): FeedbackEntry {
   return {
     id: row.id,
     userId: row.user_id,
+    userName: user?.name ?? null,
+    userEmail: user?.email ?? null,
     kind: row.kind,
     status: row.status,
     helpful: row.helpful,
@@ -267,5 +339,7 @@ export async function listFeedbackEntries(filters: FeedbackListFilters = {}) {
     values
   );
 
-  return result.rows.map(mapFeedbackRow);
+  const usersById = await getFeedbackUsersByIds([...new Set(result.rows.map((row) => row.user_id))]);
+
+  return result.rows.map((row) => mapFeedbackRow(row, usersById.get(row.user_id)));
 }

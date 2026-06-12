@@ -218,6 +218,7 @@ export async function ensureDatabase() {
         image_object_key TEXT,
         image_name TEXT,
         image_mime_type TEXT,
+        image_size_bytes BIGINT,
         status TEXT NOT NULL DEFAULT 'completed',
         error_code TEXT,
         created_at TIMESTAMPTZ NOT NULL,
@@ -236,8 +237,95 @@ export async function ensureDatabase() {
     `);
 
     await db.query(`
+      ALTER TABLE writing_reviews
+      ADD COLUMN IF NOT EXISTS image_size_bytes BIGINT;
+    `);
+
+    await db.query(`
       CREATE INDEX IF NOT EXISTS writing_reviews_user_created_idx
       ON writing_reviews (user_id, created_at DESC);
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS media_usage_monthly (
+        month_key TEXT PRIMARY KEY,
+        upload_bytes BIGINT NOT NULL DEFAULT 0,
+        download_bytes BIGINT NOT NULL DEFAULT 0,
+        upload_count INTEGER NOT NULL DEFAULT 0,
+        download_count INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS media_quota_settings (
+        id TEXT PRIMARY KEY,
+        upload_limit_bytes BIGINT,
+        download_limit_bytes BIGINT,
+        hard_block_uploads BOOLEAN NOT NULL DEFAULT FALSE,
+        hard_block_downloads BOOLEAN NOT NULL DEFAULT FALSE,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      INSERT INTO media_quota_settings (
+        id,
+        upload_limit_bytes,
+        download_limit_bytes,
+        hard_block_uploads,
+        hard_block_downloads,
+        updated_at
+      )
+      VALUES ('global', NULL, NULL, FALSE, FALSE, NOW())
+      ON CONFLICT (id) DO NOTHING;
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS support_inbox_entries (
+        id TEXT PRIMARY KEY,
+        resend_email_id TEXT UNIQUE,
+        from_email TEXT NOT NULL,
+        from_name TEXT,
+        to_email TEXT,
+        subject TEXT NOT NULL DEFAULT '',
+        text_content TEXT NOT NULL DEFAULT '',
+        html_content TEXT,
+        status TEXT NOT NULL DEFAULT 'new',
+        reply_count INTEGER NOT NULL DEFAULT 0,
+        last_replied_at TIMESTAMPTZ,
+        raw_payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        received_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS support_inbox_entries_received_idx
+      ON support_inbox_entries (received_at DESC);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS support_inbox_entries_status_received_idx
+      ON support_inbox_entries (status, received_at DESC);
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS support_inbox_replies (
+        id TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL REFERENCES support_inbox_entries(id) ON DELETE CASCADE,
+        admin_user_id TEXT,
+        to_email TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        body_text TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS support_inbox_replies_entry_created_idx
+      ON support_inbox_replies (entry_id, created_at DESC);
     `);
 
     await db.query(`

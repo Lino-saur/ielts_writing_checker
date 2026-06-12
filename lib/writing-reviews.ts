@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { db, ensureDatabase } from "./db";
 import { consumeEnergyInTransaction, getReviewEnergyCost } from "./energy";
+import { recordMediaUpload } from "./media-usage";
 import { getReviewImageObject, putReviewImageObject } from "./object-storage";
 import type {
   TaskImageInput,
@@ -109,6 +110,7 @@ export async function createWritingReview(input: {
   taskImageObjectKey?: string | null;
   taskImageName?: string | null;
   taskImageMimeType?: string | null;
+  taskImageSizeBytes?: number | null;
   result: WritingCheckResult;
 }) {
   await ensureDatabase();
@@ -121,9 +123,11 @@ export async function createWritingReview(input: {
       ? {
           objectKey: input.taskImageObjectKey,
           name: input.taskImageName,
-          mimeType: input.taskImageMimeType
+          mimeType: input.taskImageMimeType,
+          sizeBytes: input.taskImageSizeBytes ?? null
         }
       : null;
+  const imageSizeBytes = image && "sizeBytes" in image ? image.sizeBytes ?? null : null;
   const client = await db.connect();
 
   try {
@@ -145,13 +149,14 @@ export async function createWritingReview(input: {
         image_object_key,
         image_name,
         image_mime_type,
+        image_size_bytes,
         status,
         error_code,
         created_at,
         updated_at
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, 'completed', NULL, $14, $15
+        $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, 'completed', NULL, $15, $16
       )`,
       [
         reviewId,
@@ -167,12 +172,17 @@ export async function createWritingReview(input: {
         image?.objectKey ?? null,
         image?.name ?? null,
         image?.mimeType ?? null,
+        imageSizeBytes,
         createdAt,
         createdAt
       ]
     );
 
     await client.query("COMMIT");
+
+    if (imageSizeBytes) {
+      await recordMediaUpload(imageSizeBytes);
+    }
 
     return {
       reviewId,

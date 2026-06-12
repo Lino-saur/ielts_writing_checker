@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
+import { assertMediaUploadAllowed } from "@/lib/media-usage";
 import { createPresignedReviewImageUploadUrl } from "@/lib/object-storage";
 
 type RequestBody = {
   fileName?: string;
   mimeType?: string;
+  fileSize?: number;
 };
 
 function sanitizeSegment(value: string) {
@@ -23,10 +25,17 @@ export async function POST(request: Request) {
     const body = (await request.json()) as RequestBody;
     const mimeType = body.mimeType?.trim() || "";
     const fileName = body.fileName?.trim() || "";
+    const fileSize = Number(body.fileSize);
 
     if (!mimeType.startsWith("image/")) {
       return NextResponse.json({ error: "INVALID_IMAGE_TYPE" }, { status: 400 });
     }
+
+    if (!Number.isFinite(fileSize) || fileSize <= 0) {
+      return NextResponse.json({ error: "INVALID_IMAGE_SIZE" }, { status: 400 });
+    }
+
+    await assertMediaUploadAllowed(fileSize);
 
     const objectKey = `writing-reviews/${sanitizeSegment(session.user.id)}/${randomUUID()}/${sanitizeFileName(fileName)}`;
     const signed = createPresignedReviewImageUploadUrl({
@@ -41,7 +50,12 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error.";
-    const status = message === "UNAUTHORIZED" ? 401 : 500;
+    const status =
+      message === "UNAUTHORIZED"
+        ? 401
+        : message === "MEDIA_UPLOAD_LIMIT_REACHED" || message === "MEDIA_UPLOADS_BLOCKED"
+          ? 429
+          : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

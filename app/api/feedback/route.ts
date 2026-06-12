@@ -76,6 +76,10 @@ export async function POST(request: Request) {
     const saved = await createFeedback({
       ...body,
       userId: session.user.id,
+      context: {
+        ...(body.context ?? {}),
+        uid: session.user.id
+      },
       page: body.page.trim()
     });
 

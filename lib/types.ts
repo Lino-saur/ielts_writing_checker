@@ -119,6 +119,7 @@ export type WritingReviewDetail = {
 
 export type FeedbackKind = "review" | "product" | "bug" | "feature_request";
 export type FeedbackStatus = "new" | "reviewing" | "closed";
+export type SupportInboxStatus = "new" | "reviewing" | "closed";
 export type AdminUserStatus = "active" | "disabled";
 export type RechargeProvider = "manual" | "wechat" | "alipay";
 export type RechargeOrderStatus = "pending" | "paid" | "failed" | "cancelled";
@@ -142,6 +143,8 @@ export type FeedbackPayload = {
 export type FeedbackEntry = {
   id: string;
   userId: string;
+  userName: string | null;
+  userEmail: string | null;
   kind: FeedbackKind;
   status: FeedbackStatus;
   helpful: boolean | null;
@@ -156,6 +159,24 @@ export type FeedbackEntry = {
   wordCount: number | null;
   payload: Record<string, unknown>;
   createdAt: string;
+};
+
+export type SupportInboxEntry = {
+  id: string;
+  resendEmailId: string | null;
+  fromEmail: string;
+  fromName: string | null;
+  toEmail: string | null;
+  subject: string;
+  textContent: string;
+  htmlContent: string | null;
+  status: SupportInboxStatus;
+  replyCount: number;
+  lastRepliedAt: string | null;
+  receivedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  rawPayload: Record<string, unknown>;
 };
 
 export type AdminUserEntry = {

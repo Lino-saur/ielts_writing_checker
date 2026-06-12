@@ -3,6 +3,8 @@ type SendEmailInput = {
   subject: string;
   html: string;
   text: string;
+  from?: string;
+  replyTo?: string | string[];
 };
 
 const RESEND_API_URL = "https://api.resend.com/emails";
@@ -14,10 +16,11 @@ function getEmailConfig() {
   };
 }
 
-export async function sendEmail({ to, subject, html, text }: SendEmailInput) {
+export async function sendEmail({ to, subject, html, text, from: customFrom, replyTo }: SendEmailInput) {
   const { apiKey, from } = getEmailConfig();
+  const effectiveFrom = customFrom?.trim() || from;
 
-  if (!apiKey || !from) {
+  if (!apiKey || !effectiveFrom) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("AUTH_EMAIL_PROVIDER_NOT_CONFIGURED");
     }
@@ -37,11 +40,12 @@ export async function sendEmail({ to, subject, html, text }: SendEmailInput) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      from,
+      from: effectiveFrom,
       to,
       subject,
       html,
-      text
+      text,
+      reply_to: replyTo
     })
   });
 

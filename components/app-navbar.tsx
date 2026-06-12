@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  getClientSessionContext,
   invalidateClientSessionContext,
-  type ClientSessionContext
+  type ClientSessionContext,
+  useAuthSession
 } from "@/lib/auth-client-session";
 import type { NavbarMessages } from "@/lib/i18n/messages";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
@@ -74,11 +74,11 @@ export function AppNavbar({
   energyLabel,
   authRequest = null
 }: AppNavbarProps) {
+  const { sessionContext, sessionResolved, refreshSessionContext, setSessionContext } = useAuthSession();
   const themeSwitchId = useId();
   const taskMenuRef = useRef<HTMLDivElement | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
-  const [currentUser, setCurrentUser] = useState<ClientSessionContext["user"]>(null);
-  const [currentEnergyBalance, setCurrentEnergyBalance] = useState<number | null>(energyBalance);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signIn");
   const [signInEmail, setSignInEmail] = useState("");
@@ -99,6 +99,7 @@ export function AppNavbar({
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [activeTask, setActiveTask] = useState<string | null>(null);
   const [taskMenuOpen, setTaskMenuOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [signInPasswordVisible, setSignInPasswordVisible] = useState(false);
   const [signUpPasswordVisible, setSignUpPasswordVisible] = useState(false);
@@ -120,11 +121,15 @@ export function AppNavbar({
   const checkerTask2Href = useMemo(() => `/${locale}/checker?task=task2`, [locale]);
   const historyHref = useMemo(() => `/${locale}/history`, [locale]);
   const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : copy.writingTasks;
+  const actionMenuLabel = copy.actionGroup;
+  const actionMenuOpenLabel = copy.openActionMenu;
+  const actionMenuCloseLabel = copy.closeActionMenu;
   const moreMenuOpenLabel = copy.openSettingsMenu;
   const moreMenuCloseLabel = copy.closeSettingsMenu;
   const authSwitchPrefix = authMode === "signIn" ? copy.noAccount : copy.alreadyHaveAccount;
   const authSwitchAction = authMode === "signIn" ? copy.createOne : copy.backToSignIn;
-  const effectiveEnergyBalance = energyBalance ?? currentEnergyBalance;
+  const currentUser = sessionContext.user;
+  const effectiveEnergyBalance = energyBalance ?? sessionContext.energy?.balance ?? null;
   const themeLabel = copy.themeLabel;
   const appearanceLabel = copy.appearanceLabel;
   const resendVerificationEmail = (signInEmail.trim() || verificationEmail).trim();
@@ -136,10 +141,6 @@ export function AppNavbar({
         authNotice === copy.authVerificationPending ||
         authNotice === copy.authVerificationSent
     );
-
-  useEffect(() => {
-    setCurrentEnergyBalance(energyBalance);
-  }, [energyBalance]);
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("theme-mode");
@@ -172,34 +173,9 @@ export function AppNavbar({
   }, []);
 
   useEffect(() => {
-    let mounted = true;
-
-    async function loadSession() {
-      try {
-        const sessionContext = await getClientSessionContext();
-
-        if (mounted) {
-          setCurrentUser(sessionContext.user);
-          setCurrentEnergyBalance(sessionContext.energy?.balance ?? null);
-        }
-      } catch {
-        if (mounted) {
-          setCurrentUser(null);
-          setCurrentEnergyBalance(null);
-        }
-      }
-    }
-
-    loadSession();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
     if (authDialogOpen || feedbackDialogOpen || rechargeDialogOpen || deleteDialogOpen) {
       setTaskMenuOpen(false);
+      setActionMenuOpen(false);
       setMoreMenuOpen(false);
     }
   }, [authDialogOpen, feedbackDialogOpen, rechargeDialogOpen, deleteDialogOpen]);
@@ -230,6 +206,10 @@ export function AppNavbar({
         setTaskMenuOpen(false);
       }
 
+      if (!actionMenuRef.current?.contains(event.target as Node)) {
+        setActionMenuOpen(false);
+      }
+
       if (!moreMenuRef.current?.contains(event.target as Node)) {
         setMoreMenuOpen(false);
       }
@@ -247,9 +227,7 @@ export function AppNavbar({
   }
 
   async function refreshSession() {
-    const sessionContext = await getClientSessionContext({ forceRefresh: true });
-    setCurrentUser(sessionContext.user);
-    setCurrentEnergyBalance(sessionContext.energy?.balance ?? null);
+    await refreshSessionContext();
     await onSessionUpdated?.();
   }
 
@@ -342,6 +320,7 @@ export function AppNavbar({
         const result = await authClient.signIn.email({
           email: signInEmail.trim(),
           password: signInPassword,
+          rememberMe: true,
           callbackURL: getVerificationCallbackUrl()
         });
 
@@ -417,6 +396,11 @@ export function AppNavbar({
       }
 
       invalidateClientSessionContext();
+      setSessionContext({
+        user: null,
+        energy: null,
+        reviewCost: null
+      });
       await refreshSession();
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : copy.genericError);
@@ -463,6 +447,11 @@ export function AppNavbar({
       }
 
       invalidateClientSessionContext();
+      setSessionContext({
+        user: null,
+        energy: null,
+        reviewCost: null
+      });
       await refreshSession();
       setDeleteDialogOpen(false);
       setDeletePassword("");
@@ -497,6 +486,9 @@ export function AppNavbar({
           kind: feedbackKind,
           helpful: null,
           comment: feedbackComment.trim(),
+          context: {
+            uid: currentUser?.id ?? null
+          },
           page: typeof window !== "undefined" ? window.location.pathname : "/"
         })
       });
@@ -538,7 +530,8 @@ export function AppNavbar({
           helpful: null,
           comment: rechargeContact.trim(),
           context: {
-            source: "recharge_waitlist"
+            source: "recharge_waitlist",
+            uid: currentUser?.id ?? null
           },
           page: typeof window !== "undefined" ? window.location.pathname : "/"
         })
@@ -566,12 +559,7 @@ export function AppNavbar({
       <Surface as="header" className="aroundNavbar">
         <Link className="aroundNavBrand" href={homeHref}>
           <span className="aroundBrandIcon" aria-hidden="true">
-            <svg width="35" height="32" viewBox="0 0 36 33" xmlns="http://www.w3.org/2000/svg">
-              <path
-                fill="currentColor"
-                d="M35.6,29c-1.1,3.4-5.4,4.4-7.9,1.9c-2.3-2.2-6.1-3.7-9.4-3.7c-3.1,0-7.5,1.8-10,4.1c-2.2,2-5.8,1.5-7.3-1.1c-1-1.8-1.2-4.1,0-6.2l0.6-1.1l0,0c0.6-0.7,4.4-5.2,12.5-5.7c0.5,1.8,2,3.1,3.9,3.1c2.2,0,4.1-1.9,4.1-4.2s-1.8-4.2-4.1-4.2c-2,0-3.6,1.4-4,3.3H7.7c-0.8,0-1.3-0.9-0.9-1.6l5.6-9.8c2.5-4.5,8.8-4.5,11.3,0L35.1,24C36,25.7,36.1,27.5,35.6,29z"
-              />
-            </svg>
+            <img src="/app-icons/icon.png" alt="" className="aroundBrandIconImage" />
           </span>
           <span className="aroundBrandFull">{copy.brand}</span>
           <span className="aroundBrandCompact">IELTS</span>
@@ -617,6 +605,30 @@ export function AppNavbar({
           )}
         </div>
 
+        <div className="aroundTaskMenu" ref={actionMenuRef}>
+          <button
+            type="button"
+            className={`aroundTaskMenuButton${actionMenuOpen ? " is-open" : ""}`}
+            aria-haspopup="menu"
+            aria-expanded={actionMenuOpen}
+            aria-label={actionMenuOpen ? actionMenuCloseLabel : actionMenuOpenLabel}
+            onClick={() => {
+              setTaskMenuOpen(false);
+              setMoreMenuOpen(false);
+              setActionMenuOpen((value) => !value);
+            }}
+          >
+            <span>{actionMenuLabel}</span>
+            <i className={`ai-chevron-${actionMenuOpen ? "up" : "down"}`} aria-hidden="true" />
+          </button>
+
+          <div className={`aroundTaskDropdown${actionMenuOpen ? " is-open" : ""}`} role="menu">
+            <Link href={historyHref} role="menuitem" onClick={() => setActionMenuOpen(false)}>
+              {copy.historyEntry}
+            </Link>
+          </div>
+        </div>
+
         <div className="aroundNavControls">
           <div className="aroundAuthArea">
             <div className="aroundAccountCluster">
@@ -630,7 +642,11 @@ export function AppNavbar({
               ) : null}
             </div>
 
-            {!currentUser ? (
+            {!sessionResolved ? (
+              <ActionButton className="aroundPrimaryAction" disabled aria-busy="true">
+                ...
+              </ActionButton>
+            ) : !currentUser ? (
               <ActionButton
                 className="aroundPrimaryAction"
                 onClick={() => {
@@ -662,6 +678,7 @@ export function AppNavbar({
             aria-label={moreMenuOpen ? moreMenuCloseLabel : moreMenuOpenLabel}
             onClick={() => {
               setTaskMenuOpen(false);
+              setActionMenuOpen(false);
               setMoreMenuOpen((value) => !value);
             }}
           >
@@ -694,15 +711,6 @@ export function AppNavbar({
                 </button>
               </div>
             </div>
-
-            {currentUser ? (
-              <div className="aroundMenuSection">
-                <Link href={historyHref} className="aroundMenuActionButton" onClick={() => setMoreMenuOpen(false)}>
-                  {copy.historyEntry}
-                </Link>
-              </div>
-            ) : null}
-
             <div className="aroundMenuSection">
               <button
                 type="button"

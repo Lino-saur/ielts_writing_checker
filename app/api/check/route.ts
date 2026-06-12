@@ -13,6 +13,7 @@ type RequestBody = {
   taskImageObjectKey?: string;
   taskImageName?: string;
   taskImageMimeType?: string;
+  taskImageSizeBytes?: number;
   provider?: AiProvider;
   locale?: Locale;
   targetBand?: TargetBand;
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
       taskImageObjectKey: body.taskImageObjectKey || null,
       taskImageName: body.taskImageName || null,
       taskImageMimeType: body.taskImageMimeType || null,
+      taskImageSizeBytes: typeof body.taskImageSizeBytes === "number" ? body.taskImageSizeBytes : null,
       result
     });
 
