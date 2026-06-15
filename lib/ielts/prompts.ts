@@ -128,6 +128,13 @@ Focus on:
 - whether there is a clear overview
 - whether important comparisons and trends are selected instead of listing every detail
 - whether the data description is accurate and relevant
+
+Task 1 image consistency checks:
+- Compare the essay's reported figures, categories, dates, rankings, directions, stages, and trends against the uploaded image.
+- If the essay description conflicts with the image data, explicitly point out the mismatch and treat it as a Task Achievement accuracy problem.
+- If the uploaded image appears unrelated to the written prompt or does not match the expected Task 1 visual, explicitly warn about that problem instead of pretending the image is valid.
+- Do not invent unreadable values. If part of the image is unclear, say that it is unclear and judge only what can be supported confidently.
+- For revision, do not preserve clearly wrong data claims from the student's essay. Correct or generalize them so the revised response stays consistent with the visible image.
 `,
   task2: `Evaluate the user's response for IELTS Writing Task 2.
 
