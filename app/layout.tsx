@@ -3,6 +3,8 @@ import { AuthSessionProvider } from "@/lib/auth-client-session";
 import { getServerSessionContext } from "@/lib/server-session-context";
 import "./globals.css";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "IELTS Writing Checker",
   description: "AI powered IELTS writing checker for Task 1 and Task 2.",
