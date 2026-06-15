@@ -12,6 +12,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isValidFeedbackProvider(provider: RequestBody["providerUsed"]) {
+  return provider === "deepseek" || provider === "gemini" || provider === "qianwen";
+}
+
 function validateFeedbackBody(body: RequestBody) {
   if (!VALID_FEEDBACK_KINDS.has(body.kind)) {
     throw new Error("INVALID_FEEDBACK_KIND");
@@ -45,7 +49,7 @@ function validateFeedbackBody(body: RequestBody) {
     throw new Error("INVALID_FEEDBACK_TARGET_BAND");
   }
 
-  if (body.providerUsed != null && body.providerUsed !== "deepseek") {
+  if (body.providerUsed != null && !isValidFeedbackProvider(body.providerUsed)) {
     throw new Error("INVALID_FEEDBACK_PROVIDER");
   }
 

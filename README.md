@@ -16,7 +16,7 @@ AI-powered IELTS writing checker for Task 1 and Task 2 with rubric-based scoring
 - Uploads Task 1 images directly from the browser to object storage using a short-lived signed URL.
 - Binds review energy to a Better Auth user session.
 - Keeps signed-in sessions in a persistent auth cookie for up to 30 days unless the user signs out.
-- Uses `DeepSeek` for AI feedback.
+- Uses `DeepSeek` for text-first feedback and `Qianwen` for Task 1 image understanding.
 
 ## Stack
 
@@ -42,6 +42,8 @@ OPENAI_MODEL=gpt-5.4
 OPENAI_REASONING_EFFORT=medium
 
 DEEPSEEK_API_KEY=your_deepseek_key_here
+QIANWEN_API_KEY=your_qianwen_key_here
+QIANWEN_MODEL=qwen3.7-plus
 
 BETTER_AUTH_SECRET=your_long_random_secret
 BETTER_AUTH_URL=http://localhost:3000
@@ -95,6 +97,7 @@ Set these environment variables in Vercel:
 - `BETTER_AUTH_URL`
 - `OPENAI_API_KEY`
 - `DEEPSEEK_API_KEY`
+- `QIANWEN_API_KEY`
 - `NEXT_PUBLIC_APP_URL`
 - `RESEND_API_KEY`
 - `AUTH_EMAIL_FROM`

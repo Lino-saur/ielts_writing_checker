@@ -30,7 +30,7 @@ export type ChatCompletionsPayload = {
 };
 
 export type ProviderConfig = {
-  name: "deepseek" | "gemini";
+  name: "deepseek" | "gemini" | "qianwen";
   apiKey?: string;
   endpoint: string;
   model: string;

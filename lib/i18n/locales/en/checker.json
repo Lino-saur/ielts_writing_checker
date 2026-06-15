@@ -68,7 +68,7 @@
   "aiReview": "AI Review",
   "coverage": "Task 2",
   "providerDeepSeek": "DeepSeek",
-  "providerGemini": "Gemini",
+  "providerQianwen": "Qianwen",
   "targetBand": "Target Band",
   "prompt": "Prompt",
   "task1ImageLabel": "Task 1 Visual",

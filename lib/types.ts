@@ -6,9 +6,9 @@ export type TaskImageInput = {
   dataUrl: string;
 };
 
-export type AiProvider = "deepseek" | "gemini";
+export type AiProvider = "deepseek" | "gemini" | "qianwen";
 
-export type ActiveProvider = "deepseek" | "gemini";
+export type ActiveProvider = "deepseek" | "gemini" | "qianwen";
 
 export type Locale = "en" | "zh-CN";
 

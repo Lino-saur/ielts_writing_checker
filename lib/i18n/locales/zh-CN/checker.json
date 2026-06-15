@@ -68,7 +68,7 @@
   "aiReview": "AI 评分",
   "coverage": "Task 2",
   "providerDeepSeek": "DeepSeek",
-  "providerGemini": "Gemini",
+  "providerQianwen": "通义千问",
   "targetBand": "目标分数",
   "prompt": "题目",
   "task1ImageLabel": "Task 1 图表图片",
