@@ -57,6 +57,39 @@ function readGeminiText(payload: GeminiGenerateContentPayload) {
     .trim();
 }
 
+function serializeError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return {
+      message: String(error)
+    };
+  }
+
+  const errorWithExtras = error as Error & {
+    code?: string;
+    errno?: number | string;
+    syscall?: string;
+    hostname?: string;
+    cause?: unknown;
+  };
+
+  return {
+    name: error.name,
+    message: error.message,
+    code: errorWithExtras.code,
+    errno: errorWithExtras.errno,
+    syscall: errorWithExtras.syscall,
+    hostname: errorWithExtras.hostname,
+    cause:
+      errorWithExtras.cause instanceof Error
+        ? {
+            name: errorWithExtras.cause.name,
+            message: errorWithExtras.cause.message
+          }
+        : errorWithExtras.cause,
+    stack: error.stack
+  };
+}
+
 async function runTaggedCompletion<T>(
   input: CheckInput,
   config: ProviderConfig,
@@ -95,23 +128,38 @@ async function runTaggedCompletion<T>(
   });
 
   async function requestCompletion(messages: ChatMessage[], phase: "first" | "retry" | "repair") {
-    const response = await fetch(config.endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`
-      },
-      body: JSON.stringify({
+    let response: Response;
+
+    try {
+      response = await fetch(config.endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          ...config.extraBody
+        })
+      });
+    } catch (error) {
+      console.error("[IELTS_CHECK][NETWORK_ERROR]", {
+        provider: config.name,
         model: config.model,
-        messages,
-        ...config.extraBody
-      })
-    });
+        endpoint: config.endpoint,
+        phase,
+        ...serializeError(error)
+      });
+      throw error;
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[IELTS_CHECK][HTTP_ERROR]", {
         provider: config.name,
+        model: config.model,
+        endpoint: config.endpoint,
         phase,
         status: response.status,
         bodyPreview: previewText(errorText)
@@ -253,13 +301,15 @@ async function runGeminiVisionCompletion<T>(
     throw new Error("TASK1_IMAGE_REQUIRED");
   }
 
+  const taskImage = input.taskImage;
+
   const wordCount = countWords(input.essay);
   const endpoint = `${config.endpoint}/${config.model}:generateContent?key=${config.apiKey}`;
   const baseParts = [
     {
       inline_data: {
-        mime_type: input.taskImage.mimeType,
-        data: input.taskImage.dataUrl.replace(/^data:[^;]+;base64,/, "")
+        mime_type: taskImage.mimeType,
+        data: taskImage.dataUrl.replace(/^data:[^;]+;base64,/, "")
       }
     },
     {
@@ -276,36 +326,53 @@ async function runGeminiVisionCompletion<T>(
     promptLength: options.prompt.length,
     essayLength: input.essay.length,
     imageName: input.taskImage.name,
-    imageMimeType: input.taskImage.mimeType
+    imageMimeType: taskImage.mimeType
   });
 
   async function requestCompletion(
     textInstructions: string[],
     phase: "first" | "retry" | "repair"
   ) {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              ...baseParts,
-              ...textInstructions.map((text) => ({
-                text
-              }))
-            ]
-          }
-        ]
-      })
-    });
+    let response: Response;
+
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                ...baseParts,
+                ...textInstructions.map((text) => ({
+                  text
+                }))
+              ]
+            }
+          ]
+        })
+      });
+    } catch (error) {
+      console.error("[IELTS_CHECK][GEMINI_NETWORK_ERROR]", {
+        provider: config.name,
+        model: config.model,
+        endpoint,
+        phase,
+        imageName: taskImage.name,
+        imageMimeType: taskImage.mimeType,
+        ...serializeError(error)
+      });
+      throw error;
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[IELTS_CHECK][HTTP_ERROR]", {
         provider: config.name,
+        model: config.model,
+        endpoint,
         phase,
         status: response.status,
         bodyPreview: previewText(errorText)

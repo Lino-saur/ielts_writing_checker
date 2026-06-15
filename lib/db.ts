@@ -15,6 +15,10 @@ export const db =
   globalForDb.__ieltsPool ??
   new Pool({
     connectionString: getConnectionString(),
+    max: 10,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
+    keepAlive: true,
     ssl:
       process.env.POSTGRES_SSL === "false"
         ? false
@@ -22,6 +26,17 @@ export const db =
           ? { rejectUnauthorized: false }
           : false
   });
+
+if (!(db as Pool & { __ieltsErrorListenerAttached?: boolean }).__ieltsErrorListenerAttached) {
+  db.on("error", (error) => {
+    console.error("[DB][POOL_ERROR]", {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+  });
+  (db as Pool & { __ieltsErrorListenerAttached?: boolean }).__ieltsErrorListenerAttached = true;
+}
 
 if (process.env.NODE_ENV !== "production") {
   globalForDb.__ieltsPool = db;
