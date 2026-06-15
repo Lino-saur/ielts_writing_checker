@@ -93,20 +93,20 @@ reason: ...
 
 {{taskPrompt}}
 
+Revision stage:
+{{revisionStage}}
+
 Target band:
 {{targetBand}}
 
 Constraints:
-- annotatedEssay must preserve the original essay order and mark edits inline using [del#1]original text[/del#1][add#1]improved text[/add#1], [del#2]...[/del#2][add#2]...[/add#2], etc.
+- annotatedEssay must preserve the essay order and mark edits inline using [del#1]original text[/del#1][add#1]improved text[/add#1], [del#2]...[/del#2][add#2]...[/add#2], etc.
 - Every inline edit id in annotatedEssay must have exactly one matching correctionNotes item with the same id, and every correctionNotes id must appear exactly once in annotatedEssay.
-- Every single revision in annotatedEssay must be annotated.
-- Build the output in this order mentally: first decide the full correctionNotes list, then write annotatedEssay by reusing those same ids exactly once each.
-- Before finalizing, count the ids in correctionNotes and count the [del#id]/[add#id] pairs in annotatedEssay. These two counts must be exactly the same.
+- Before finalizing, count the note ids and the [del#id]/[add#id] pairs in annotatedEssay. These two counts must match exactly.
 - If you cannot fully annotate many tiny edits reliably, merge nearby edits into fewer larger revisions so that every revision still has one clear note.
-- correctionNotes and annotatedEssay must actively correct grammar mistakes, spelling mistakes, punctuation problems, awkward phrasing, weak logic links, and unclear sentence structure wherever needed.
-- annotatedEssay itself must read like the target-band version of the essay after all [add] text is applied.
+- {{revisionStageConstraints}}
 - Keep the student's core stance, major supporting points, and overall paragraph plan whenever possible.
-- If the original essay is underdeveloped, expand ideas inside annotatedEssay so that the revised result better matches the requested band level, but still stays recognizably based on the original response.
+- {{revisionStageExpansionRule}}
 - Consider the minimum word expectation of {{minimumWords}}.
 - Use the exact section headers above and keep them in the same order.
 - Put each section header on its own line, and put the section content on the following lines.
@@ -181,7 +181,11 @@ export async function buildScorePrompt(input: CheckInput, minimumWords: number, 
   }).trim();
 }
 
-export async function buildRevisionPrompt(input: CheckInput, minimumWords: number) {
+export async function buildRevisionPrompt(
+  input: CheckInput,
+  minimumWords: number,
+  stage: "grammar" | "optimization"
+) {
   const locale = getLocale(input.locale);
   const targetBand = getTargetBand(input.targetBand);
   const outputLanguageInstruction =
@@ -190,9 +194,24 @@ export async function buildRevisionPrompt(input: CheckInput, minimumWords: numbe
       : "Write correctionNotes.reason in English. annotatedEssay, original, and corrected text must remain in natural English.";
   const revisionTemplate = PROMPTS.revision;
   const taskPrompt = input.taskType === "task1" ? PROMPTS.task1 : PROMPTS.task2;
+  const revisionStage =
+    stage === "grammar"
+      ? "Stage 1: Grammar Check"
+      : "Stage 2: Article Optimization";
+  const revisionStageConstraints =
+    stage === "grammar"
+      ? "This stage is grammar check only. Focus on grammar, spelling, punctuation, article usage, verb tense, subject-verb agreement, sentence structure, and obvious wording errors. Do not significantly expand ideas in this stage."
+      : "This stage is article optimization. Improve idea development, cohesion, clarity, concision, lexical choice, paragraph flow, and overall task response quality. Keep grammar correct while optimizing.";
+  const revisionStageExpansionRule =
+    stage === "grammar"
+      ? "Do not expand underdeveloped ideas in this stage. Only make the essay grammatically clean and readable."
+      : "If the essay is underdeveloped, expand ideas inside annotatedEssay so that the revised result better matches the requested band level, but still stays recognizably based on the input essay for this stage.";
 
   return applyTemplate(revisionTemplate, {
     taskPrompt,
+    revisionStage,
+    revisionStageConstraints,
+    revisionStageExpansionRule,
     targetBand,
     minimumWords,
     outputLanguageInstruction,

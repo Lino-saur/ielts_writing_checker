@@ -104,6 +104,8 @@
   "correctionCorrected": "Corrected",
   "correctionReason": "Reason",
   "revisionBundle": "Inline Revision",
+  "revisionStageGrammar": "Stage 1: Grammar Check",
+  "revisionStageOptimization": "Stage 2: Article Optimization",
   "tapForReason": "Click a revision to see why it was changed.",
   "ready": "Ready",
   "emptyTitle": "Run the first review",

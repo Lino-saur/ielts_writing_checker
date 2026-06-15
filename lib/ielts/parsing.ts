@@ -4,6 +4,7 @@ import {
   CorrectionNote,
   HighlightedSentence,
   ProviderConfig,
+  RevisionStage,
   WritingCheckResult,
   WritingRevisionResult,
   WritingScoreResult,
@@ -255,12 +256,27 @@ export function parseRevisionStructuredResponse(text: string): WritingRevisionRe
 
     const taskType = (sections.get("TASK_TYPE") || "").trim();
     const annotatedEssay = (sections.get("ANNOTATED_ESSAY") || "").trim();
+    const correctionNotes = parseCorrectionNotesBlock(sections.get("CORRECTION_NOTES") || "");
+    const grammarAnnotatedEssay = (sections.get("GRAMMAR_ANNOTATED_ESSAY") || "").trim();
+    const optimizationAnnotatedEssay = (sections.get("OPTIMIZATION_ANNOTATED_ESSAY") || "").trim();
 
     if (taskType !== "task1" && taskType !== "task2") {
       throw new Error(`Invalid task type section: ${taskType}`);
     }
 
-    if (!annotatedEssay) {
+    if (annotatedEssay) {
+      return {
+        taskType,
+        wordCount: 0,
+        targetBand: 6.5,
+        annotatedEssay,
+        correctionNotes,
+        feedbackMode: "ai",
+        providerUsed: "deepseek"
+      };
+    }
+
+    if (!grammarAnnotatedEssay) {
       throw new Error("Missing ANNOTATED_ESSAY section.");
     }
 
@@ -268,8 +284,18 @@ export function parseRevisionStructuredResponse(text: string): WritingRevisionRe
       taskType,
       wordCount: 0,
       targetBand: 6.5,
-      annotatedEssay,
-      correctionNotes: parseCorrectionNotesBlock(sections.get("CORRECTION_NOTES") || ""),
+      annotatedEssay: optimizationAnnotatedEssay || grammarAnnotatedEssay,
+      correctionNotes: parseCorrectionNotesBlock(sections.get("OPTIMIZATION_CORRECTION_NOTES") || "") || correctionNotes,
+      grammarRevision: {
+        annotatedEssay: grammarAnnotatedEssay,
+        correctionNotes: parseCorrectionNotesBlock(sections.get("GRAMMAR_CORRECTION_NOTES") || "")
+      },
+      optimizationRevision: optimizationAnnotatedEssay
+        ? {
+            annotatedEssay: optimizationAnnotatedEssay,
+            correctionNotes: parseCorrectionNotesBlock(sections.get("OPTIMIZATION_CORRECTION_NOTES") || "")
+          }
+        : undefined,
       feedbackMode: "ai",
       providerUsed: "deepseek"
     };
@@ -282,6 +308,8 @@ export function parseRevisionStructuredResponse(text: string): WritingRevisionRe
         targetBand: parsed.targetBand,
         annotatedEssay: parsed.annotatedEssay,
         correctionNotes: parsed.correctionNotes,
+        grammarRevision: parsed.grammarRevision,
+        optimizationRevision: parsed.optimizationRevision,
         feedbackMode: parsed.feedbackMode,
         providerUsed: parsed.providerUsed
       };
@@ -304,10 +332,52 @@ function attachIdsToAnnotatedEssay(annotatedEssay: string, correctionNotes: Corr
   });
 }
 
-function validateRevisionAlignment(annotatedEssay: string, correctionNotes: CorrectionNote[]) {
-  const editIds = [...annotatedEssay.matchAll(/\[del#([A-Za-z0-9_-]+)\][\s\S]*?\[\/del#\1\]\[add#\1\][\s\S]*?\[\/add#\1\]/g)].map(
-    (match) => match[1]
+function extractRevisionEdits(annotatedEssay: string) {
+  return [...annotatedEssay.matchAll(/\[del#([A-Za-z0-9_-]+)\]([\s\S]*?)\[\/del#\1\]\[add#\1\]([\s\S]*?)\[\/add#\1\]/g)].map(
+    (match) => ({
+      id: match[1],
+      original: match[2].trim(),
+      corrected: match[3].trim()
+    })
   );
+}
+
+function repairRevisionNotes(annotatedEssay: string, correctionNotes: CorrectionNote[]) {
+  const edits = extractRevisionEdits(annotatedEssay);
+  const notesById = new Map(
+    correctionNotes.map((note) => [
+      note.id,
+      {
+        ...note,
+        original: note.original.trim(),
+        corrected: note.corrected.trim(),
+        reason: note.reason.trim()
+      }
+    ])
+  );
+
+  return edits.map((edit) => {
+    const existing = notesById.get(edit.id);
+    if (existing) {
+      return {
+        id: edit.id,
+        original: existing.original || edit.original,
+        corrected: existing.corrected || edit.corrected,
+        reason: existing.reason || "Model did not provide a reason for this edit."
+      };
+    }
+
+    return {
+      id: edit.id,
+      original: edit.original,
+      corrected: edit.corrected,
+      reason: "Model did not provide a reason for this edit."
+    };
+  });
+}
+
+function validateRevisionAlignment(annotatedEssay: string, correctionNotes: CorrectionNote[]) {
+  const editIds = extractRevisionEdits(annotatedEssay).map((edit) => edit.id);
   const noteIds = correctionNotes.map((note) => note.id);
 
   const uniqueEditIds = new Set(editIds);
@@ -363,17 +433,46 @@ export function normalizeRevisionResult(
   input: CheckInput,
   providerName: ProviderConfig["name"]
 ) {
+  function normalizeRevisionStage(stage: RevisionStage | undefined, fallbackAnnotatedEssay?: string, fallbackNotes?: CorrectionNote[]) {
+    const resolvedAnnotatedEssay = stage?.annotatedEssay ?? fallbackAnnotatedEssay ?? "";
+    const resolvedNotes =
+      stage?.correctionNotes?.map((note, index) => ({
+        ...note,
+        id: note.id || String(index + 1)
+      })) ??
+      fallbackNotes?.map((note, index) => ({
+        ...note,
+        id: note.id || String(index + 1)
+      })) ??
+      [];
+
+    const annotatedEssayWithIds = attachIdsToAnnotatedEssay(resolvedAnnotatedEssay, resolvedNotes);
+    const repairedNotes = repairRevisionNotes(annotatedEssayWithIds, resolvedNotes);
+    validateRevisionAlignment(annotatedEssayWithIds, repairedNotes);
+
+    return {
+      annotatedEssay: annotatedEssayWithIds,
+      correctionNotes: repairedNotes
+    };
+  }
+
   parsed.feedbackMode = "ai";
   parsed.providerUsed = providerName;
   parsed.wordCount = countWords(input.essay);
   parsed.taskType = input.taskType;
   parsed.targetBand = getTargetBand(input.targetBand);
-  parsed.correctionNotes =
-    parsed.correctionNotes?.map((note, index) => ({
-      ...note,
-      id: note.id || String(index + 1)
-    })) || [];
-  parsed.annotatedEssay = attachIdsToAnnotatedEssay(parsed.annotatedEssay, parsed.correctionNotes);
-  validateRevisionAlignment(parsed.annotatedEssay, parsed.correctionNotes);
+
+  const singleStageRevision = normalizeRevisionStage(undefined, parsed.annotatedEssay, parsed.correctionNotes);
+  const grammarRevision = parsed.grammarRevision
+    ? normalizeRevisionStage(parsed.grammarRevision)
+    : singleStageRevision;
+  const optimizationRevision = parsed.optimizationRevision
+    ? normalizeRevisionStage(parsed.optimizationRevision)
+    : singleStageRevision;
+
+  parsed.grammarRevision = grammarRevision;
+  parsed.optimizationRevision = optimizationRevision;
+  parsed.annotatedEssay = optimizationRevision.annotatedEssay;
+  parsed.correctionNotes = optimizationRevision.correctionNotes;
   return parsed;
 }

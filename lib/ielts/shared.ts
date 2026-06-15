@@ -2,6 +2,7 @@ import {
   AiProvider,
   CorrectionNote,
   HighlightedSentence,
+  RevisionStage,
   Locale,
   TargetBand,
   TaskImageInput,
@@ -81,6 +82,7 @@ export function getTargetBand(value?: TargetBand): TargetBand {
 export type {
   CorrectionNote,
   HighlightedSentence,
+  RevisionStage,
   WritingCheckResult,
   WritingRevisionResult,
   WritingScoreResult

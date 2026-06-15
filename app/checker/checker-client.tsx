@@ -43,6 +43,7 @@ type EnergyPayload = {
 type ErrorSource = "auth" | "general";
 type ReportView = "overview" | "revise";
 type ReviseLayout = "split" | "stack";
+type RevisionStageKey = "grammar" | "optimization";
 type FeedbackChoice = "helpful" | "notHelpful";
 type UploadedTaskImage = {
   objectKey: string;
@@ -275,6 +276,7 @@ function CheckerPageContent() {
   const [errorSource, setErrorSource] = useState<ErrorSource>("general");
   const [loading, setLoading] = useState(false);
   const [activeEditIndex, setActiveEditIndex] = useState<number | null>(null);
+  const [activeRevisionStage, setActiveRevisionStage] = useState<RevisionStageKey>("optimization");
   const [energy, setEnergy] = useState<EnergyState | null>(sessionContext.energy as EnergyState | null);
   const [reviewCost, setReviewCost] = useState(sessionContext.reviewCost ?? 1);
   const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
@@ -295,7 +297,21 @@ function CheckerPageContent() {
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
   const wordCountTone = wordCount < 220 ? "low" : wordCount <= 320 ? "ready" : "extended";
   const promptEditLabel = promptEditing ? t.doneEditing : t.editPrompt;
-  const parsedRevision = result ? parseAnnotatedEssay(result.annotatedEssay, result.correctionNotes) : null;
+  const currentRevisionStage =
+    result == null
+      ? null
+      : activeRevisionStage === "grammar"
+        ? (result.grammarRevision ?? {
+            annotatedEssay: result.annotatedEssay,
+            correctionNotes: result.correctionNotes
+          })
+        : (result.optimizationRevision ?? {
+            annotatedEssay: result.annotatedEssay,
+            correctionNotes: result.correctionNotes
+          });
+  const parsedRevision = currentRevisionStage
+    ? parseAnnotatedEssay(currentRevisionStage.annotatedEssay, currentRevisionStage.correctionNotes)
+    : null;
   const activeCorrection = parsedRevision && activeEditIndex !== null ? parsedRevision.edits[activeEditIndex] ?? null : null;
   const isTask1 = taskType === "task1";
 
@@ -317,6 +333,7 @@ function CheckerPageContent() {
   useEffect(() => {
     setResult(null);
     setActiveEditIndex(null);
+    setActiveRevisionStage("optimization");
     setFeedbackChoice(null);
     setFeedbackComment("");
     setFeedbackSubmitted(false);
@@ -460,6 +477,7 @@ function CheckerPageContent() {
     setReportView("overview");
     setReviseLayout("split");
     setActiveEditIndex(null);
+    setActiveRevisionStage("optimization");
     setFeedbackChoice(null);
     setFeedbackComment("");
     setFeedbackSubmitting(false);
@@ -1116,20 +1134,46 @@ function CheckerPageContent() {
                       </div>
                     </div>
                     <p className="revisionHint">{t.reviseBody}</p>
+                    <div className="reviseLayoutSwitch" role="group" aria-label="Revision stage">
+                      <button
+                        type="button"
+                        className={`reviseLayoutButton${activeRevisionStage === "grammar" ? " is-active" : ""}`}
+                        onClick={() => {
+                          setActiveRevisionStage("grammar");
+                          setActiveEditIndex(null);
+                        }}
+                      >
+                        <span>{t.revisionStageGrammar}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`reviseLayoutButton${activeRevisionStage === "optimization" ? " is-active" : ""}`}
+                        onClick={() => {
+                          setActiveRevisionStage("optimization");
+                          setActiveEditIndex(null);
+                        }}
+                      >
+                        <span>{t.revisionStageOptimization}</span>
+                      </button>
+                    </div>
                     <div className="annotatedEssay reviseAnnotatedEssay" ref={activeEditRef}>
-                      {renderAnnotatedEssay(
-                        result.annotatedEssay,
-                        result.highlightedSentences.map((item) => item.sentence),
-                        result.correctionNotes,
-                        activeEditIndex,
-                        (index) => setActiveEditIndex((current) => (current === index ? null : index)),
-                        t
-                      )}
+                      {currentRevisionStage
+                        ? renderAnnotatedEssay(
+                            currentRevisionStage.annotatedEssay,
+                            result.highlightedSentences.map((item) => item.sentence),
+                            currentRevisionStage.correctionNotes,
+                            activeEditIndex,
+                            (index) => setActiveEditIndex((current) => (current === index ? null : index)),
+                            t
+                          )
+                        : null}
                     </div>
                   </article>
 
                   <aside className="feedbackSection reviseSidebar">
-                    <p className="sectionLabel">{t.revisionBundle}</p>
+                    <p className="sectionLabel">
+                      {activeRevisionStage === "grammar" ? t.revisionStageGrammar : t.revisionStageOptimization}
+                    </p>
                     {activeCorrection ? (
                       <div className="reviseDetailCard">
                         <div className="revisePair">

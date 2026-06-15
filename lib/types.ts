@@ -31,6 +31,11 @@ export type CorrectionNote = {
   reason: string;
 };
 
+export type RevisionStage = {
+  annotatedEssay: string;
+  correctionNotes: CorrectionNote[];
+};
+
 export type HighlightedSentence = {
   sentence: string;
   reason: string;
@@ -60,6 +65,8 @@ export type WritingRevisionResult = {
   targetBand: TargetBand;
   annotatedEssay: string;
   correctionNotes: CorrectionNote[];
+  grammarRevision?: RevisionStage;
+  optimizationRevision?: RevisionStage;
   feedbackMode: "ai";
   providerUsed: ActiveProvider;
 };
@@ -80,6 +87,8 @@ export type WritingCheckResult = {
   priorityFixes: ImprovementItem[];
   annotatedEssay: string;
   correctionNotes: CorrectionNote[];
+  grammarRevision?: RevisionStage;
+  optimizationRevision?: RevisionStage;
   feedbackMode: "ai";
   providerUsed: ActiveProvider;
 };

@@ -113,6 +113,12 @@ function serializeError(error: unknown) {
   };
 }
 
+function materializeAnnotatedEssay(annotatedEssay: string) {
+  return annotatedEssay
+    .replace(/\[del#([A-Za-z0-9_-]+)\][\s\S]*?\[\/del#\1\]\[add#\1\]([\s\S]*?)\[\/add#\1\]/g, "$2")
+    .replace(/\[del\][\s\S]*?\[\/del\]\[add\]([\s\S]*?)\[\/add\]/g, "$1");
+}
+
 async function runTaggedCompletion<T>(
   input: CheckInput,
   config: ProviderConfig,
@@ -692,12 +698,22 @@ export async function buildAiScoreFeedback(input: CheckInput): Promise<WritingSc
 export async function buildAiRevisionFeedback(input: CheckInput): Promise<WritingRevisionResult> {
   const minimumWords = input.taskType === "task1" ? 150 : 250;
   const systemPrompt = await loadBasePrompt();
-  const prompt = await buildRevisionPrompt(input, minimumWords);
   const visionProvider = getVisionProvider();
+  const grammarPrompt = await buildRevisionPrompt(input, minimumWords, "grammar");
 
-  if (shouldUseVisionModel(input)) {
-    if (visionProvider === "gemini") {
-      return runAlternateVisionCompletion(input, getGeminiConfig(), {
+  async function runRevisionPass(revisionInput: CheckInput, prompt: string) {
+    if (shouldUseVisionModel(revisionInput)) {
+      if (visionProvider === "gemini") {
+        return runAlternateVisionCompletion(revisionInput, getGeminiConfig(), {
+          kind: "revision",
+          systemPrompt,
+          prompt,
+          parse: parseRevisionStructuredResponse,
+          normalize: normalizeRevisionResult
+        });
+      }
+
+      return runQianwenVisionCompletion(revisionInput, getQianwenConfig(), {
         kind: "revision",
         systemPrompt,
         prompt,
@@ -706,7 +722,7 @@ export async function buildAiRevisionFeedback(input: CheckInput): Promise<Writin
       });
     }
 
-    return runQianwenVisionCompletion(input, getQianwenConfig(), {
+    return runTaggedCompletion(revisionInput, getDeepSeekConfig(), {
       kind: "revision",
       systemPrompt,
       prompt,
@@ -715,11 +731,26 @@ export async function buildAiRevisionFeedback(input: CheckInput): Promise<Writin
     });
   }
 
-  return runTaggedCompletion(input, getDeepSeekConfig(), {
-    kind: "revision",
-    systemPrompt,
-    prompt,
-    parse: parseRevisionStructuredResponse,
-    normalize: normalizeRevisionResult
-  });
+  const grammarRevision = await runRevisionPass(input, grammarPrompt);
+  const grammarCleanEssay = materializeAnnotatedEssay(grammarRevision.annotatedEssay);
+  const optimizationInput: CheckInput = {
+    ...input,
+    essay: grammarCleanEssay
+  };
+  const optimizationPrompt = await buildRevisionPrompt(optimizationInput, minimumWords, "optimization");
+  const optimizationRevision = await runRevisionPass(optimizationInput, optimizationPrompt);
+
+  return {
+    ...optimizationRevision,
+    annotatedEssay: optimizationRevision.annotatedEssay,
+    correctionNotes: optimizationRevision.correctionNotes,
+    grammarRevision: {
+      annotatedEssay: grammarRevision.annotatedEssay,
+      correctionNotes: grammarRevision.correctionNotes
+    },
+    optimizationRevision: {
+      annotatedEssay: optimizationRevision.annotatedEssay,
+      correctionNotes: optimizationRevision.correctionNotes
+    }
+  };
 }

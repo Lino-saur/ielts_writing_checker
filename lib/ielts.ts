@@ -49,6 +49,8 @@ export async function evaluateWriting(input: CheckInput): Promise<WritingCheckRe
       priorityFixes: score.priorityFixes,
       annotatedEssay: revision.annotatedEssay,
       correctionNotes: revision.correctionNotes,
+      grammarRevision: revision.grammarRevision,
+      optimizationRevision: revision.optimizationRevision,
       feedbackMode: "ai",
       providerUsed: score.providerUsed
     };

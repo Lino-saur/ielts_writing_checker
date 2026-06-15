@@ -360,10 +360,29 @@ export default function HistoryPageClient() {
                 </article>
 
                 <article className="feedbackSection">
-                  <p className="sectionLabel">{t.revisionBundle}</p>
+                  <p className="sectionLabel">{t.revisionStageGrammar}</p>
                   <div className="correctionList">
-                    {detail.result.correctionNotes.map((item) => (
-                      <article key={item.id} className="correctionCard">
+                    {(detail.result.grammarRevision?.correctionNotes ?? detail.result.correctionNotes).map((item) => (
+                      <article key={`grammar-${item.id}`} className="correctionCard">
+                        <p>
+                          <strong>{t.correctionOriginal}:</strong> {item.original}
+                        </p>
+                        <p>
+                          <strong>{t.correctionCorrected}:</strong> {item.corrected}
+                        </p>
+                        <p>
+                          <strong>{t.correctionReason}:</strong> {item.reason}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="feedbackSection">
+                  <p className="sectionLabel">{t.revisionStageOptimization}</p>
+                  <div className="correctionList">
+                    {(detail.result.optimizationRevision?.correctionNotes ?? detail.result.correctionNotes).map((item) => (
+                      <article key={`optimization-${item.id}`} className="correctionCard">
                         <p>
                           <strong>{t.correctionOriginal}:</strong> {item.original}
                         </p>

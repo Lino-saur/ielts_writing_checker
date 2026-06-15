@@ -104,6 +104,8 @@
   "correctionCorrected": "修改后",
   "correctionReason": "修改原因",
   "revisionBundle": "文中批改",
+  "revisionStageGrammar": "第一阶段：语法检查",
+  "revisionStageOptimization": "第二阶段：文章优化",
   "tapForReason": "点击文中的修改处，可查看原因。",
   "ready": "已就绪",
   "emptyTitle": "开始第一次批改",
