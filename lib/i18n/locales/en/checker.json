@@ -79,6 +79,7 @@
   "task1ImageTypeError": "Please upload an image file for Task 1.",
   "task1ImageSizeError": "Please keep the Task 1 image under 8MB.",
   "task1ImageReadError": "Failed to read the image file.",
+  "task1ImageUploadError": "Failed to upload the image. Please try again.",
   "task1ImageQuotaError": "Image uploads are temporarily unavailable because this month's storage quota has been reached.",
   "task1HistoryStorageError": "Task 1 image archiving is unavailable. Configure review image storage and try again.",
   "essay": "Essay",

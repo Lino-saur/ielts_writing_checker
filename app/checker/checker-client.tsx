@@ -58,6 +58,28 @@ const TASK1_MAX_IMAGE_DIMENSION = 1800;
 const TASK1_COMPRESSED_MIME_TYPE = "image/jpeg";
 const TASK1_COMPRESSED_QUALITY = 0.85;
 
+async function readResponseError(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    try {
+      const data = (await response.json()) as { error?: string };
+      if (data.error) {
+        return data.error;
+      }
+    } catch {
+      return `HTTP_${response.status}`;
+    }
+  }
+
+  try {
+    const text = (await response.text()).trim();
+    return text ? `HTTP_${response.status}:${text.slice(0, 160)}` : `HTTP_${response.status}`;
+  } catch {
+    return `HTTP_${response.status}`;
+  }
+}
+
 function ScoreCard({
   label,
   score,
@@ -595,7 +617,7 @@ function CheckerPageContent() {
         | { error?: string };
 
       if (!signResponse.ok || !("uploadUrl" in signData)) {
-        throw new Error(("error" in signData && signData.error) || "UPLOAD_URL_FAILED");
+        throw new Error(("error" in signData && signData.error) || (await readResponseError(signResponse)) || "UPLOAD_URL_FAILED");
       }
 
       const uploadResponse = await fetch(signData.uploadUrl, {
@@ -607,7 +629,7 @@ function CheckerPageContent() {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error("UPLOAD_FAILED");
+        throw new Error((await readResponseError(uploadResponse)) || "UPLOAD_FAILED");
       }
 
       const previewUrl = window.URL.createObjectURL(uploadFile);
@@ -625,8 +647,17 @@ function CheckerPageContent() {
       const message = uploadError instanceof Error ? uploadError.message : "UPLOAD_FAILED";
       if (message === "MEDIA_UPLOAD_LIMIT_REACHED" || message === "MEDIA_UPLOADS_BLOCKED") {
         showError(t.task1ImageQuotaError);
-      } else {
+      } else if (message === "UNAUTHORIZED") {
+        showError(t.authRequired, "auth");
+      } else if (message === "REVIEW_IMAGE_STORAGE_NOT_CONFIGURED") {
+        showError(t.task1HistoryStorageError);
+      } else if (
+        message === "IMAGE_LOAD_FAILED" ||
+        message === "IMAGE_COMPRESS_FAILED"
+      ) {
         showError(t.task1ImageReadError);
+      } else {
+        showError(t.task1ImageUploadError);
       }
       event.target.value = "";
     } finally {

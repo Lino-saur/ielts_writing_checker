@@ -79,6 +79,7 @@
   "task1ImageTypeError": "请上传图片格式的 Task 1 文件。",
   "task1ImageSizeError": "Task 1 图片请控制在 8MB 以内。",
   "task1ImageReadError": "读取图片失败，请重试。",
+  "task1ImageUploadError": "上传图片失败，请重试。",
   "task1ImageQuotaError": "本月图片存储额度已用尽，暂时无法继续上传图片。",
   "task1HistoryStorageError": "Task 1 原图归档暂不可用，请先配置图片对象存储后再试。",
   "essay": "作文",
