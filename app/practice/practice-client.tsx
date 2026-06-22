@@ -220,7 +220,7 @@ export default function PracticePageClient() {
                     <p className="practicePromptPreview">{item.prompt}</p>
 
                     <div className="practiceCardActions">
-                      <Link href={checkerHref} className="uiButton aroundDarkButton">
+                      <Link href={checkerHref} className="uiButton practiceStartButton">
                         {t.startPractice}
                       </Link>
                     </div>
