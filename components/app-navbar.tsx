@@ -120,6 +120,7 @@ export function AppNavbar({
   const checkerTask1Href = useMemo(() => `/${locale}/checker?task=task1`, [locale]);
   const checkerTask2Href = useMemo(() => `/${locale}/checker?task=task2`, [locale]);
   const historyHref = useMemo(() => `/${locale}/history`, [locale]);
+  const practiceHref = useMemo(() => `/${locale}/practice`, [locale]);
   const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : copy.writingTasks;
   const actionMenuLabel = copy.actionGroup;
   const actionMenuOpenLabel = copy.openActionMenu;
@@ -623,6 +624,9 @@ export function AppNavbar({
           </button>
 
           <div className={`aroundTaskDropdown${actionMenuOpen ? " is-open" : ""}`} role="menu">
+            <Link href={practiceHref} role="menuitem" onClick={() => setActionMenuOpen(false)}>
+              {copy.practiceEntry}
+            </Link>
             <Link href={historyHref} role="menuitem" onClick={() => setActionMenuOpen(false)}>
               {copy.historyEntry}
             </Link>

@@ -148,6 +148,53 @@ Returns the current user's saved review history.
 
 Returns one saved review, including the original prompt, essay, and scored result.
 
+### `GET /api/practice/questions`
+
+Returns the signed-in user's Cambridge IELTS 5-20 practice question library index. The synced library contains 128 published Academic Writing questions:
+
+- `source=cambridge_ielts`
+- `module=academic`
+- `book=5` through `book=20`
+- `test=1` through `test=4`
+- `taskType=task1` or `task2`
+- `title` normalized to question codes such as `C8-T3-T2`
+- `tags` populated from the source category labels
+- `contentStatus=complete`
+- `status=published`
+
+Run the standalone seed script if you need to initialize the table outside a normal app request:
+
+```bash
+npm run db:seed:practice
+```
+
+You can also sync external metadata from Koolearn into the same records:
+
+```bash
+npm run db:sync:practice:koolearn
+```
+
+The Koolearn sync imports authorized question prompts into Postgres and copies Task 1 images to the configured R2/S3-compatible object storage. It writes the copied object key to `image_object_key` and keeps source URLs in metadata for traceability.
+
+To sync a narrower slice, pass filters after `--`, for example `npm run db:sync:practice:koolearn -- --book=8` or `npm run db:sync:practice:koolearn -- --question=C8-T3-T2`.
+
+Required for the sync:
+
+- `DATABASE_URL`
+- `REVIEW_IMAGE_STORAGE_ENDPOINT`
+- `REVIEW_IMAGE_STORAGE_REGION`
+- `REVIEW_IMAGE_STORAGE_BUCKET`
+- `REVIEW_IMAGE_STORAGE_ACCESS_KEY_ID`
+- `REVIEW_IMAGE_STORAGE_SECRET_ACCESS_KEY`
+
+### `GET /api/practice/questions/:id`
+
+Returns one practice question metadata record and its prompt/image fields when those fields have been populated from an authorized source.
+
+### `GET /api/practice/questions/:id/image`
+
+Streams a synced Task 1 image from R2/S3-compatible object storage through the app after the same authenticated media quota checks used by review images.
+
 ### `POST /api/review-images/upload-url`
 
 Returns a short-lived signed upload URL for direct browser image uploads.
@@ -169,6 +216,6 @@ Accepts provider webhooks.
 
 ## TODO
 
-* [ ] 真题练习模式
-* [ ] Task1 功能
-* [ ] 图片上传（OCR）
+* [ ] 真题练习模式 UI
+* [ ] 真题题干授权内容导入
+* [ ] 练习记录与弱项统计

@@ -122,6 +122,7 @@
   "reviseEmpty": "点击一处文中修改，右侧查看对应建议。",
   "reviseOriginal": "原句",
   "reviseSuggested": "建议改法",
+  "revisionGenericCategory": "修改",
   "layoutSplit": "左右布局",
   "layoutStack": "上下布局",
   "exportRevisionDoc": "导出 Word",
@@ -156,5 +157,18 @@
   "historyResultTitle": "保存的结果",
   "historyCreatedAt": "创建时间",
   "historyLoadError": "加载历史批改失败。",
-  "historyNotFound": "没有找到这条批改记录。"
+  "historyNotFound": "没有找到这条批改记录。",
+  "historyAnalyticsTitle": "历史统计",
+  "historyTaskFilterLabel": "任务筛选",
+  "historyTaskFilterAll": "所有任务",
+  "historyRecentCountLabel": "最近批改次数",
+  "historyRecentCountSuffix": "次批改",
+  "historyStatsLoadError": "加载历史统计失败。",
+  "historyStatsTotalReviews": "纳入统计的批改次数",
+  "historyStatsTotalGrammarFixes": "语法修改总数",
+  "historyGrammarPieTitle": "语法错误分类占比",
+  "historyGrammarPieBody": "基于当前筛选范围内的语法阶段修改项统计。",
+  "historyScoreTrendTitle": "批改得分趋势",
+  "historyScoreTrendBody": "按时间顺序展示最近批改的预估分数变化。",
+  "historyChartEmpty": "当前筛选范围内还没有可展示的数据。"
 }

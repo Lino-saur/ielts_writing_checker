@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:seed:practice": "node scripts/seed-practice-library.mjs",
+    "db:sync:practice:koolearn": "node scripts/sync-koolearn-practice-library.mjs"
   },
   "dependencies": {
     "better-auth": "^1.6.11",
@@ -14,7 +16,8 @@
     "next": "15.3.8",
     "pg": "^8.21.0",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@types/node": "22.15.21",

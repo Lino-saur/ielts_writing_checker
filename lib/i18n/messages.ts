@@ -6,6 +6,8 @@ import landingEn from "./locales/en/landing.json";
 import landingZhCN from "./locales/zh-CN/landing.json";
 import navbarEn from "./locales/en/navbar.json";
 import navbarZhCN from "./locales/zh-CN/navbar.json";
+import practiceEn from "./locales/en/practice.json";
+import practiceZhCN from "./locales/zh-CN/practice.json";
 
 export type NavbarMessages = Record<string, string> & {
   brand: string;
@@ -72,6 +74,7 @@ export type NavbarMessages = Record<string, string> & {
   feedbackSubmitted: string;
   rechargeEntry: string;
   historyEntry: string;
+  practiceEntry: string;
   rechargeTitle: string;
   rechargeHint: string;
   rechargeMessage: string;
@@ -86,6 +89,30 @@ export type NavbarMessages = Record<string, string> & {
 
 export type LandingMessages = Record<string, string>;
 export type CheckerMessages = Record<string, string>;
+export type PracticeMessages = Record<string, string> & {
+  title: string;
+  eyebrow: string;
+  body: string;
+  allBooks: string;
+  allTasks: string;
+  allTags: string;
+  task1: string;
+  task2: string;
+  bookLabel: string;
+  testLabel: string;
+  questionCount: string;
+  startPractice: string;
+  loading: string;
+  loadFailed: string;
+  emptyTitle: string;
+  emptyBody: string;
+  authTitle: string;
+  authBody: string;
+  authLogin: string;
+  authSignUp: string;
+  imageReady: string;
+  tags: string;
+};
 
 const navbarMessages: Record<Locale, NavbarMessages> = {
   en: navbarEn,
@@ -102,11 +129,17 @@ const checkerMessages: Record<Locale, CheckerMessages> = {
   "zh-CN": checkerZhCN
 };
 
+const practiceMessages: Record<Locale, PracticeMessages> = {
+  en: practiceEn,
+  "zh-CN": practiceZhCN
+};
+
 export function getMessages(locale: Locale) {
   const resolvedLocale = locale in navbarMessages ? locale : DEFAULT_LOCALE;
   return {
     navbar: navbarMessages[resolvedLocale],
     landing: landingMessages[resolvedLocale],
-    checker: checkerMessages[resolvedLocale]
+    checker: checkerMessages[resolvedLocale],
+    practice: practiceMessages[resolvedLocale]
   };
 }

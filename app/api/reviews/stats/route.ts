@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
-import { listWritingReviews } from "@/lib/writing-reviews";
+import { getWritingReviewStats } from "@/lib/writing-reviews";
 import type { TaskType, WritingReviewTaskFilter } from "@/lib/types";
 
 function parseInteger(value: string | null, fallback: number) {
@@ -21,10 +21,9 @@ export async function GET(request: Request) {
   try {
     const session = await requireSession();
     const { searchParams } = new URL(request.url);
-    const limit = parseRecentCount(searchParams.get("limit"), 20);
-    const offset = parseInteger(searchParams.get("offset"), 0);
     const taskType = parseTaskType(searchParams.get("taskType"));
-    const data = await listWritingReviews(session.user.id, { limit, offset, taskType });
+    const recentCount = parseRecentCount(searchParams.get("recentCount"), 20);
+    const data = await getWritingReviewStats(session.user.id, { taskType, recentCount });
 
     return NextResponse.json(data);
   } catch (error) {

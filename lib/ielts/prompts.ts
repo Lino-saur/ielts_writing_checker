@@ -1,4 +1,5 @@
 import { CheckInput, ProviderConfig, countWords, getLocale, getTargetBand } from "./shared";
+import { GRAMMAR_REVISION_CATEGORIES, OPTIMIZATION_REVISION_CATEGORIES } from "./revision-categories";
 
 const PROMPTS = {
   base: `You are a precise IELTS writing evaluator.
@@ -85,6 +86,7 @@ task1 or task2
 
 ===CORRECTION_NOTES===
 1. id: 1
+category: ...
 original: ...
 corrected: ...
 reason: ...
@@ -102,7 +104,15 @@ Target band:
 Constraints:
 - annotatedEssay must preserve the essay order and mark edits inline using [del#1]original text[/del#1][add#1]improved text[/add#1], [del#2]...[/del#2][add#2]...[/add#2], etc.
 - Every inline edit id in annotatedEssay must have exactly one matching correctionNotes item with the same id, and every correctionNotes id must appear exactly once in annotatedEssay.
+- Every correctionNotes item must include a short category label.
+- Every correctionNotes item must include a non-empty reason. The reason is required for every id with no exceptions.
+- Every reason must be specific and complete, not generic. Explain what is wrong in the original, what the corrected version changes, and why the correction is better in this context.
+- Every reason must be at least 2 full sentences in the required output language.
+- Do not write vague reasons such as "grammar mistake", "better wording", "more natural", "improves clarity", or "fixed error" unless you also explain the exact error and the exact improvement.
+- For grammar stage, category must be exactly one of: {{grammarCategoryList}}.
+- For optimization stage, category must be exactly one of: {{optimizationCategoryList}}.
 - Before finalizing, count the note ids and the [del#id]/[add#id] pairs in annotatedEssay. These two counts must match exactly.
+- Before finalizing, verify that every correctionNotes item contains id, category, original, corrected, and reason, and that no reason is blank.
 - If you cannot fully annotate many tiny edits reliably, merge nearby edits into fewer larger revisions so that every revision still has one clear note.
 - {{revisionStageConstraints}}
 - Keep the student's core stance, major supporting points, and overall paragraph plan whenever possible.
@@ -200,7 +210,7 @@ export async function buildRevisionPrompt(
       : "Stage 2: Article Optimization";
   const revisionStageConstraints =
     stage === "grammar"
-      ? "This stage is grammar check only. Focus on grammar, spelling, punctuation, article usage, verb tense, subject-verb agreement, sentence structure, and obvious wording errors. Do not significantly expand ideas in this stage."
+      ? "This stage is grammar check only. Focus on tense, subject-verb agreement, articles, prepositions, word form, sentence structure, clause structure, verb pattern, voice, pronoun reference, parallelism, punctuation, capitalization, collocation, naturalness, and other clear grammar or mechanics issues. Do not significantly expand ideas in this stage."
       : "This stage is article optimization. Improve idea development, cohesion, clarity, concision, lexical choice, paragraph flow, and overall task response quality. Keep grammar correct while optimizing.";
   const revisionStageExpansionRule =
     stage === "grammar"
@@ -212,6 +222,8 @@ export async function buildRevisionPrompt(
     revisionStage,
     revisionStageConstraints,
     revisionStageExpansionRule,
+    grammarCategoryList: GRAMMAR_REVISION_CATEGORIES.join(", "),
+    optimizationCategoryList: OPTIMIZATION_REVISION_CATEGORIES.join(", "),
     targetBand,
     minimumWords,
     outputLanguageInstruction,

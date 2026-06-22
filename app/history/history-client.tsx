@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
-import type { WritingReviewDetail, WritingReviewListItem } from "@/lib/types";
+import type { WritingReviewListItem, WritingReviewStats, WritingReviewTaskFilter } from "@/lib/types";
+import { describeTaskFilter, formatReviewTime, PieChart, ScoreTrendChart } from "./history-shared";
 
 type EnergyState = {
   balance: number;
@@ -20,34 +22,7 @@ type ReviewListPayload = {
   total: number;
 };
 
-function formatReviewTime(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en-US", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(value));
-}
-
-function ScoreCard({
-  label,
-  score,
-  rationale
-}: {
-  label: string;
-  score: number;
-  rationale: string;
-}) {
-  return (
-    <article className="scoreCard">
-      <div className="scoreHeader">
-        <div>
-          <p className="sectionLabel">{label}</p>
-          <h3>{score.toFixed(1)}</h3>
-        </div>
-      </div>
-      <p>{rationale}</p>
-    </article>
-  );
-}
+const RECENT_COUNT_OPTIONS = [10, 20, 30, 50] as const;
 
 export default function HistoryPageClient() {
   const { sessionContext, sessionResolved } = useAuthSession();
@@ -55,11 +30,13 @@ export default function HistoryPageClient() {
   const [energy, setEnergy] = useState<EnergyState | null>(sessionContext.energy as EnergyState | null);
   const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
   const [items, setItems] = useState<WritingReviewListItem[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<WritingReviewDetail | null>(null);
   const [loadingList, setLoadingList] = useState(false);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [stats, setStats] = useState<WritingReviewStats | null>(null);
+  const [taskFilter, setTaskFilter] = useState<WritingReviewTaskFilter>("all");
+  const [recentCount, setRecentCount] = useState<(typeof RECENT_COUNT_OPTIONS)[number]>(20);
 
   const { checker: t, navbar } = getMessages(locale);
   const checkerHref = useMemo(() => `/${locale}/checker`, [locale]);
@@ -71,7 +48,11 @@ export default function HistoryPageClient() {
     setError(null);
 
     try {
-      const response = await fetch("/api/reviews?limit=30", {
+      const params = new URLSearchParams({
+        limit: String(recentCount),
+        taskType: taskFilter
+      });
+      const response = await fetch(`/api/reviews?${params.toString()}`, {
         cache: "no-store"
       });
       const data = (await response.json()) as ReviewListPayload | { error?: string };
@@ -81,14 +62,37 @@ export default function HistoryPageClient() {
       }
 
       setItems(data.items);
-      setSelectedId((current) => current ?? data.items[0]?.id ?? null);
-      if (!data.items.length) {
-        setDetail(null);
-      }
     } catch {
       setError(t.historyLoadError);
     } finally {
       setLoadingList(false);
+    }
+  }
+
+  async function loadStats() {
+    setLoadingStats(true);
+    setStatsError(null);
+
+    try {
+      const params = new URLSearchParams({
+        recentCount: String(recentCount),
+        taskType: taskFilter
+      });
+      const response = await fetch(`/api/reviews/stats?${params.toString()}`, {
+        cache: "no-store"
+      });
+      const data = (await response.json()) as WritingReviewStats | { error?: string };
+
+      if (!response.ok || !("scoreTrend" in data)) {
+        throw new Error("REQUEST_FAILED");
+      }
+
+      setStats(data);
+    } catch {
+      setStatsError(t.historyStatsLoadError ?? t.historyLoadError);
+      setStats(null);
+    } finally {
+      setLoadingStats(false);
     }
   }
 
@@ -103,62 +107,15 @@ export default function HistoryPageClient() {
 
     if (!isAuthenticated) {
       setItems([]);
-      setSelectedId(null);
-      setDetail(null);
       setError(null);
+      setStats(null);
+      setStatsError(null);
       return;
     }
 
     void loadReviews();
-  }, [isAuthenticated, sessionReady]);
-
-  useEffect(() => {
-    if (!selectedId || !isAuthenticated) {
-      return;
-    }
-
-    const reviewId = selectedId;
-    let cancelled = false;
-
-    async function loadDetail() {
-      setLoadingDetail(true);
-      setError(null);
-
-      try {
-        const response = await fetch(`/api/reviews/${encodeURIComponent(reviewId)}`, {
-          cache: "no-store"
-        });
-        const data = (await response.json()) as WritingReviewDetail | { error?: string };
-
-        if (response.status === 404) {
-          throw new Error("NOT_FOUND");
-        }
-
-        if (!response.ok || !("id" in data)) {
-          throw new Error("REQUEST_FAILED");
-        }
-
-        if (!cancelled) {
-          setDetail(data);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setDetail(null);
-          setError(loadError instanceof Error && loadError.message === "NOT_FOUND" ? t.historyNotFound : t.historyLoadError);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingDetail(false);
-        }
-      }
-    }
-
-    void loadDetail();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated, selectedId, t.historyLoadError, t.historyNotFound]);
+    void loadStats();
+  }, [isAuthenticated, sessionReady, recentCount, taskFilter]);
 
   return (
     <main className="pageShell">
@@ -168,10 +125,10 @@ export default function HistoryPageClient() {
         <span className="backdropGrid" />
       </div>
 
-        <AppNavbar
-          locale={locale}
-          onLocaleChange={setLocale}
-          copy={navbar}
+      <AppNavbar
+        locale={locale}
+        onLocaleChange={setLocale}
+        copy={navbar}
         taskMenuMode="all"
         energyBalance={energy?.balance ?? null}
         energyLabel={t.energy}
@@ -191,6 +148,83 @@ export default function HistoryPageClient() {
         </Surface>
       </section>
 
+      {sessionReady && isAuthenticated ? (
+        <section className="historyAnalytics">
+          <Surface className="historyAnalyticsCard">
+            <div className="historyAnalyticsHeader">
+              <div>
+                <p className="sectionLabel">{t.historyAnalyticsTitle}</p>
+                <p className="uiSectionBody">
+                  {describeTaskFilter(taskFilter, navbar, t.historyTaskFilterAll)} · {recentCount} {t.historyRecentCountSuffix}
+                </p>
+              </div>
+              <div className="historyFilters">
+                <div className="historyFilterGroup" role="group" aria-label={t.historyTaskFilterLabel}>
+                  {(["all", "task1", "task2"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`historyFilterButton${taskFilter === value ? " is-active" : ""}`}
+                      onClick={() => setTaskFilter(value)}
+                    >
+                      {value === "all" ? t.historyTaskFilterAll : value === "task1" ? navbar.task1 : navbar.task2}
+                    </button>
+                  ))}
+                </div>
+                <div className="historyFilterGroup" role="group" aria-label={t.historyRecentCountLabel}>
+                  {RECENT_COUNT_OPTIONS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`historyFilterButton${recentCount === value ? " is-active" : ""}`}
+                      onClick={() => setRecentCount(value)}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {loadingStats ? <p>{t.historyLoading}</p> : null}
+            {statsError && !loadingStats ? <p className="errorBox">{statsError}</p> : null}
+
+            {!loadingStats && !statsError ? (
+              <>
+                <div className="historyAnalyticsOverview">
+                  <div className="historyAnalyticsMetric">
+                    <span>{t.historyStatsTotalReviews}</span>
+                    <strong>{stats?.totalReviews ?? 0}</strong>
+                  </div>
+                  <div className="historyAnalyticsMetric">
+                    <span>{t.historyStatsTotalGrammarFixes}</span>
+                    <strong>{stats?.totalGrammarCorrections ?? 0}</strong>
+                  </div>
+                </div>
+
+                <div className="historyChartGrid">
+                  <article className="historyChartCard">
+                    <div className="historyChartHeader">
+                      <p className="sectionLabel">{t.historyGrammarPieTitle}</p>
+                      <p className="uiSectionBody">{t.historyGrammarPieBody}</p>
+                    </div>
+                    <PieChart stats={stats} locale={locale} emptyLabel={t.historyChartEmpty} />
+                  </article>
+
+                  <article className="historyChartCard">
+                    <div className="historyChartHeader">
+                      <p className="sectionLabel">{t.historyScoreTrendTitle}</p>
+                      <p className="uiSectionBody">{t.historyScoreTrendBody}</p>
+                    </div>
+                    <ScoreTrendChart stats={stats} locale={locale} emptyLabel={t.historyChartEmpty} />
+                  </article>
+                </div>
+              </>
+            ) : null}
+          </Surface>
+        </section>
+      ) : null}
+
       {!sessionReady ? (
         <Surface className="historyEmptyState">
           <p>{t.historyLoading}</p>
@@ -200,17 +234,15 @@ export default function HistoryPageClient() {
           <h2>{t.historyAuthTitle}</h2>
           <p>{t.historyAuthBody}</p>
           <div className="historyAuthActions">
-            <ActionButton onClick={() => setAuthRequest({ mode: "signIn", id: Date.now() })}>
-              {t.authRequiredLogin}
-            </ActionButton>
+            <ActionButton onClick={() => setAuthRequest({ mode: "signIn", id: Date.now() })}>{t.authRequiredLogin}</ActionButton>
             <ActionButton variant="primary" onClick={() => setAuthRequest({ mode: "signUp", id: Date.now() })}>
               {t.authRequiredSignUp}
             </ActionButton>
           </div>
         </Surface>
       ) : (
-        <section className="historyLayout">
-          <Surface className="historySidebar">
+        <section className="historyRecordsSection">
+          <Surface className="historyListSurface">
             <div className="historySidebarHeader">
               <div>
                 <p className="sectionLabel">{t.historyListTitle}</p>
@@ -228,176 +260,30 @@ export default function HistoryPageClient() {
             ) : null}
 
             <div className="historyList">
-              {items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`historyListItem${selectedId === item.id ? " is-active" : ""}`}
-                  onClick={() => setSelectedId(item.id)}
-                >
-                  <div className="historyListItemTop">
-                    <strong>{item.taskType === "task1" ? navbar.task1 : navbar.task2}</strong>
-                    <Pill>{item.estimatedBand.toFixed(1)}</Pill>
-                  </div>
-                  <div className="historyListMeta">
-                    <span>
-                      {t.historyCreatedAt}: {formatReviewTime(item.createdAt, locale)}
-                    </span>
-                    <span>
-                      {item.wordCount} {t.wordsUnit}
-                    </span>
-                    <span>{item.hasImage ? t.task1ImageLabel : t.historyNoImage}</span>
-                  </div>
-                </button>
-              ))}
+              {items.map((item) => {
+                const detailHref = `/${locale}/history/${item.id}`;
+                return (
+                  <Link key={item.id} href={detailHref} className="historyListItem">
+                    <div className="historyListItemTop">
+                      <div className="historyListHeading">
+                        <strong>{item.taskType === "task1" ? navbar.task1 : navbar.task2}</strong>
+                        <span className="historyListTimestamp">{formatReviewTime(item.createdAt, locale)}</span>
+                      </div>
+                      <Pill>{item.estimatedBand.toFixed(1)}</Pill>
+                    </div>
+                    <p className="historyListPreview">{item.promptPreview}</p>
+                    <p className="historyListEssayPreview">{item.essayPreview}</p>
+                    <div className="historyListMeta">
+                      <span>
+                        {item.wordCount} {t.wordsUnit}
+                      </span>
+                      <span>{item.hasImage ? t.task1ImageLabel : t.historyNoImage}</span>
+                      <span>{item.providerUsed}</span>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
-          </Surface>
-
-          <Surface className="historyDetail">
-            {loadingDetail ? <p>{t.historyLoadingDetail}</p> : null}
-
-            {!loadingDetail && detail ? (
-              <>
-                <div className="resultHero">
-                  <div className="resultScore">
-                    <p className="sectionLabel">{t.estimatedBand}</p>
-                    <h2>{detail.estimatedBand.toFixed(1)}</h2>
-                  </div>
-                  <div className="resultHeroActions">
-                    <div className="resultMeta">
-                      <Pill>
-                        {t.targetChipLabel} {detail.targetBand.toFixed(1)}
-                      </Pill>
-                      <Pill>
-                        {detail.wordCount} {t.wordsUnit}
-                      </Pill>
-                      <Pill>{detail.providerUsed}</Pill>
-                    </div>
-                  </div>
-                </div>
-
-                <article className="feedbackSection">
-                  <p className="sectionLabel">{t.historyOriginalPrompt}</p>
-                  <p className="historyTextBlock">{detail.prompt}</p>
-                </article>
-
-                <article className="feedbackSection">
-                  <p className="sectionLabel">{t.historyOriginalEssay}</p>
-                  <pre className="historyEssayBlock">{detail.essay}</pre>
-                </article>
-
-                <article className="feedbackSection">
-                  <p className="sectionLabel">{t.historyOriginalImage}</p>
-                  {detail.image ? (
-                    <div className="historyImagePanel">
-                      <img src={detail.image.url} alt={detail.image.name} className="historyImage" />
-                    </div>
-                  ) : (
-                    <p>{t.historyNoImage}</p>
-                  )}
-                </article>
-
-                <article className="feedbackSection">
-                  <p className="sectionLabel">{t.historyResultTitle}</p>
-                  <div className="scoreGrid">
-                    <ScoreCard
-                      label={t.taskAchievement}
-                      score={detail.result.bandBreakdown.taskAchievement.score}
-                      rationale={detail.result.bandBreakdown.taskAchievement.rationale}
-                    />
-                    <ScoreCard
-                      label={t.coherence}
-                      score={detail.result.bandBreakdown.coherenceAndCohesion.score}
-                      rationale={detail.result.bandBreakdown.coherenceAndCohesion.rationale}
-                    />
-                    <ScoreCard
-                      label={t.lexical}
-                      score={detail.result.bandBreakdown.lexicalResource.score}
-                      rationale={detail.result.bandBreakdown.lexicalResource.rationale}
-                    />
-                    <ScoreCard
-                      label={t.grammar}
-                      score={detail.result.bandBreakdown.grammaticalRangeAndAccuracy.score}
-                      rationale={detail.result.bandBreakdown.grammaticalRangeAndAccuracy.rationale}
-                    />
-                  </div>
-                </article>
-
-                <article className="feedbackSection">
-                  <p className="sectionLabel">{t.strengths}</p>
-                  <ul>
-                    {detail.result.strengths.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </article>
-
-                <article className="feedbackSection">
-                  <p className="sectionLabel">{t.highlightedSentences}</p>
-                  <div className="correctionList">
-                    {detail.result.highlightedSentences.map((item, index) => (
-                      <article key={`${item.sentence}-${index}`} className="correctionCard">
-                        <p>
-                          <strong>{t.highlightedSentence}:</strong> {item.sentence}
-                        </p>
-                        <p>
-                          <strong>{t.highlightedReason}:</strong> {item.reason}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-
-                <article className="feedbackSection">
-                  <p className="sectionLabel">{t.priorityFixes}</p>
-                  <ul>
-                    {detail.result.priorityFixes.map((item) => (
-                      <li key={item.title}>
-                        <strong>{item.title}:</strong> {item.detail}
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-
-                <article className="feedbackSection">
-                  <p className="sectionLabel">{t.revisionStageGrammar}</p>
-                  <div className="correctionList">
-                    {(detail.result.grammarRevision?.correctionNotes ?? detail.result.correctionNotes).map((item) => (
-                      <article key={`grammar-${item.id}`} className="correctionCard">
-                        <p>
-                          <strong>{t.correctionOriginal}:</strong> {item.original}
-                        </p>
-                        <p>
-                          <strong>{t.correctionCorrected}:</strong> {item.corrected}
-                        </p>
-                        <p>
-                          <strong>{t.correctionReason}:</strong> {item.reason}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-
-                <article className="feedbackSection">
-                  <p className="sectionLabel">{t.revisionStageOptimization}</p>
-                  <div className="correctionList">
-                    {(detail.result.optimizationRevision?.correctionNotes ?? detail.result.correctionNotes).map((item) => (
-                      <article key={`optimization-${item.id}`} className="correctionCard">
-                        <p>
-                          <strong>{t.correctionOriginal}:</strong> {item.original}
-                        </p>
-                        <p>
-                          <strong>{t.correctionCorrected}:</strong> {item.corrected}
-                        </p>
-                        <p>
-                          <strong>{t.correctionReason}:</strong> {item.reason}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-              </>
-            ) : null}
           </Surface>
         </section>
       )}

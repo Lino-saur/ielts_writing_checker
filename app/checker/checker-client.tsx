@@ -1,13 +1,14 @@
 "use client";
 
-import { ChangeEvent, FormEvent, Suspense, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppNavbar } from "@/components/app-navbar";
 import { useAuthSession } from "@/lib/auth-client-session";
+import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
 import { CheckerMessages, getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
-import type { AiProvider, CorrectionNote, FeedbackPayload, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
+import type { AiProvider, CorrectionNote, FeedbackPayload, Locale, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
 
 const TASK1_PLACEHOLDER = {
   prompt:
@@ -51,6 +52,20 @@ type UploadedTaskImage = {
   mimeType: string;
   fileSize: number;
   previewUrl: string;
+};
+
+type PracticeQuestionPayload = {
+  question: {
+    id: string;
+    taskType: TaskType;
+    title: string;
+    tags: string[];
+    prompt: string;
+    imageObjectKey: string | null;
+    imageName: string | null;
+    imageMimeType: string | null;
+    imageSizeBytes: number | null;
+  };
 };
 
 const TASK1_UPLOAD_LIMIT_BYTES = 8 * 1024 * 1024;
@@ -146,6 +161,38 @@ function parseAnnotatedEssay(text: string, correctionNotes: CorrectionNote[]) {
   }
 
   return { parts, edits };
+}
+
+function groupRevisionEditsByCategory(
+  edits: ReturnType<typeof parseAnnotatedEssay>["edits"],
+  locale: Locale
+) {
+  const groups = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      edits: typeof edits;
+    }
+  >();
+
+  edits.forEach((edit) => {
+    const key = edit.note?.category?.trim() || "other";
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.edits.push(edit);
+      return;
+    }
+
+    groups.set(key, {
+      key,
+      label: getRevisionCategoryLabel(key, locale),
+      edits: [edit]
+    });
+  });
+
+  return Array.from(groups.values());
 }
 
 function renderAnnotatedEssay(
@@ -264,6 +311,7 @@ function CheckerPageContent() {
   const taskImageInputRef = useRef<HTMLInputElement | null>(null);
   const [locale, setLocale] = useRouteLocale();
   const searchParams = useSearchParams();
+  const practiceId = searchParams.get("practiceId");
   const provider: AiProvider = "deepseek";
   const [taskType, setTaskType] = useState<TaskType>("task2");
   const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
@@ -290,6 +338,7 @@ function CheckerPageContent() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [exportingRevision, setExportingRevision] = useState(false);
+  const [expandedRevisionCategories, setExpandedRevisionCategories] = useState<Record<string, boolean>>({});
 
   const { checker: t, navbar } = getMessages(locale);
   const sessionReady = sessionResolved;
@@ -297,22 +346,32 @@ function CheckerPageContent() {
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
   const wordCountTone = wordCount < 220 ? "low" : wordCount <= 320 ? "ready" : "extended";
   const promptEditLabel = promptEditing ? t.doneEditing : t.editPrompt;
-  const currentRevisionStage =
-    result == null
-      ? null
-      : activeRevisionStage === "grammar"
-        ? (result.grammarRevision ?? {
-            annotatedEssay: result.annotatedEssay,
-            correctionNotes: result.correctionNotes
-          })
-        : (result.optimizationRevision ?? {
-            annotatedEssay: result.annotatedEssay,
-            correctionNotes: result.correctionNotes
-          });
-  const parsedRevision = currentRevisionStage
-    ? parseAnnotatedEssay(currentRevisionStage.annotatedEssay, currentRevisionStage.correctionNotes)
-    : null;
-  const activeCorrection = parsedRevision && activeEditIndex !== null ? parsedRevision.edits[activeEditIndex] ?? null : null;
+  const currentRevisionStage = useMemo(
+    () =>
+      result == null
+        ? null
+        : activeRevisionStage === "grammar"
+          ? (result.grammarRevision ?? {
+              annotatedEssay: result.annotatedEssay,
+              correctionNotes: result.correctionNotes
+            })
+          : (result.optimizationRevision ?? {
+              annotatedEssay: result.annotatedEssay,
+              correctionNotes: result.correctionNotes
+            }),
+    [activeRevisionStage, result]
+  );
+  const parsedRevision = useMemo(
+    () =>
+      currentRevisionStage
+        ? parseAnnotatedEssay(currentRevisionStage.annotatedEssay, currentRevisionStage.correctionNotes)
+        : null,
+    [currentRevisionStage]
+  );
+  const groupedRevisionEdits = useMemo(
+    () => (parsedRevision ? groupRevisionEditsByCategory(parsedRevision.edits, locale) : []),
+    [parsedRevision, locale]
+  );
   const isTask1 = taskType === "task1";
 
   function clearError() {
@@ -331,6 +390,10 @@ function CheckerPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (practiceId) {
+      return;
+    }
+
     setResult(null);
     setActiveEditIndex(null);
     setActiveRevisionStage("optimization");
@@ -348,7 +411,73 @@ function CheckerPageContent() {
       setEssay(TASK2_PLACEHOLDER.essay);
       setTaskImage(null);
     }
-  }, [taskType]);
+  }, [practiceId, taskType]);
+
+  useEffect(() => {
+    if (!practiceId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadPracticeQuestion() {
+      clearError();
+
+      try {
+        const response = await fetch(`/api/practice/questions/${encodeURIComponent(practiceId || "")}`, {
+          cache: "no-store"
+        });
+        const data = (await response.json()) as PracticeQuestionPayload | { error?: string };
+
+        if (!response.ok || !("question" in data)) {
+          if (response.status === 401) {
+            showError(t.authRequired, "auth");
+            return;
+          }
+          throw new Error("PRACTICE_QUESTION_LOAD_FAILED");
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        const question = data.question;
+        setTaskType(question.taskType);
+        setPrompt(question.prompt);
+        setEssay("");
+        setPromptEditing(false);
+        setResult(null);
+        setActiveEditIndex(null);
+        setActiveRevisionStage("optimization");
+        setFeedbackChoice(null);
+        setFeedbackComment("");
+        setFeedbackSubmitted(false);
+        setFeedbackError(null);
+
+        if (question.taskType === "task1" && question.imageObjectKey && question.imageName && question.imageMimeType) {
+          setTaskImage({
+            objectKey: question.imageObjectKey,
+            name: question.imageName,
+            mimeType: question.imageMimeType,
+            fileSize: question.imageSizeBytes ?? 0,
+            previewUrl: `/api/practice/questions/${encodeURIComponent(question.id)}/image`
+          });
+        } else {
+          setTaskImage(null);
+        }
+      } catch {
+        if (!cancelled) {
+          showError(t.genericError);
+        }
+      }
+    }
+
+    void loadPracticeQuestion();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [practiceId, t.authRequired, t.genericError]);
 
   useEffect(() => {
     return () => {
@@ -455,6 +584,56 @@ function CheckerPageContent() {
       document.removeEventListener("touchstart", handlePointerDown);
     };
   }, [activeEditIndex]);
+
+  useEffect(() => {
+    if (!groupedRevisionEdits.length) {
+      setExpandedRevisionCategories((current) => (Object.keys(current).length ? {} : current));
+      return;
+    }
+
+    setExpandedRevisionCategories((current) => {
+      const next: Record<string, boolean> = {};
+
+      groupedRevisionEdits.forEach((group, index) => {
+        next[group.key] = current[group.key] ?? index === 0;
+      });
+
+      const currentKeys = Object.keys(current);
+      const nextKeys = Object.keys(next);
+      if (
+        currentKeys.length === nextKeys.length &&
+        nextKeys.every((key) => current[key] === next[key])
+      ) {
+        return current;
+      }
+
+      return next;
+    });
+  }, [groupedRevisionEdits]);
+
+  useEffect(() => {
+    if (activeEditIndex === null || !parsedRevision) {
+      return;
+    }
+
+    const activeEdit = parsedRevision.edits.find((edit) => edit.index === activeEditIndex);
+    const activeCategory = activeEdit?.note?.category?.trim() || "other";
+
+    setExpandedRevisionCategories((current) =>
+      current[activeCategory]
+        ? current
+        : {
+            ...current,
+            [activeCategory]: true
+          }
+    );
+
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(`[data-revise-card-index="${activeEditIndex}"]`)
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }, [activeEditIndex, parsedRevision]);
 
   useEffect(() => {
     if (!result || !reportSectionRef.current) {
@@ -1174,35 +1353,72 @@ function CheckerPageContent() {
                     <p className="sectionLabel">
                       {activeRevisionStage === "grammar" ? t.revisionStageGrammar : t.revisionStageOptimization}
                     </p>
-                    {activeCorrection ? (
-                      <div className="reviseDetailCard">
-                        <div className="revisePair">
-                          <span>{t.reviseOriginal}</span>
-                          <p>{activeCorrection.original}</p>
-                        </div>
-                        <div className="revisePair revisePairSuggested">
-                          <span>{t.reviseSuggested}</span>
-                          <p>{activeCorrection.corrected}</p>
-                        </div>
-                        <div className="reviseReason">
-                          <span>{t.correctionReason}</span>
-                          <p>{activeCorrection.note?.reason ?? ""}</p>
-                        </div>
+                    {groupedRevisionEdits.length ? (
+                      <div className="reviseDetailList">
+                        {groupedRevisionEdits.map((group) => {
+                          const isOpen = expandedRevisionCategories[group.key] ?? false;
+
+                          return (
+                            <section key={`revise-group-${group.key}`} className="reviseCategoryGroup">
+                              <button
+                                type="button"
+                                className={`reviseCategoryButton${isOpen ? " is-open" : ""}`}
+                                onClick={() =>
+                                  setExpandedRevisionCategories((current) => ({
+                                    ...current,
+                                    [group.key]: !isOpen
+                                  }))
+                                }
+                              >
+                                <span className="reviseCategoryTitle">{group.label}</span>
+                                <span className="reviseCategoryMeta">
+                                  {group.edits.length}
+                                  <i className={`ai-chevron-${isOpen ? "up" : "down"}`} aria-hidden="true" />
+                                </span>
+                              </button>
+                              {isOpen ? (
+                                <div className="reviseCategoryItems">
+                                  {group.edits.map((edit) => {
+                                    const isActive = activeEditIndex === edit.index;
+
+                                    return (
+                                      <button
+                                        key={`revise-detail-${edit.id}-${edit.index}`}
+                                        type="button"
+                                        data-revise-card-index={edit.index}
+                                        className={`reviseDetailCard${isActive ? " is-active" : ""}`}
+                                        onClick={() =>
+                                          setActiveEditIndex((current) => (current === edit.index ? null : edit.index))
+                                        }
+                                      >
+                                        <div className="reviseDetailHeader">
+                                          <span className="reviseDetailIndex">{String(edit.index + 1).padStart(2, "0")}</span>
+                                        </div>
+                                        <div className="reviseDetailSummary">
+                                          <p className="reviseDetailOriginal">{edit.original}</p>
+                                          <i className="ai-arrow-right" aria-hidden="true" />
+                                          <p className="reviseDetailSuggested">{edit.corrected}</p>
+                                        </div>
+                                        {isActive ? (
+                                          <div className="reviseDetailBody">
+                                            <div className="reviseReason">
+                                              <span>{t.correctionReason}</span>
+                                              <p>{edit.note?.reason ?? ""}</p>
+                                            </div>
+                                          </div>
+                                        ) : null}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </section>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="reviseEmpty">{t.reviseEmpty}</p>
                     )}
-
-                    <div className="reviseSupportBlock">
-                      <p className="subsectionTitle">{t.priorityFixes}</p>
-                      <ul>
-                        {result.priorityFixes.map((item) => (
-                          <li key={item.title}>
-                            <strong>{item.title}:</strong> {item.detail}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
                   </aside>
                 </section>
               )}

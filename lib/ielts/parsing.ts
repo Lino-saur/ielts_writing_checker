@@ -10,8 +10,10 @@ import {
   WritingScoreResult,
   clampBand,
   countWords,
+  getLocale,
   getTargetBand
 } from "./shared";
+import { getRevisionCategoryLabel, normalizeRevisionCategory } from "./revision-categories";
 
 export function cleanModelText(text: string) {
   return text
@@ -167,8 +169,9 @@ function parsePriorityFixesBlock(block: string) {
 
 function parseCorrectionNotesBlock(block: string): CorrectionNote[] {
   return splitNumberedEntries(block, "id:")
-    .map((entry) => {
+    .map<CorrectionNote | null>((entry) => {
       const idMatch = entry.match(/id:\s*([A-Za-z0-9_-]+)/i);
+      const categoryMatch = entry.match(/category:\s*([\s\S]*?)(?=\s+original:|$)/i);
       const originalMatch = entry.match(/original:\s*([\s\S]*?)(?=\s+corrected:|$)/i);
       const correctedMatch = entry.match(/corrected:\s*([\s\S]*?)(?=\s+reason:|$)/i);
       const reasonMatch = entry.match(/reason:\s*([\s\S]*)/i);
@@ -179,12 +182,13 @@ function parseCorrectionNotesBlock(block: string): CorrectionNote[] {
 
       return {
         id: idMatch[1].trim(),
+        category: normalizeRevisionCategory(categoryMatch?.[1]?.trim()),
         original: originalMatch[1].trim(),
         corrected: correctedMatch[1].trim(),
         reason: reasonMatch[1].trim()
       };
     })
-    .filter((item): item is CorrectionNote => Boolean(item));
+    .filter((item): item is CorrectionNote => item !== null);
 }
 
 export function parseScoreStructuredResponse(text: string): WritingScoreResult {
@@ -342,13 +346,106 @@ function extractRevisionEdits(annotatedEssay: string) {
   );
 }
 
-function repairRevisionNotes(annotatedEssay: string, correctionNotes: CorrectionNote[]) {
+function buildFallbackRevisionReason(
+  locale: ReturnType<typeof getLocale>,
+  category: string,
+  original: string,
+  corrected: string
+) {
+  const normalizedCategory = normalizeRevisionCategory(category);
+  const categoryLabel = getRevisionCategoryLabel(normalizedCategory, locale);
+
+  if (locale === "zh-CN") {
+    return `这处修改属于“${categoryLabel}”。原句写成“${original}”不够准确或不够合适，改为“${corrected}”后，语法关系或表达逻辑会更清楚，也更符合 IELTS 写作中的自然英文用法。`;
+  }
+
+  return `This edit is classified as ${categoryLabel}. The original wording "${original}" is inaccurate or less suitable in context, and changing it to "${corrected}" makes the grammar or expression clearer and more natural for IELTS writing.`;
+}
+
+function isWeakRevisionReason(reason: string) {
+  const compact = reason.trim();
+  if (!compact) {
+    return true;
+  }
+
+  if (compact.length < 24) {
+    return true;
+  }
+
+  const normalized = compact.toLowerCase();
+  return [
+    "model did not provide a reason",
+    "grammar mistake",
+    "better wording",
+    "more natural",
+    "improves clarity",
+    "fixed error"
+  ].some((pattern) => normalized.includes(pattern));
+}
+
+function repairRevisionNotes(
+  annotatedEssay: string,
+  correctionNotes: CorrectionNote[],
+  locale: ReturnType<typeof getLocale>
+) {
+  function inferCategory(original: string, corrected: string) {
+    const before = original.trim();
+    const after = corrected.trim();
+    const lowerBefore = before.toLowerCase();
+    const lowerAfter = after.toLowerCase();
+    const beforeWord = lowerBefore.replace(/^[^a-z]+|[^a-z]+$/g, "");
+    const afterWord = lowerAfter.replace(/^[^a-z]+|[^a-z]+$/g, "");
+    const isSingleWordSwap = beforeWord.length > 0 && afterWord.length > 0 && !/\s/.test(beforeWord) && !/\s/.test(afterWord);
+
+    if (/^[\s,.;:!?'"()\-]+$/.test(before) || /^[\s,.;:!?'"()\-]+$/.test(after)) {
+      return "punctuation";
+    }
+
+    if (lowerBefore === lowerAfter && before !== after) {
+      return /[a-z]/i.test(before) || /[a-z]/i.test(after) ? "capitalization" : "punctuation";
+    }
+
+    if (/\b(a|an|the)\b/i.test(before) !== /\b(a|an|the)\b/i.test(after)) {
+      return "articles";
+    }
+
+    if (/\b(am|is|are|was|were|has|have|do|does)\b/i.test(before) || /\b(am|is|are|was|were|has|have|do|does)\b/i.test(after)) {
+      return "subject_verb_agreement";
+    }
+
+    if (/\b(was|were|had|did)\b/i.test(before) !== /\b(was|were|had|did)\b/i.test(after) || /\b(ed)\b/i.test(after)) {
+      return "tense";
+    }
+
+    if (/\b(in|on|at|for|to|with|from|of)\b/i.test(before) !== /\b(in|on|at|for|to|with|from|of)\b/i.test(after)) {
+      return "preposition";
+    }
+
+    if (
+      /\b(to\s+\w+|\w+\s+to\s+\w+|\w+\s+\w+ing)\b/i.test(`${before} ${after}`) &&
+      beforeWord !== afterWord
+    ) {
+      return "verb_pattern";
+    }
+
+    if (isSingleWordSwap) {
+      return "word_form";
+    }
+
+    if (before.split(/\s+/).length === after.split(/\s+/).length && before.length !== after.length) {
+      return "naturalness";
+    }
+
+    return "other";
+  }
+
   const edits = extractRevisionEdits(annotatedEssay);
   const notesById = new Map(
     correctionNotes.map((note) => [
       note.id,
       {
         ...note,
+        category: normalizeRevisionCategory(note.category?.trim()),
         original: note.original.trim(),
         corrected: note.corrected.trim(),
         reason: note.reason.trim()
@@ -359,19 +456,28 @@ function repairRevisionNotes(annotatedEssay: string, correctionNotes: Correction
   return edits.map((edit) => {
     const existing = notesById.get(edit.id);
     if (existing) {
+      const category = normalizeRevisionCategory(existing.category) || inferCategory(edit.original, edit.corrected);
+      const reason =
+        !isWeakRevisionReason(existing.reason)
+          ? existing.reason
+          : buildFallbackRevisionReason(locale, category, existing.original || edit.original, existing.corrected || edit.corrected);
+
       return {
         id: edit.id,
+        category,
         original: existing.original || edit.original,
         corrected: existing.corrected || edit.corrected,
-        reason: existing.reason || "Model did not provide a reason for this edit."
+        reason
       };
     }
 
+    const category = inferCategory(edit.original, edit.corrected);
     return {
       id: edit.id,
+      category,
       original: edit.original,
       corrected: edit.corrected,
-      reason: "Model did not provide a reason for this edit."
+      reason: buildFallbackRevisionReason(locale, category, edit.original, edit.corrected)
     };
   });
 }
@@ -438,16 +544,18 @@ export function normalizeRevisionResult(
     const resolvedNotes =
       stage?.correctionNotes?.map((note, index) => ({
         ...note,
+        category: normalizeRevisionCategory(note.category?.trim()),
         id: note.id || String(index + 1)
       })) ??
       fallbackNotes?.map((note, index) => ({
         ...note,
+        category: normalizeRevisionCategory(note.category?.trim()),
         id: note.id || String(index + 1)
       })) ??
       [];
 
     const annotatedEssayWithIds = attachIdsToAnnotatedEssay(resolvedAnnotatedEssay, resolvedNotes);
-    const repairedNotes = repairRevisionNotes(annotatedEssayWithIds, resolvedNotes);
+    const repairedNotes = repairRevisionNotes(annotatedEssayWithIds, resolvedNotes, getLocale(input.locale));
     validateRevisionAlignment(annotatedEssayWithIds, repairedNotes);
 
     return {

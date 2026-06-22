@@ -3,11 +3,14 @@ import { db, ensureDatabase } from "./db";
 import { consumeEnergyInTransaction, getReviewEnergyCost } from "./energy";
 import { recordMediaUpload } from "./media-usage";
 import { getReviewImageObject, putReviewImageObject } from "./object-storage";
+import { normalizeRevisionCategory } from "./ielts/revision-categories";
 import type {
   TaskImageInput,
   WritingCheckResult,
   WritingReviewDetail,
-  WritingReviewListItem
+  WritingReviewListItem,
+  WritingReviewStats,
+  WritingReviewTaskFilter
 } from "./types";
 
 type WritingReviewRow = {
@@ -28,6 +31,36 @@ type WritingReviewRow = {
   updated_at: Date | string;
 };
 
+type WritingReviewStatsRow = Pick<WritingReviewRow, "task_type" | "result_json" | "estimated_band" | "created_at">;
+
+function buildReviewFilters(userId: string, options?: { taskType?: WritingReviewTaskFilter }) {
+  const values: Array<string | number> = [userId];
+  const conditions = ["user_id = $1"];
+
+  if (options?.taskType && options.taskType !== "all") {
+    values.push(options.taskType);
+    conditions.push(`task_type = $${values.length}`);
+  }
+
+  return {
+    whereClause: conditions.join(" AND "),
+    values
+  };
+}
+
+function buildPreview(text: string, maxLength: number) {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (!compact) {
+    return "";
+  }
+
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+
+  return `${compact.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 function mapReviewSummary(row: WritingReviewRow): WritingReviewListItem {
   return {
     id: row.id,
@@ -37,7 +70,9 @@ function mapReviewSummary(row: WritingReviewRow): WritingReviewListItem {
     wordCount: row.word_count,
     providerUsed: row.provider_used,
     hasImage: Boolean(row.image_object_key),
-    createdAt: new Date(row.created_at).toISOString()
+    createdAt: new Date(row.created_at).toISOString(),
+    promptPreview: buildPreview(row.prompt_text, 132),
+    essayPreview: buildPreview(row.essay_text, 168)
   };
 }
 
@@ -196,11 +231,16 @@ export async function createWritingReview(input: {
   }
 }
 
-export async function listWritingReviews(userId: string, options?: { limit?: number; offset?: number }) {
+export async function listWritingReviews(
+  userId: string,
+  options?: { limit?: number; offset?: number; taskType?: WritingReviewTaskFilter }
+) {
   await ensureDatabase();
 
   const limit = Math.min(Math.max(options?.limit ?? 20, 1), 100);
   const offset = Math.max(options?.offset ?? 0, 0);
+  const filters = buildReviewFilters(userId, options);
+  const listValues = [...filters.values, limit, offset];
   const result = await db.query<WritingReviewRow>(
     `SELECT
       id,
@@ -219,23 +259,85 @@ export async function listWritingReviews(userId: string, options?: { limit?: num
       created_at,
       updated_at
      FROM writing_reviews
-     WHERE user_id = $1
+     WHERE ${filters.whereClause}
      ORDER BY created_at DESC
-     LIMIT $2 OFFSET $3`,
-    [userId, limit, offset]
+     LIMIT $${listValues.length - 1} OFFSET $${listValues.length}`,
+    listValues
   );
 
   const totalResult = await db.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count
      FROM writing_reviews
-     WHERE user_id = $1`,
-    [userId]
+     WHERE ${filters.whereClause}`,
+    filters.values
   );
 
   return {
     items: result.rows.map(mapReviewSummary),
     total: Number(totalResult.rows[0]?.count || 0)
   };
+}
+
+export async function getWritingReviewStats(
+  userId: string,
+  options?: { taskType?: WritingReviewTaskFilter; recentCount?: number }
+) {
+  await ensureDatabase();
+
+  const recentCount = Math.min(Math.max(options?.recentCount ?? 20, 1), 100);
+  const taskType = options?.taskType ?? "all";
+  const filters = buildReviewFilters(userId, { taskType });
+  const rows = await db.query<WritingReviewStatsRow>(
+    `SELECT
+      task_type,
+      result_json,
+      estimated_band,
+      created_at
+     FROM writing_reviews
+     WHERE ${filters.whereClause}
+     ORDER BY created_at DESC
+     LIMIT $${filters.values.length + 1}`,
+    [...filters.values, recentCount]
+  );
+  const orderedRows = [...rows.rows].reverse();
+  const totalReviews = orderedRows.length;
+  const categoryCounts = new Map<string, number>();
+  let totalGrammarCorrections = 0;
+
+  orderedRows.forEach((row) => {
+    const grammarNotes = row.result_json.grammarRevision?.correctionNotes ?? row.result_json.correctionNotes ?? [];
+    grammarNotes.forEach((note) => {
+      const category = normalizeRevisionCategory(note.category);
+      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+      totalGrammarCorrections += 1;
+    });
+  });
+
+  const grammarCategoryBreakdown = Array.from(categoryCounts.entries())
+    .map(([category, count]) => ({
+      category,
+      count,
+      percentage: totalGrammarCorrections ? Number(((count / totalGrammarCorrections) * 100).toFixed(1)) : 0
+    }))
+    .sort((left, right) => right.count - left.count || left.category.localeCompare(right.category));
+
+  const scoreTrend = orderedRows.map((row, index) => ({
+    date: new Date(row.created_at).toISOString(),
+    label: `#${index + 1}`,
+    averageScore: Number(Number(row.estimated_band).toFixed(2)),
+    reviewCount: 1
+  }));
+
+  const stats: WritingReviewStats = {
+    taskType,
+    recentCount,
+    totalReviews,
+    totalGrammarCorrections,
+    grammarCategoryBreakdown,
+    scoreTrend
+  };
+
+  return stats;
 }
 
 export async function getWritingReview(userId: string, reviewId: string) {

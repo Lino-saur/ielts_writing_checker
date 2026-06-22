@@ -26,6 +26,7 @@ export type ImprovementItem = {
 
 export type CorrectionNote = {
   id: string;
+  category?: string;
   original: string;
   corrected: string;
   reason: string;
@@ -108,6 +109,32 @@ export type WritingReviewListItem = {
   providerUsed: ActiveProvider;
   hasImage: boolean;
   createdAt: string;
+  promptPreview: string;
+  essayPreview: string;
+};
+
+export type WritingReviewTaskFilter = "all" | TaskType;
+
+export type WritingReviewStatsCategoryItem = {
+  category: string;
+  count: number;
+  percentage: number;
+};
+
+export type WritingReviewScoreTrendPoint = {
+  date: string;
+  label: string;
+  averageScore: number | null;
+  reviewCount: number;
+};
+
+export type WritingReviewStats = {
+  taskType: WritingReviewTaskFilter;
+  recentCount: number;
+  totalReviews: number;
+  totalGrammarCorrections: number;
+  grammarCategoryBreakdown: WritingReviewStatsCategoryItem[];
+  scoreTrend: WritingReviewScoreTrendPoint[];
 };
 
 export type WritingReviewDetail = {
@@ -133,6 +160,10 @@ export type AdminUserStatus = "active" | "disabled";
 export type RechargeProvider = "manual" | "wechat" | "alipay";
 export type RechargeOrderStatus = "pending" | "paid" | "failed" | "cancelled";
 export type RechargePaymentMode = "redirect" | "qr_code" | "sdk" | "pending";
+export type PracticeQuestionSource = "cambridge_ielts";
+export type PracticeQuestionModule = "academic" | "general_training";
+export type PracticeQuestionContentStatus = "placeholder" | "complete";
+export type PracticeQuestionStatus = "draft" | "published" | "archived";
 
 export type FeedbackPayload = {
   kind: FeedbackKind;
@@ -238,4 +269,31 @@ export type RechargePaymentSession = {
   qrCodeUrl: string | null;
   clientPayload: Record<string, string | number | boolean | null> | null;
   message?: string;
+};
+
+
+export type PracticeQuestion = {
+  id: string;
+  source: PracticeQuestionSource;
+  module: PracticeQuestionModule;
+  bookNumber: number;
+  testNumber: number;
+  taskType: TaskType;
+  title: string;
+  tags: string[];
+  prompt: string;
+  sourceRef: string | null;
+  sourceUrl: string | null;
+  metadata: Record<string, unknown>;
+  imageSourceUrl: string | null;
+  imageSourceUrls: string[];
+  imageObjectKey: string | null;
+  imageName: string | null;
+  imageMimeType: string | null;
+  imageSizeBytes: number | null;
+  contentStatus: PracticeQuestionContentStatus;
+  status: PracticeQuestionStatus;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
 };

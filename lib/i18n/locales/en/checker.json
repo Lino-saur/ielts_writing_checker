@@ -122,6 +122,7 @@
   "reviseEmpty": "Select a highlighted revision to inspect the change.",
   "reviseOriginal": "Original",
   "reviseSuggested": "Suggested",
+  "revisionGenericCategory": "Revision",
   "layoutSplit": "Side by side",
   "layoutStack": "Stacked",
   "exportRevisionDoc": "Export Word",
@@ -156,5 +157,18 @@
   "historyResultTitle": "Saved result",
   "historyCreatedAt": "Created",
   "historyLoadError": "Failed to load review history.",
-  "historyNotFound": "This review could not be found."
+  "historyNotFound": "This review could not be found.",
+  "historyAnalyticsTitle": "History analytics",
+  "historyTaskFilterLabel": "Task filter",
+  "historyTaskFilterAll": "All tasks",
+  "historyRecentCountLabel": "Recent review count",
+  "historyRecentCountSuffix": "reviews",
+  "historyStatsLoadError": "Failed to load review analytics.",
+  "historyStatsTotalReviews": "Reviews in scope",
+  "historyStatsTotalGrammarFixes": "Grammar corrections",
+  "historyGrammarPieTitle": "Grammar category share",
+  "historyGrammarPieBody": "Counted from grammar-stage corrections within the current filter.",
+  "historyScoreTrendTitle": "Score trend",
+  "historyScoreTrendBody": "Estimated band movement across the most recent reviews in chronological order.",
+  "historyChartEmpty": "There is no chart data in the current filter."
 }
