@@ -2074,25 +2074,94 @@ html[data-theme="dark"] .checkerEssayInput:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding-top: 4px;
+  gap: 24px;
+  padding-top: 6px;
 }
 
 .checkerDraftMeta {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.checkerWordProgress {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 360px);
+}
+
+.checkerWordProgressHeader {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.checkerDraftStatus {
-  color: var(--muted);
-  font-size: 0.8rem;
+.checkerWordGuidance {
+  color: #9a6700;
+  font-size: 0.78rem;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.checkerWordProgress.is-ready .checkerWordGuidance {
+  color: #0f766e;
+}
+
+html[data-theme="dark"] .checkerWordGuidance {
+  color: #fbbf24;
+}
+
+html[data-theme="dark"] .checkerWordProgress.is-ready .checkerWordGuidance {
+  color: #6ee7b7;
+}
+
+.checkerWordProgressTrack {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.checkerWordProgressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #f59e0b;
+  transition: width 180ms ease, background-color 180ms ease;
+}
+
+.checkerWordProgress.is-ready .checkerWordProgressFill {
+  background: #10b981;
+}
+
+.checkerDraftStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.checkerDraftStatus::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #10b981;
+  content: "";
 }
 
 .checkerDraftStatus.is-saving {
   color: var(--accent-deep);
+}
+
+.checkerDraftStatus.is-saving::before {
+  background: #f59e0b;
 }
 
 .checkerWordHint {
@@ -3376,8 +3445,8 @@ html[data-theme="dark"] .checkerEssayInput:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding-top: 4px;
+  gap: 24px;
+  padding-top: 6px;
 }
 
 .checkerWordHint {
@@ -4565,8 +4634,8 @@ html[data-theme="dark"] .checkerEssayInput:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding-top: 4px;
+  gap: 24px;
+  padding-top: 6px;
 }
 
 .checkerWordHint {

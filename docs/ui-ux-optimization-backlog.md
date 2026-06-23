@@ -3,7 +3,7 @@
 This document is the persistent implementation checklist for the agreed interaction and UI improvements.
 
 - [x] 1. Protect drafts: keep separate Task 1 / Task 2 drafts, auto-save locally, guard unsaved task switches, start blank, and provide an explicit “load example” action.
-- [ ] 2. Make word-count guidance task-specific: Task 1 ≥ 150 words, Task 2 ≥ 250 words, with remaining-word guidance.
+- [x] 2. Make word-count guidance task-specific: Task 1 ≥ 150 words, Task 2 ≥ 250 words, with remaining-word guidance.
 - [ ] 3. Fix the mobile revision-stage control being hidden with the layout control below 1080 px.
 - [ ] 4. Turn revision review into an actionable workspace: accept/ignore, previous/next, category filters, progress, accept-all grammar, copy revised essay, and re-check.
 - [ ] 5. Improve long-running review feedback with persistent progress, elapsed-time guidance, skeleton states, and inline failures.

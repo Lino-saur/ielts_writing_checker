@@ -410,7 +410,10 @@ function CheckerPageContent() {
   const sessionReady = sessionResolved;
   const isAuthenticated = Boolean(sessionContext.user);
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
-  const wordCountTone = wordCount < 220 ? "low" : wordCount <= 320 ? "ready" : "extended";
+  const minimumWordCount = taskType === "task1" ? 150 : 250;
+  const remainingWordCount = Math.max(0, minimumWordCount - wordCount);
+  const wordCountProgress = Math.min(100, Math.round((wordCount / minimumWordCount) * 100));
+  const wordCountTone = remainingWordCount > 0 ? "low" : "ready";
   const promptEditLabel = promptEditing ? t.doneEditing : t.editPrompt;
   const currentRevisionStage = useMemo(
     () =>
@@ -1469,6 +1472,11 @@ function CheckerPageContent() {
             <div className="checkerDraftHeader">
               <div>
                 <h2>{t.essay}</h2>
+                {draftReady ? (
+                  <span className={`checkerDraftStatus${draftDirty ? " is-saving" : ""}`} aria-live="polite">
+                    {draftDirty ? t.draftSaving : t.draftSaved}
+                  </span>
+                ) : null}
               </div>
               <label className="checkerInlineSelect">
                 <span>{t.targetBand}</span>
@@ -1508,15 +1516,31 @@ function CheckerPageContent() {
 
             <div className="checkerDraftFooter">
               <div className="checkerDraftMeta">
-                <span className={`checkerWordHint is-${wordCountTone}`}>
-                  <strong>{wordCount}</strong>
-                  <span>{t.wordCount}</span>
-                </span>
-                {draftReady ? (
-                  <span className={`checkerDraftStatus${draftDirty ? " is-saving" : ""}`} aria-live="polite">
-                    {draftDirty ? t.draftSaving : t.draftSaved}
+                <div className={`checkerWordProgress is-${wordCountTone}`}>
+                  <div className="checkerWordProgressHeader">
+                    <span className={`checkerWordHint is-${wordCountTone}`}>
+                      <strong>{wordCount}</strong>
+                      <span>
+                        / {minimumWordCount} {t.wordsUnit}
+                      </span>
+                    </span>
+                    <span className="checkerWordGuidance">
+                      {remainingWordCount > 0
+                        ? t.wordCountRemaining.replace("{count}", String(remainingWordCount))
+                        : t.wordCountReady}
+                    </span>
+                  </div>
+                  <span
+                    className="checkerWordProgressTrack"
+                    role="progressbar"
+                    aria-label={t.wordCountProgressLabel}
+                    aria-valuemin={0}
+                    aria-valuemax={minimumWordCount}
+                    aria-valuenow={Math.min(wordCount, minimumWordCount)}
+                  >
+                    <span className="checkerWordProgressFill" style={{ width: `${wordCountProgress}%` }} />
                   </span>
-                ) : null}
+                </div>
               </div>
               <ActionButton type="submit" variant="primary" disabled={loading || !sessionReady || !draftReady}>
                 {loading ? t.checking : isAuthenticated ? t.checkWriting : t.checkWritingLocked}
