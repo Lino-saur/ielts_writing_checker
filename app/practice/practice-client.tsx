@@ -75,7 +75,7 @@ export default function PracticePageClient() {
   }, [t.loadFailed, isAuthenticated]);
 
   const books = useMemo(() => {
-    return [...new Set(items.map((item) => item.bookNumber))].sort((left, right) => left - right);
+    return [...new Set(items.map((item) => item.bookNumber))].sort((left, right) => right - left);
   }, [items]);
 
   const tags = useMemo(() => {
@@ -123,7 +123,7 @@ export default function PracticePageClient() {
           </div>
           <div className="practiceHeroStats">
             <Pill>
-              {items.length || 128} {t.questionCount}
+              {items.length || 136} {t.questionCount}
             </Pill>
             <Pill>{t.task1}</Pill>
             <Pill>{t.task2}</Pill>

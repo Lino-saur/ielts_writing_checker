@@ -153,7 +153,7 @@ try {
       (book_number * 100) + (test_number * 10) + CASE WHEN task_type = 'task1' THEN 1 ELSE 2 END,
       NOW(),
       NOW()
-    FROM generate_series(5, 20) AS book_number
+    FROM generate_series(5, 21) AS book_number
     CROSS JOIN generate_series(1, 4) AS test_number
     CROSS JOIN (VALUES ('task1'), ('task2')) AS task_types(task_type)
     ON CONFLICT (source, module, book_number, test_number, task_type) DO NOTHING

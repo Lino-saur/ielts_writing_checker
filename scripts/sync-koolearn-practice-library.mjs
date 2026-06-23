@@ -5,6 +5,8 @@ const { Pool } = pg;
 
 const BASE_URL = "https://liuxue.koolearn.com";
 const INDEX_URL = `${BASE_URL}/ielts/write-0-0-0/`;
+const MIN_BOOK_NUMBER = 5;
+const MAX_BOOK_NUMBER = 21;
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const args = new Map(
@@ -538,10 +540,15 @@ try {
 
   const indexHtml = await fetchHtml(INDEX_URL);
   const indexData = extractNextData(indexHtml, INDEX_URL);
+  const seenQuestionIds = new Set();
   const questions = collectQuestionNodes(indexData)
     .filter((question) => {
       const parsed = parseQuestionName(question.questionName ?? "");
-      if (!parsed || parsed.bookNumber < 5 || parsed.bookNumber > 20) {
+      if (
+        !parsed ||
+        parsed.bookNumber < MIN_BOOK_NUMBER ||
+        parsed.bookNumber > MAX_BOOK_NUMBER
+      ) {
         return false;
       }
       if (onlyBookNumber !== null && parsed.bookNumber !== onlyBookNumber) {
@@ -550,6 +557,11 @@ try {
       if (onlyQuestionName && formatQuestionName(parsed) !== onlyQuestionName) {
         return false;
       }
+      if (seenQuestionIds.has(question.id)) {
+        return false;
+      }
+
+      seenQuestionIds.add(question.id);
 
       return true;
     })

@@ -139,7 +139,7 @@ export async function listPracticeQuestions(filters: PracticeQuestionFilters = {
        updated_at
      FROM practice_questions
      ${whereSql}
-     ORDER BY sort_order ASC, book_number ASC, test_number ASC, task_type ASC
+     ORDER BY book_number DESC, test_number ASC, task_type ASC
      LIMIT ${limitRef} OFFSET ${offsetRef}`,
     values
   );

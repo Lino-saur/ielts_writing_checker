@@ -150,11 +150,11 @@ Returns one saved review, including the original prompt, essay, and scored resul
 
 ### `GET /api/practice/questions`
 
-Returns the signed-in user's Cambridge IELTS 5-20 practice question library index. The synced library contains 128 published Academic Writing questions:
+Returns the signed-in user's Cambridge IELTS 5-21 practice question library index. The synced library contains 136 published Academic Writing questions:
 
 - `source=cambridge_ielts`
 - `module=academic`
-- `book=5` through `book=20`
+- `book=5` through `book=21`
 - `test=1` through `test=4`
 - `taskType=task1` or `task2`
 - `title` normalized to question codes such as `C8-T3-T2`
