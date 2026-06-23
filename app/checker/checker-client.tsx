@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppNavbar } from "@/components/app-navbar";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
@@ -54,6 +54,28 @@ type UploadedTaskImage = {
   previewUrl: string;
 };
 
+type StoredCheckerDraft = {
+  prompt: string;
+  essay: string;
+  targetBand: TargetBand;
+  updatedAt: string;
+};
+
+type SessionCheckerDraft = StoredCheckerDraft & {
+  taskImage: UploadedTaskImage | null;
+};
+
+type PendingTaskNavigation = {
+  taskType: TaskType;
+  href: string;
+};
+
+type LoadedDraftContext = {
+  storageKey: string;
+  scope: string;
+  ownerId: string;
+};
+
 type PracticeQuestionPayload = {
   question: {
     id: string;
@@ -73,6 +95,43 @@ const TASK1_COMPRESSION_THRESHOLD_BYTES = 1.2 * 1024 * 1024;
 const TASK1_MAX_IMAGE_DIMENSION = 1800;
 const TASK1_COMPRESSED_MIME_TYPE = "image/jpeg";
 const TASK1_COMPRESSED_QUALITY = 0.85;
+const DRAFT_STORAGE_PREFIX = "ielts-writing-checker:draft:v1";
+const DRAFT_SAVE_DELAY_MS = 600;
+
+function getDraftStorageScope(taskType: TaskType, practiceId: string | null) {
+  return practiceId ? `practice:${practiceId}:${taskType}` : `freeform:${taskType}`;
+}
+
+function getDraftStorageKey(ownerId: string, taskType: TaskType, practiceId: string | null) {
+  return `${DRAFT_STORAGE_PREFIX}:user:${encodeURIComponent(ownerId)}:${getDraftStorageScope(taskType, practiceId)}`;
+}
+
+function isTargetBand(value: unknown): value is TargetBand {
+  return value === 5 || value === 5.5 || value === 6 || value === 6.5 || value === 7 || value === 7.5 || value === 8;
+}
+
+function readStoredDraft(storageKey: string): StoredCheckerDraft | null {
+  try {
+    const rawDraft = window.localStorage.getItem(storageKey);
+    if (!rawDraft) {
+      return null;
+    }
+
+    const draft = JSON.parse(rawDraft) as Partial<StoredCheckerDraft>;
+    if (typeof draft.prompt !== "string" || typeof draft.essay !== "string" || !isTargetBand(draft.targetBand)) {
+      return null;
+    }
+
+    return {
+      prompt: draft.prompt,
+      essay: draft.essay,
+      targetBand: draft.targetBand,
+      updatedAt: typeof draft.updatedAt === "string" ? draft.updatedAt : new Date().toISOString()
+    };
+  } catch {
+    return null;
+  }
+}
 
 async function readResponseError(response: Response) {
   const contentType = response.headers.get("content-type") || "";
@@ -309,14 +368,17 @@ function CheckerPageContent() {
   const activeEditRef = useRef<HTMLDivElement | null>(null);
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
   const taskImageInputRef = useRef<HTMLInputElement | null>(null);
+  const sessionDraftsRef = useRef(new Map<string, SessionCheckerDraft>());
+  const loadedDraftContextRef = useRef<LoadedDraftContext | null>(null);
   const [locale, setLocale] = useRouteLocale();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const practiceId = searchParams.get("practiceId");
   const provider: AiProvider = "deepseek";
-  const [taskType, setTaskType] = useState<TaskType>("task2");
+  const [taskType, setTaskType] = useState<TaskType>(searchParams.get("task") === "task1" ? "task1" : "task2");
   const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
-  const [prompt, setPrompt] = useState(TASK2_PLACEHOLDER.prompt);
-  const [essay, setEssay] = useState(TASK2_PLACEHOLDER.essay);
+  const [prompt, setPrompt] = useState("");
+  const [essay, setEssay] = useState("");
   const [taskImage, setTaskImage] = useState<UploadedTaskImage | null>(null);
   const [taskImageUploading, setTaskImageUploading] = useState(false);
   const [result, setResult] = useState<WritingCheckResult | null>(null);
@@ -330,6 +392,10 @@ function CheckerPageContent() {
   const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
   const [promptEditing, setPromptEditing] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [loadExampleDialogOpen, setLoadExampleDialogOpen] = useState(false);
+  const [pendingTaskNavigation, setPendingTaskNavigation] = useState<PendingTaskNavigation | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
   const [reportView, setReportView] = useState<ReportView>("overview");
   const [reviseLayout, setReviseLayout] = useState<ReviseLayout>("split");
   const [feedbackChoice, setFeedbackChoice] = useState<FeedbackChoice | null>(null);
@@ -373,6 +439,145 @@ function CheckerPageContent() {
     [parsedRevision, locale]
   );
   const isTask1 = taskType === "task1";
+  const draftOwnerId = sessionContext.user?.id ?? "guest";
+  const currentDraftScope = useMemo(
+    () => getDraftStorageScope(taskType, practiceId),
+    [practiceId, taskType]
+  );
+  const currentDraftStorageKey = useMemo(
+    () => getDraftStorageKey(draftOwnerId, taskType, practiceId),
+    [draftOwnerId, practiceId, taskType]
+  );
+
+  function persistCurrentDraft(storageKey = currentDraftStorageKey) {
+    const draft: SessionCheckerDraft = {
+      prompt,
+      essay,
+      targetBand,
+      taskImage,
+      updatedAt: new Date().toISOString()
+    };
+
+    sessionDraftsRef.current.set(storageKey, draft);
+
+    try {
+      const storedDraft: StoredCheckerDraft = {
+        prompt: draft.prompt,
+        essay: draft.essay,
+        targetBand: draft.targetBand,
+        updatedAt: draft.updatedAt
+      };
+      window.localStorage.setItem(storageKey, JSON.stringify(storedDraft));
+      setDraftDirty(false);
+    } catch {
+      // Keep the in-memory draft available for task switches when storage is unavailable.
+    }
+  }
+
+  function getAvailableDraft(storageKey: string) {
+    const sessionDraft = sessionDraftsRef.current.get(storageKey);
+    if (sessionDraft) {
+      return sessionDraft;
+    }
+
+    const storedDraft = readStoredDraft(storageKey);
+    return storedDraft ? { ...storedDraft, taskImage: null } : null;
+  }
+
+  function prepareDraft(storageKey: string, scope: string) {
+    const previousContext = loadedDraftContextRef.current;
+    if (previousContext && previousContext.storageKey !== storageKey) {
+      persistCurrentDraft(previousContext.storageKey);
+    }
+
+    let draft = getAvailableDraft(storageKey);
+    if (!draft) {
+      const legacyStorageKey = `${DRAFT_STORAGE_PREFIX}:${scope}`;
+      const legacyDraft = readStoredDraft(legacyStorageKey);
+
+      if (legacyDraft) {
+        draft = { ...legacyDraft, taskImage: null };
+        sessionDraftsRef.current.set(storageKey, draft);
+
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify(legacyDraft));
+          window.localStorage.removeItem(legacyStorageKey);
+        } catch {
+          // Keep the migrated draft in memory when storage is unavailable.
+        }
+      }
+    }
+
+    const shouldAdoptGuestDraft =
+      !draft &&
+      previousContext?.ownerId === "guest" &&
+      draftOwnerId !== "guest" &&
+      previousContext.scope === scope;
+
+    if (shouldAdoptGuestDraft) {
+      persistCurrentDraft(storageKey);
+      draft = getAvailableDraft(storageKey);
+    }
+
+    loadedDraftContextRef.current = {
+      storageKey,
+      scope,
+      ownerId: draftOwnerId
+    };
+
+    return draft;
+  }
+
+  function markDraftDirty() {
+    setDraftDirty(true);
+  }
+
+  function applyExampleDraft() {
+    const example = taskType === "task1" ? TASK1_PLACEHOLDER : TASK2_PLACEHOLDER;
+    if (taskImage) {
+      clearTask1Image();
+    }
+    setPrompt(example.prompt);
+    setEssay(example.essay);
+    setPromptEditing(false);
+    setResult(null);
+    setLoadExampleDialogOpen(false);
+    markDraftDirty();
+  }
+
+  function requestExampleDraft() {
+    if (!prompt.trim() && !essay.trim() && !taskImage) {
+      applyExampleDraft();
+      return;
+    }
+
+    setLoadExampleDialogOpen(true);
+  }
+
+  function handleTaskNavigate(nextTaskType: TaskType, href: string) {
+    if (nextTaskType === taskType && !practiceId) {
+      return;
+    }
+
+    if (draftDirty) {
+      setPendingTaskNavigation({ taskType: nextTaskType, href });
+      return;
+    }
+
+    persistCurrentDraft();
+    router.push(href);
+  }
+
+  function confirmTaskNavigation() {
+    if (!pendingTaskNavigation) {
+      return;
+    }
+
+    const { href } = pendingTaskNavigation;
+    persistCurrentDraft();
+    setPendingTaskNavigation(null);
+    router.push(href);
+  }
 
   function clearError() {
     setError(null);
@@ -390,10 +595,11 @@ function CheckerPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (practiceId) {
+    if (practiceId || !sessionReady) {
       return;
     }
 
+    setDraftReady(false);
     setResult(null);
     setActiveEditIndex(null);
     setActiveRevisionStage("optimization");
@@ -401,24 +607,23 @@ function CheckerPageContent() {
     setFeedbackComment("");
     setFeedbackSubmitted(false);
     setFeedbackError(null);
-
-    if (taskType === "task1") {
-      setPrompt(TASK1_PLACEHOLDER.prompt);
-      setEssay(TASK1_PLACEHOLDER.essay);
-      setTaskImage(null);
-    } else {
-      setPrompt(TASK2_PLACEHOLDER.prompt);
-      setEssay(TASK2_PLACEHOLDER.essay);
-      setTaskImage(null);
-    }
-  }, [practiceId, taskType]);
+    const draft = prepareDraft(currentDraftStorageKey, currentDraftScope);
+    setPrompt(draft?.prompt ?? "");
+    setEssay(draft?.essay ?? "");
+    setTargetBand(draft?.targetBand ?? 6.5);
+    setTaskImage(draft?.taskImage ?? null);
+    setPromptEditing(!draft?.prompt);
+    setDraftDirty(false);
+    setDraftReady(true);
+  }, [currentDraftScope, currentDraftStorageKey, practiceId, sessionReady, taskType]);
 
   useEffect(() => {
-    if (!practiceId) {
+    if (!practiceId || !sessionReady) {
       return;
     }
 
     let cancelled = false;
+    setDraftReady(false);
 
     async function loadPracticeQuestion() {
       clearError();
@@ -442,9 +647,24 @@ function CheckerPageContent() {
         }
 
         const question = data.question;
+        const practiceDraftScope = getDraftStorageScope(question.taskType, practiceId);
+        const practiceDraftKey = getDraftStorageKey(draftOwnerId, question.taskType, practiceId);
+        const savedDraft = prepareDraft(practiceDraftKey, practiceDraftScope);
+        const questionImage =
+          question.taskType === "task1" && question.imageObjectKey && question.imageName && question.imageMimeType
+            ? {
+                objectKey: question.imageObjectKey,
+                name: question.imageName,
+                mimeType: question.imageMimeType,
+                fileSize: question.imageSizeBytes ?? 0,
+                previewUrl: `/api/practice/questions/${encodeURIComponent(question.id)}/image`
+              }
+            : null;
+
         setTaskType(question.taskType);
-        setPrompt(question.prompt);
-        setEssay("");
+        setPrompt(savedDraft?.prompt ?? question.prompt);
+        setEssay(savedDraft?.essay ?? "");
+        setTargetBand(savedDraft?.targetBand ?? 6.5);
         setPromptEditing(false);
         setResult(null);
         setActiveEditIndex(null);
@@ -453,21 +673,15 @@ function CheckerPageContent() {
         setFeedbackComment("");
         setFeedbackSubmitted(false);
         setFeedbackError(null);
-
-        if (question.taskType === "task1" && question.imageObjectKey && question.imageName && question.imageMimeType) {
-          setTaskImage({
-            objectKey: question.imageObjectKey,
-            name: question.imageName,
-            mimeType: question.imageMimeType,
-            fileSize: question.imageSizeBytes ?? 0,
-            previewUrl: `/api/practice/questions/${encodeURIComponent(question.id)}/image`
-          });
-        } else {
-          setTaskImage(null);
-        }
+        setTaskImage(savedDraft?.taskImage ?? questionImage);
+        setDraftDirty(false);
       } catch {
         if (!cancelled) {
           showError(t.genericError);
+        }
+      } finally {
+        if (!cancelled) {
+          setDraftReady(true);
         }
       }
     }
@@ -477,20 +691,45 @@ function CheckerPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [practiceId, t.authRequired, t.genericError]);
+  }, [draftOwnerId, practiceId, sessionReady, t.authRequired, t.genericError]);
 
   useEffect(() => {
     return () => {
-      if (taskImage?.previewUrl) {
-        window.URL.revokeObjectURL(taskImage.previewUrl);
+      for (const draft of sessionDraftsRef.current.values()) {
+        if (draft.taskImage?.previewUrl.startsWith("blob:")) {
+          window.URL.revokeObjectURL(draft.taskImage.previewUrl);
+        }
       }
     };
-  }, [taskImage]);
+  }, []);
 
   useEffect(() => {
     setEnergy(sessionContext.energy as EnergyState | null);
     setReviewCost(sessionContext.reviewCost ?? 1);
   }, [sessionContext.energy, sessionContext.reviewCost]);
+
+  useEffect(() => {
+    if (!draftReady) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      persistCurrentDraft(currentDraftStorageKey);
+    }, DRAFT_SAVE_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [currentDraftStorageKey, draftReady, essay, prompt, targetBand, taskImage]);
+
+  useEffect(() => {
+    function handleBeforeUnload() {
+      if (draftReady && draftDirty) {
+        persistCurrentDraft(currentDraftStorageKey);
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [currentDraftStorageKey, draftDirty, draftReady, essay, prompt, targetBand, taskImage]);
 
   async function loadImageElement(file: Blob) {
     const objectUrl = window.URL.createObjectURL(file);
@@ -665,13 +904,15 @@ function CheckerPageContent() {
   }, [result]);
 
   useEffect(() => {
-    if (!confirmDialogOpen) {
+    if (!confirmDialogOpen && !loadExampleDialogOpen && !pendingTaskNavigation) {
       return;
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setConfirmDialogOpen(false);
+        setLoadExampleDialogOpen(false);
+        setPendingTaskNavigation(null);
       }
     }
 
@@ -679,7 +920,7 @@ function CheckerPageContent() {
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [confirmDialogOpen]);
+  }, [confirmDialogOpen, loadExampleDialogOpen, pendingTaskNavigation]);
 
   useEffect(() => {
     if (isAuthenticated && errorSource === "auth") {
@@ -840,6 +1081,7 @@ function CheckerPageContent() {
         fileSize: uploadFile.size,
         previewUrl
       });
+      markDraftDirty();
     } catch (uploadError) {
       const message = uploadError instanceof Error ? uploadError.message : "UPLOAD_FAILED";
       if (message === "MEDIA_UPLOAD_LIMIT_REACHED" || message === "MEDIA_UPLOADS_BLOCKED") {
@@ -867,6 +1109,7 @@ function CheckerPageContent() {
       window.URL.revokeObjectURL(taskImage.previewUrl);
     }
     setTaskImage(null);
+    markDraftDirty();
     if (taskImageInputRef.current) {
       taskImageInputRef.current.value = "";
     }
@@ -1020,6 +1263,81 @@ function CheckerPageContent() {
         </div>
       ) : null}
 
+      {loadExampleDialogOpen ? (
+        <div className="authDialogBackdrop" onClick={() => setLoadExampleDialogOpen(false)}>
+          <Surface
+            className="authDialog confirmDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="load-example-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="authDialogHeader confirmDialogHeader">
+              <div className="authCardIntro confirmDialogIntro">
+                <div>
+                  <h2 id="load-example-title">{t.loadExampleConfirmTitle}</h2>
+                  <p className="authHint">{t.loadExampleConfirmBody}</p>
+                </div>
+              </div>
+              <button type="button" className="authDialogClose" onClick={() => setLoadExampleDialogOpen(false)}>
+                <i className="ai-cross" aria-hidden="true" />
+                <span className="srOnly">{navbar.authClose}</span>
+              </button>
+            </div>
+            <section className="authCardInner confirmDialogBody">
+              <div className="confirmDialogActions">
+                <ActionButton type="button" variant="secondary" onClick={() => setLoadExampleDialogOpen(false)}>
+                  {t.loadExampleCancel}
+                </ActionButton>
+                <ActionButton type="button" variant="primary" onClick={applyExampleDraft}>
+                  {t.loadExampleConfirm}
+                </ActionButton>
+              </div>
+            </section>
+          </Surface>
+        </div>
+      ) : null}
+
+      {pendingTaskNavigation ? (
+        <div className="authDialogBackdrop" onClick={() => setPendingTaskNavigation(null)}>
+          <Surface
+            className="authDialog confirmDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="switch-task-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="authDialogHeader confirmDialogHeader">
+              <div className="authCardIntro confirmDialogIntro">
+                <div>
+                  <h2 id="switch-task-title">{t.switchTaskConfirmTitle}</h2>
+                  <p className="authHint">
+                    {t.switchTaskConfirmBody.replace(
+                      "{task}",
+                      pendingTaskNavigation.taskType === "task1" ? navbar.task1 : navbar.task2
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button type="button" className="authDialogClose" onClick={() => setPendingTaskNavigation(null)}>
+                <i className="ai-cross" aria-hidden="true" />
+                <span className="srOnly">{navbar.authClose}</span>
+              </button>
+            </div>
+            <section className="authCardInner confirmDialogBody">
+              <div className="confirmDialogActions">
+                <ActionButton type="button" variant="secondary" onClick={() => setPendingTaskNavigation(null)}>
+                  {t.switchTaskCancel}
+                </ActionButton>
+                <ActionButton type="button" variant="primary" onClick={confirmTaskNavigation}>
+                  {t.switchTaskConfirm}
+                </ActionButton>
+              </div>
+            </section>
+          </Surface>
+        </div>
+      ) : null}
+
       {confirmDialogOpen ? (
         <div className="authDialogBackdrop" onClick={() => setConfirmDialogOpen(false)}>
           <Surface className="authDialog confirmDialog" onClick={(event) => event.stopPropagation()}>
@@ -1075,6 +1393,7 @@ function CheckerPageContent() {
         energyBalance={energy?.balance ?? null}
         energyLabel={t.energy}
         authRequest={authRequest}
+        onTaskNavigate={handleTaskNavigate}
       />
 
       <section className="checkerStudio" id="workspace">
@@ -1083,6 +1402,11 @@ function CheckerPageContent() {
             <div className="checkerPromptHeader">
               <span>{t.prompt}</span>
               <div className="checkerPromptControls">
+                {!practiceId ? (
+                  <button type="button" className="checkerPromptEditButton" onClick={requestExampleDraft}>
+                    {t.loadExample}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="checkerPromptEditButton"
@@ -1094,7 +1418,15 @@ function CheckerPageContent() {
             </div>
             <div className="checkerPromptBody">
               {promptEditing ? (
-                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={4} />
+                <textarea
+                  value={prompt}
+                  onChange={(event) => {
+                    setPrompt(event.target.value);
+                    markDraftDirty();
+                  }}
+                  rows={4}
+                  placeholder={t.promptPlaceholder}
+                />
               ) : (
                 <p className="checkerPromptText">{prompt}</p>
               )}
@@ -1140,7 +1472,13 @@ function CheckerPageContent() {
               </div>
               <label className="checkerInlineSelect">
                 <span>{t.targetBand}</span>
-                <select value={targetBand} onChange={(event) => setTargetBand(Number(event.target.value) as TargetBand)}>
+                <select
+                  value={targetBand}
+                  onChange={(event) => {
+                    setTargetBand(Number(event.target.value) as TargetBand);
+                    markDraftDirty();
+                  }}
+                >
                   <option value={5}>5.0</option>
                   <option value={5.5}>5.5</option>
                   <option value={6}>6.0</option>
@@ -1159,17 +1497,28 @@ function CheckerPageContent() {
               <textarea
                 className="checkerEssayInput"
                 value={essay}
-                onChange={(event) => setEssay(event.target.value)}
+                onChange={(event) => {
+                  setEssay(event.target.value);
+                  markDraftDirty();
+                }}
                 rows={24}
+                placeholder={t.essayPlaceholder}
               />
             </label>
 
             <div className="checkerDraftFooter">
-              <span className={`checkerWordHint is-${wordCountTone}`}>
-                <strong>{wordCount}</strong>
-                <span>{t.wordCount}</span>
-              </span>
-              <ActionButton type="submit" variant="primary" disabled={loading || !sessionReady}>
+              <div className="checkerDraftMeta">
+                <span className={`checkerWordHint is-${wordCountTone}`}>
+                  <strong>{wordCount}</strong>
+                  <span>{t.wordCount}</span>
+                </span>
+                {draftReady ? (
+                  <span className={`checkerDraftStatus${draftDirty ? " is-saving" : ""}`} aria-live="polite">
+                    {draftDirty ? t.draftSaving : t.draftSaved}
+                  </span>
+                ) : null}
+              </div>
+              <ActionButton type="submit" variant="primary" disabled={loading || !sessionReady || !draftReady}>
                 {loading ? t.checking : isAuthenticated ? t.checkWriting : t.checkWritingLocked}
               </ActionButton>
             </div>

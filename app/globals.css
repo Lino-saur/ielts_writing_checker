@@ -2078,6 +2078,23 @@ html[data-theme="dark"] .checkerEssayInput:focus {
   padding-top: 4px;
 }
 
+.checkerDraftMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.checkerDraftStatus {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.checkerDraftStatus.is-saving {
+  color: var(--accent-deep);
+}
+
 .checkerWordHint {
   display: inline-flex;
   align-items: center;

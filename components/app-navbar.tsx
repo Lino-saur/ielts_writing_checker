@@ -23,6 +23,7 @@ type AppNavbarProps = {
     mode: AuthMode;
     id: number;
   } | null;
+  onTaskNavigate?: (task: "task1" | "task2", href: string) => void;
 };
 
 type AuthMode = "signIn" | "signUp";
@@ -72,7 +73,8 @@ export function AppNavbar({
   taskMenuMode = "all",
   energyBalance = null,
   energyLabel,
-  authRequest = null
+  authRequest = null,
+  onTaskNavigate
 }: AppNavbarProps) {
   const { sessionContext, sessionResolved, refreshSessionContext, setSessionContext } = useAuthSession();
   const themeSwitchId = useId();
@@ -589,7 +591,13 @@ export function AppNavbar({
                   href={checkerTask1Href}
                   className={activeTask === "task1" ? "active" : undefined}
                   role="menuitem"
-                  onClick={() => setTaskMenuOpen(false)}
+                  onClick={(event) => {
+                    setTaskMenuOpen(false);
+                    if (onTaskNavigate) {
+                      event.preventDefault();
+                      onTaskNavigate("task1", checkerTask1Href);
+                    }
+                  }}
                 >
                   {copy.task1}
                 </Link>
@@ -597,7 +605,13 @@ export function AppNavbar({
                   href={checkerTask2Href}
                   className={activeTask === "task2" ? "active" : undefined}
                   role="menuitem"
-                  onClick={() => setTaskMenuOpen(false)}
+                  onClick={(event) => {
+                    setTaskMenuOpen(false);
+                    if (onTaskNavigate) {
+                      event.preventDefault();
+                      onTaskNavigate("task2", checkerTask2Href);
+                    }
+                  }}
                 >
                   {copy.task2}
                 </Link>
