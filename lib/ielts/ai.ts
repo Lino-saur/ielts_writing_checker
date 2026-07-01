@@ -688,7 +688,7 @@ export async function buildAiScoreFeedback(input: CheckInput): Promise<WritingSc
   const minimumWords = input.taskType === "task1" ? 150 : 250;
   const systemPrompt = await loadBasePrompt();
   const visionProvider = getVisionProvider();
-  const prompt = await buildScorePrompt(input, minimumWords, shouldUseVisionModel(input) ? visionProvider : "deepseek");
+  const prompt = await buildScorePrompt(input, minimumWords);
 
   if (shouldUseVisionModel(input)) {
     if (visionProvider === "gemini") {

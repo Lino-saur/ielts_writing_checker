@@ -6,14 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint app components lib scripts tests --ext .ts,.tsx,.mjs --max-warnings=0",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "db:migrate": "tsx scripts/migrate-db.ts",
     "db:seed:practice": "node scripts/seed-practice-library.mjs",
     "db:sync:practice:koolearn": "node scripts/sync-koolearn-practice-library.mjs"
   },
   "dependencies": {
     "better-auth": "^1.6.11",
     "docx": "^9.7.1",
-    "next": "15.3.8",
+    "next": "15.5.19",
     "pg": "^8.21.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
@@ -24,6 +29,13 @@
     "@types/pg": "^8.20.0",
     "@types/react": "19.1.5",
     "@types/react-dom": "19.1.5",
-    "typescript": "5.8.3"
+    "eslint": "^8.57.1",
+    "eslint-config-next": "15.5.19",
+    "tsx": "^4.20.3",
+    "typescript": "5.8.3",
+    "vitest": "3.2.6"
+  },
+  "overrides": {
+    "postcss": "8.5.16"
   }
 }

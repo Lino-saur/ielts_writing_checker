@@ -6,6 +6,7 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
+const CURRENT_SCHEMA_VERSION = 1;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -49,6 +50,30 @@ export async function ensureDatabase() {
   }
 
   const initPromise = (async () => {
+    const migrationClient = await db.connect();
+
+    try {
+      const db = migrationClient;
+      await db.query("BEGIN");
+      await db.query("SELECT pg_advisory_xact_lock(hashtext('ielts-writing-checker-schema'))");
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          version INTEGER PRIMARY KEY,
+          applied_at TIMESTAMPTZ NOT NULL
+        );
+      `);
+      const appliedMigration = await db.query<{ version: number }>(
+        `SELECT COALESCE(MAX(version), 0)::integer AS version
+         FROM schema_migrations`
+      );
+      const appliedVersion = Number(appliedMigration.rows[0]?.version || 0);
+
+      if (appliedVersion >= CURRENT_SCHEMA_VERSION) {
+        await db.query("COMMIT");
+        return;
+      }
+
+      if (appliedVersion < 1) {
     await db.query(`
       CREATE TABLE IF NOT EXISTS energy_accounts (
         user_id TEXT PRIMARY KEY,
@@ -549,6 +574,18 @@ export async function ensureDatabase() {
         ('prod_energy_200', 'energy_200', '200 Energy', 200, 40, 5990, 'USD', 'active', 30, NOW(), NOW())
       ON CONFLICT (code) DO NOTHING;
     `);
+      await db.query(
+        `INSERT INTO schema_migrations (version, applied_at)
+         VALUES (1, NOW())`
+      );
+      }
+      await db.query("COMMIT");
+    } catch (error) {
+      await migrationClient.query("ROLLBACK");
+      throw error;
+    } finally {
+      migrationClient.release();
+    }
   })();
 
   globalForDb.__ieltsDbInitPromise = initPromise;

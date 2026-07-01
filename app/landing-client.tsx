@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { getMessages } from "@/lib/i18n/messages";
@@ -56,7 +57,14 @@ export default function LandingPageClient() {
           <div className="aroundProductHeroCopy">
             <div className="aroundProductHeroStage aroundProductHeroStagePoster">
               <div className="aroundProductHeroPoster" aria-hidden="true">
-                <img src="/hero.jpeg" alt="" />
+                <Image
+                  src="/hero.jpeg"
+                  alt=""
+                  fill
+                  priority
+                  quality={82}
+                  sizes="100vw"
+                />
               </div>
 
               <div className="aroundProductHeroPrimary aroundProductHeroPrimaryPoster">
@@ -119,7 +127,12 @@ export default function LandingPageClient() {
         <div className="aroundProductContainer">
           <div className="landingStoryCard landingStoryCardTask1">
             <div className="landingStoryVisual">
-              <img src="/around-product/review-paper.jpg" alt="" />
+              <Image
+                src="/around-product/review-paper.webp"
+                alt=""
+                fill
+                sizes="(max-width: 1080px) 100vw, 50vw"
+              />
               <div className="landingStoryVisualBadge">{t.sectionTwoBadge}</div>
             </div>
             <div className="landingStoryContent">
@@ -174,7 +187,12 @@ export default function LandingPageClient() {
               </ActionLink>
             </div>
             <div className="landingStoryVisual landingStoryVisualWide">
-              <img src="/around-product/proofreading-closeup.jpg" alt="" />
+              <Image
+                src="/around-product/proofreading-closeup.webp"
+                alt=""
+                fill
+                sizes="(max-width: 1080px) 100vw, 50vw"
+              />
               <div className="landingStoryFloatingNote">
                 <strong>{t.sectionThreeNoteTitle}</strong>
                 <p>{t.sectionThreeNoteBody}</p>
@@ -188,7 +206,12 @@ export default function LandingPageClient() {
         <div className="aroundProductContainer">
           <div className="landingStoryCard landingStoryCardHistory">
             <div className="landingStoryVisual">
-              <img src="/around-product/study-overhead.jpg" alt="" />
+              <Image
+                src="/around-product/study-overhead.webp"
+                alt=""
+                fill
+                sizes="(max-width: 1080px) 100vw, 50vw"
+              />
               <div className="landingTimelineCard">
                 <span>{t.sectionFourTimelineLabel}</span>
                 <strong>{t.sectionFourTimelineValue}</strong>
@@ -244,15 +267,15 @@ export default function LandingPageClient() {
 
               <div className="footerStats">
                 <div>
-                  <i className="ai-check-circle" aria-hidden="true" />
+                  <i className="ai-circle-check" aria-hidden="true" />
                   <span>{t.footerStatOne}</span>
                 </div>
                 <div>
-                  <i className="ai-edit-3" aria-hidden="true" />
+                  <i className="ai-edit" aria-hidden="true" />
                   <span>{t.footerStatTwo}</span>
                 </div>
                 <div>
-                  <i className="ai-layers" aria-hidden="true" />
+                  <i className="ai-layer" aria-hidden="true" />
                   <span>{t.footerStatThree}</span>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AuthSessionProvider } from "@/lib/auth-client-session";
 import { getServerSessionContext } from "@/lib/server-session-context";
+import "./around-icons.css";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
@@ -24,9 +25,6 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <head>
-        <link rel="stylesheet" href="/around-icons/around-icons.min.css" />
-      </head>
       <body>
         <AuthSessionProvider initialSessionContext={initialSessionContext}>{children}</AuthSessionProvider>
       </body>

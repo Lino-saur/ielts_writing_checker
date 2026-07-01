@@ -71,19 +71,25 @@ For local development against a local Postgres instance, you can also set:
 POSTGRES_SSL=false
 ```
 
-3. Run the Better Auth migration:
+3. Run the application database migrations:
+
+```bash
+npm run db:migrate
+```
+
+4. Run the Better Auth migration:
 
 ```bash
 npx auth@latest migrate --config ./lib/auth.ts --yes
 ```
 
-4. Start the app:
+5. Start the app:
 
 ```bash
 npm run dev
 ```
 
-5. Open:
+6. Open:
 
 ```text
 http://localhost:3000

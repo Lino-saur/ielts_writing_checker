@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   invalidateClientSessionContext,
   type ClientSessionContext,
@@ -144,6 +144,10 @@ export function AppNavbar({
         authNotice === copy.authVerificationPending ||
         authNotice === copy.authVerificationSent
     );
+  const refreshSession = useCallback(async () => {
+    await refreshSessionContext();
+    await onSessionUpdated?.();
+  }, [onSessionUpdated, refreshSessionContext]);
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("theme-mode");
@@ -173,7 +177,7 @@ export function AppNavbar({
           setAuthDialogOpen(true);
         });
     }
-  }, []);
+  }, [copy.authVerificationSuccess, refreshSession]);
 
   useEffect(() => {
     if (authDialogOpen || feedbackDialogOpen || rechargeDialogOpen || deleteDialogOpen) {
@@ -229,11 +233,6 @@ export function AppNavbar({
     window.localStorage.setItem("theme-mode", nextTheme);
   }
 
-  async function refreshSession() {
-    await refreshSessionContext();
-    await onSessionUpdated?.();
-  }
-
   function openAuth(mode: AuthMode) {
     setAuthMode(mode);
     setAuthError(null);
@@ -247,13 +246,6 @@ export function AppNavbar({
     setFeedbackError(null);
     setFeedbackSubmitted(false);
     setFeedbackDialogOpen(true);
-  }
-
-  function openRechargeDialog() {
-    setRechargeContact("");
-    setRechargeError(null);
-    setRechargeSubmitted(false);
-    setRechargeDialogOpen(true);
   }
 
   function openDeleteDialog() {
@@ -562,7 +554,9 @@ export function AppNavbar({
       <Surface as="header" className="aroundNavbar">
         <Link className="aroundNavBrand" href={homeHref}>
           <span className="aroundBrandIcon" aria-hidden="true">
-            <img src="/app-icons/icon.png" alt="" className="aroundBrandIconImage" />
+            {/* The 8 KB local icon is cheaper than loading the Next Image client runtime on every route. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/app-icons/icon.png" alt="" width="34" height="34" className="aroundBrandIconImage" />
           </span>
           <span className="aroundBrandFull">{copy.brand}</span>
           <span className="aroundBrandCompact">IELTS</span>

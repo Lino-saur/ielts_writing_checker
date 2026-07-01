@@ -1,0 +1,35 @@
+@font-face {
+  font-family: "around-icons";
+  src: url("/around-icons/around-icons.woff2") format("woff2");
+  font-display: swap;
+}
+
+[class*=" ai-"]::before,
+[class^="ai-"]::before {
+  font-family: "around-icons" !important;
+  font-style: normal;
+  font-variant: normal;
+  font-weight: 400 !important;
+  line-height: 1;
+  text-transform: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ai-arrow-right::before { content: "\f10e"; }
+.ai-chevron-down::before { content: "\f13f"; }
+.ai-chevron-up::before { content: "\f142"; }
+.ai-circle-check::before { content: "\f14e"; }
+.ai-cross::before { content: "\f167"; }
+.ai-edit::before { content: "\f17e"; }
+.ai-hide::before { content: "\f1a5"; }
+.ai-layer::before { content: "\f1ae"; }
+.ai-layout-column::before { content: "\f1b1"; }
+.ai-layout-row::before { content: "\f1b3"; }
+.ai-lock-closed::before { content: "\f1b9"; }
+.ai-mail::before { content: "\f1be"; }
+.ai-moon::before { content: "\f1cf"; }
+.ai-settings-filled::before { content: "\f202"; }
+.ai-show::before { content: "\f207"; }
+.ai-sun::before { content: "\f221"; }
+.ai-user::before { content: "\f23e"; }

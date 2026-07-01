@@ -1,14 +1,19 @@
 "use client";
 
-import { ChangeEvent, FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppNavbar } from "@/components/app-navbar";
 import { useAuthSession } from "@/lib/auth-client-session";
-import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
-import { CheckerMessages, getMessages } from "@/lib/i18n/messages";
+import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
-import type { AiProvider, CorrectionNote, FeedbackPayload, Locale, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
+import type { AiProvider, FeedbackPayload, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
+import {
+  groupRevisionEditsByCategory,
+  parseAnnotatedEssay,
+  renderAnnotatedEssay,
+  ScoreCard
+} from "./checker-revision";
 
 const TASK1_PLACEHOLDER = {
   prompt:
@@ -34,11 +39,6 @@ type EnergyState = {
   totalConsumed: number;
   totalRecharged: number;
   updatedAt: string;
-};
-
-type EnergyPayload = {
-  energy: EnergyState;
-  cost: number;
 };
 
 type ErrorSource = "auth" | "general";
@@ -155,214 +155,6 @@ async function readResponseError(response: Response) {
   }
 }
 
-function ScoreCard({
-  label,
-  score,
-  rationale
-}: {
-  label: string;
-  score: number;
-  rationale: string;
-}) {
-  return (
-    <article className="scoreCard">
-      <div className="scoreHeader">
-        <div>
-          <p className="sectionLabel">{label}</p>
-          <h3>{score.toFixed(1)}</h3>
-        </div>
-      </div>
-      <p>{rationale}</p>
-    </article>
-  );
-}
-
-function parseAnnotatedEssay(text: string, correctionNotes: CorrectionNote[]) {
-  const notesById = new Map(correctionNotes.map((note) => [note.id, note]));
-  const parts: Array<
-    | { type: "plain"; text: string }
-    | { type: "edit"; id: string; original: string; corrected: string; note?: CorrectionNote; index: number }
-    | { type: "del" | "add"; text: string }
-  > = [];
-  const edits: Array<{
-    id: string;
-    original: string;
-    corrected: string;
-    note?: CorrectionNote;
-    index: number;
-  }> = [];
-  const pairPattern = /\[del#([A-Za-z0-9_-]+)\]([\s\S]*?)\[\/del#\1\]\[add#\1\]([\s\S]*?)\[\/add#\1\]/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let editIndex = 0;
-
-  while ((match = pairPattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: "plain", text: text.slice(lastIndex, match.index) });
-    }
-
-    const edit = {
-      id: match[1],
-      original: match[2],
-      corrected: match[3],
-      note: notesById.get(match[1]),
-      index: editIndex
-    };
-
-    parts.push({ type: "edit", ...edit });
-    edits.push(edit);
-    editIndex += 1;
-    lastIndex = pairPattern.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push({ type: "plain", text: text.slice(lastIndex) });
-  }
-
-  return { parts, edits };
-}
-
-function groupRevisionEditsByCategory(
-  edits: ReturnType<typeof parseAnnotatedEssay>["edits"],
-  locale: Locale
-) {
-  const groups = new Map<
-    string,
-    {
-      key: string;
-      label: string;
-      edits: typeof edits;
-    }
-  >();
-
-  edits.forEach((edit) => {
-    const key = edit.note?.category?.trim() || "other";
-    const existing = groups.get(key);
-
-    if (existing) {
-      existing.edits.push(edit);
-      return;
-    }
-
-    groups.set(key, {
-      key,
-      label: getRevisionCategoryLabel(key, locale),
-      edits: [edit]
-    });
-  });
-
-  return Array.from(groups.values());
-}
-
-function renderAnnotatedEssay(
-  text: string,
-  highlightedSentences: string[],
-  correctionNotes: CorrectionNote[],
-  activeEditIndex: number | null,
-  onToggleEdit: (index: number) => void,
-  t: CheckerMessages
-) {
-  const { parts } = parseAnnotatedEssay(text, correctionNotes);
-
-  function renderPlainTextSegment(segment: string, keyPrefix: string) {
-    if (!highlightedSentences.length) {
-      return <span key={keyPrefix}>{segment}</span>;
-    }
-
-    const normalizedCandidates = highlightedSentences.filter(Boolean);
-    if (!normalizedCandidates.length) {
-      return <span key={keyPrefix}>{segment}</span>;
-    }
-
-    const subparts: React.ReactNode[] = [];
-    let remaining = segment;
-    let cursor = 0;
-
-    while (remaining.length > 0) {
-      let matchedSentence = "";
-      let matchedIndex = -1;
-
-      for (const candidate of normalizedCandidates) {
-        const index = remaining.indexOf(candidate);
-        if (index !== -1 && (matchedIndex === -1 || index < matchedIndex)) {
-          matchedSentence = candidate;
-          matchedIndex = index;
-        }
-      }
-
-      if (matchedIndex === -1) {
-        subparts.push(<span key={`${keyPrefix}-tail-${cursor}`}>{remaining}</span>);
-        break;
-      }
-
-      if (matchedIndex > 0) {
-        subparts.push(
-          <span key={`${keyPrefix}-plain-${cursor}`}>{remaining.slice(0, matchedIndex)}</span>
-        );
-      }
-
-      subparts.push(
-        <mark key={`${keyPrefix}-highlight-${cursor}`} className="essayHighlight">
-          {matchedSentence}
-        </mark>
-      );
-
-      remaining = remaining.slice(matchedIndex + matchedSentence.length);
-      cursor += 1;
-    }
-
-    return <span key={keyPrefix}>{subparts}</span>;
-  }
-
-  return parts.map((part, index) => {
-    if (part.type === "edit") {
-      const isActive = activeEditIndex === part.index;
-
-      return (
-        <span
-          key={`edit-${part.index}-${index}`}
-          className={`editChip${isActive ? " active" : ""}`}
-          role="button"
-          tabIndex={0}
-          onClick={() => onToggleEdit(part.index)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onToggleEdit(part.index);
-            }
-          }}
-        >
-          <del className="essayDel">{part.original}</del>
-          <ins className="essayAdd">{part.corrected}</ins>
-          {part.note ? (
-            <span className={`editTooltip${isActive ? " visible" : ""}`}>
-              <strong>{t.correctionReason}:</strong> {part.note.reason}
-            </span>
-          ) : null}
-        </span>
-      );
-    }
-
-    if (part.type === "del") {
-      return (
-        <del key={index} className="essayDel">
-          {part.text}
-        </del>
-      );
-    }
-
-    if (part.type === "add") {
-      return (
-        <ins key={index} className="essayAdd">
-          {part.text}
-        </ins>
-      );
-    }
-
-    return renderPlainTextSegment(part.text, `plain-${index}`);
-  });
-}
-
 function CheckerPageContent() {
   const { sessionContext, sessionResolved, refreshSessionContext: refreshAuthSessionContext } = useAuthSession();
   const activeEditRef = useRef<HTMLDivElement | null>(null);
@@ -370,6 +162,12 @@ function CheckerPageContent() {
   const taskImageInputRef = useRef<HTMLInputElement | null>(null);
   const checkRequestIdRef = useRef<string | null>(null);
   const sessionDraftsRef = useRef(new Map<string, SessionCheckerDraft>());
+  const draftSnapshotRef = useRef<Omit<SessionCheckerDraft, "updatedAt">>({
+    prompt: "",
+    essay: "",
+    targetBand: 6.5,
+    taskImage: null
+  });
   const loadedDraftContextRef = useRef<LoadedDraftContext | null>(null);
   const [locale, setLocale] = useRouteLocale();
   const router = useRouter();
@@ -452,13 +250,17 @@ function CheckerPageContent() {
     () => getDraftStorageKey(draftOwnerId, taskType, practiceId),
     [draftOwnerId, practiceId, taskType]
   );
+  draftSnapshotRef.current = {
+    prompt,
+    essay,
+    targetBand,
+    taskImage
+  };
 
-  function persistCurrentDraft(storageKey = currentDraftStorageKey) {
+  const persistCurrentDraft = useCallback((storageKey: string) => {
+    const snapshot = draftSnapshotRef.current;
     const draft: SessionCheckerDraft = {
-      prompt,
-      essay,
-      targetBand,
-      taskImage,
+      ...snapshot,
       updatedAt: new Date().toISOString()
     };
 
@@ -476,9 +278,9 @@ function CheckerPageContent() {
     } catch {
       // Keep the in-memory draft available for task switches when storage is unavailable.
     }
-  }
+  }, []);
 
-  function getAvailableDraft(storageKey: string) {
+  const getAvailableDraft = useCallback((storageKey: string) => {
     const sessionDraft = sessionDraftsRef.current.get(storageKey);
     if (sessionDraft) {
       return sessionDraft;
@@ -486,9 +288,9 @@ function CheckerPageContent() {
 
     const storedDraft = readStoredDraft(storageKey);
     return storedDraft ? { ...storedDraft, taskImage: null } : null;
-  }
+  }, []);
 
-  function prepareDraft(storageKey: string, scope: string) {
+  const prepareDraft = useCallback((storageKey: string, scope: string) => {
     const previousContext = loadedDraftContextRef.current;
     if (previousContext && previousContext.storageKey !== storageKey) {
       persistCurrentDraft(previousContext.storageKey);
@@ -530,7 +332,7 @@ function CheckerPageContent() {
     };
 
     return draft;
-  }
+  }, [draftOwnerId, getAvailableDraft, persistCurrentDraft]);
 
   function markDraftDirty() {
     setDraftDirty(true);
@@ -568,7 +370,7 @@ function CheckerPageContent() {
       return;
     }
 
-    persistCurrentDraft();
+    persistCurrentDraft(currentDraftStorageKey);
     router.push(href);
   }
 
@@ -578,7 +380,7 @@ function CheckerPageContent() {
     }
 
     const { href } = pendingTaskNavigation;
-    persistCurrentDraft();
+    persistCurrentDraft(currentDraftStorageKey);
     setPendingTaskNavigation(null);
     router.push(href);
   }
@@ -619,7 +421,7 @@ function CheckerPageContent() {
     setPromptEditing(!draft?.prompt);
     setDraftDirty(false);
     setDraftReady(true);
-  }, [currentDraftScope, currentDraftStorageKey, practiceId, sessionReady, taskType]);
+  }, [currentDraftScope, currentDraftStorageKey, practiceId, prepareDraft, sessionReady, taskType]);
 
   useEffect(() => {
     if (!practiceId || !sessionReady) {
@@ -695,11 +497,12 @@ function CheckerPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [draftOwnerId, practiceId, sessionReady, t.authRequired, t.genericError]);
+  }, [draftOwnerId, practiceId, prepareDraft, sessionReady, t.authRequired, t.genericError]);
 
   useEffect(() => {
+    const sessionDrafts = sessionDraftsRef.current;
     return () => {
-      for (const draft of sessionDraftsRef.current.values()) {
+      for (const draft of sessionDrafts.values()) {
         if (draft.taskImage?.previewUrl.startsWith("blob:")) {
           window.URL.revokeObjectURL(draft.taskImage.previewUrl);
         }
@@ -722,7 +525,7 @@ function CheckerPageContent() {
     }, DRAFT_SAVE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [currentDraftStorageKey, draftReady, essay, prompt, targetBand, taskImage]);
+  }, [currentDraftStorageKey, draftReady, essay, persistCurrentDraft, prompt, targetBand, taskImage]);
 
   useEffect(() => {
     function handleBeforeUnload() {
@@ -733,7 +536,7 @@ function CheckerPageContent() {
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [currentDraftStorageKey, draftDirty, draftReady, essay, prompt, targetBand, taskImage]);
+  }, [currentDraftStorageKey, draftDirty, draftReady, essay, persistCurrentDraft, prompt, targetBand, taskImage]);
 
   async function loadImageElement(file: Blob) {
     const objectUrl = window.URL.createObjectURL(file);
@@ -1469,6 +1272,8 @@ function CheckerPageContent() {
                 ) : null}
                 {taskImage ? (
                   <div className="checkerUploadPreview">
+                    {/* The source is a local blob or authenticated endpoint, so it must bypass Next's server image optimizer. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={taskImage.previewUrl} alt={t.task1ImageLabel} className="checkerUploadPreviewImage" />
                   </div>
                 ) : null}

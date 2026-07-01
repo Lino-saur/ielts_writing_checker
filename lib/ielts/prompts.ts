@@ -1,4 +1,4 @@
-import { CheckInput, ProviderConfig, countWords, getLocale, getTargetBand } from "./shared";
+import { CheckInput, countWords, getLocale, getTargetBand } from "./shared";
 import { GRAMMAR_REVISION_CATEGORIES, OPTIMIZATION_REVISION_CATEGORIES } from "./revision-categories";
 
 const PROMPTS = {
@@ -170,7 +170,7 @@ function applyTemplate(template: string, values: Record<string, string | number>
   }, template);
 }
 
-export async function buildScorePrompt(input: CheckInput, minimumWords: number, _providerName: ProviderConfig["name"]) {
+export async function buildScorePrompt(input: CheckInput, minimumWords: number) {
   const locale = getLocale(input.locale);
   const targetBand = getTargetBand(input.targetBand);
   const outputLanguageInstruction =

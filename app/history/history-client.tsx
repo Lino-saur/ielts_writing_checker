@@ -1,14 +1,24 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import type { WritingReviewListItem, WritingReviewStats, WritingReviewTaskFilter } from "@/lib/types";
-import { describeTaskFilter, formatReviewTime, PieChart, ScoreTrendChart } from "./history-shared";
+import { describeTaskFilter, formatReviewTime } from "./history-shared";
+
+const PieChart = dynamic(
+  () => import("./history-charts").then((module) => module.PieChart),
+  { ssr: false, loading: () => <div className="historyChartEmpty" aria-hidden="true" /> }
+);
+const ScoreTrendChart = dynamic(
+  () => import("./history-charts").then((module) => module.ScoreTrendChart),
+  { ssr: false, loading: () => <div className="historyChartEmpty" aria-hidden="true" /> }
+);
 
 type EnergyState = {
   balance: number;
@@ -43,7 +53,7 @@ export default function HistoryPageClient() {
   const sessionReady = sessionResolved;
   const isAuthenticated = Boolean(sessionContext.user);
 
-  async function loadReviews() {
+  const loadReviews = useCallback(async () => {
     setLoadingList(true);
     setError(null);
 
@@ -67,9 +77,9 @@ export default function HistoryPageClient() {
     } finally {
       setLoadingList(false);
     }
-  }
+  }, [recentCount, t.historyLoadError, taskFilter]);
 
-  async function loadStats() {
+  const loadStats = useCallback(async () => {
     setLoadingStats(true);
     setStatsError(null);
 
@@ -94,7 +104,7 @@ export default function HistoryPageClient() {
     } finally {
       setLoadingStats(false);
     }
-  }
+  }, [recentCount, t.historyLoadError, t.historyStatsLoadError, taskFilter]);
 
   useEffect(() => {
     setEnergy(sessionContext.energy as EnergyState | null);
@@ -115,7 +125,7 @@ export default function HistoryPageClient() {
 
     void loadReviews();
     void loadStats();
-  }, [isAuthenticated, sessionReady, recentCount, taskFilter]);
+  }, [isAuthenticated, loadReviews, loadStats, sessionReady]);
 
   return (
     <main className="pageShell">

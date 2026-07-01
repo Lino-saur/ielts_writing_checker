@@ -10,6 +10,7 @@ export async function initializeRechargePayment(order: RechargeOrder): Promise<R
 }
 
 export async function handlePaymentWebhook(_request: Request): Promise<RechargeWebhookResult> {
+  void _request;
   return {
     received: true,
     ignored: true,
