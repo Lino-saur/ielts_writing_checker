@@ -11,6 +11,7 @@ import {
 import { evaluateWriting } from "@/lib/ielts";
 import { getEnergyState, getReviewEnergyCost } from "@/lib/energy";
 import { beginReviewRequest, failReviewRequest } from "@/lib/review-requests";
+import { getPracticeQuestion } from "@/lib/practice-library";
 import type { AiProvider, Locale, TargetBand, TaskType } from "@/lib/types";
 import {
   createWritingReview,
@@ -27,6 +28,7 @@ const PROVIDERS: AiProvider[] = ["deepseek", "gemini", "qianwen"];
 export const maxDuration = 300;
 
 type RequestBody = {
+  practiceId?: string;
   taskType?: TaskType;
   prompt?: string;
   essay?: string;
@@ -80,15 +82,39 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json({ error: "INVALID_IMAGE_NAME" }, { status: 400 });
     }
+    if (
+      body.practiceId !== undefined &&
+      (typeof body.practiceId !== "string" || body.practiceId.length < 1 || body.practiceId.length > 180)
+    ) {
+      return NextResponse.json({ error: "INVALID_PRACTICE_ID" }, { status: 400 });
+    }
+
+    let taskType = body.taskType;
+    let canonicalPrompt = prompt;
+    let taskImageObjectKey = body.taskImageObjectKey;
+    let taskImageName = body.taskImageName;
+
+    if (body.practiceId) {
+      const practiceQuestion = await getPracticeQuestion(body.practiceId);
+      if (!practiceQuestion || practiceQuestion.status !== "published") {
+        return NextResponse.json({ error: "PRACTICE_QUESTION_NOT_FOUND" }, { status: 404 });
+      }
+
+      taskType = practiceQuestion.taskType;
+      canonicalPrompt = practiceQuestion.prompt;
+      taskImageObjectKey = practiceQuestion.imageObjectKey ?? undefined;
+      taskImageName = practiceQuestion.imageName ?? undefined;
+    }
 
     const requestHash = createHash("sha256")
       .update(
         JSON.stringify({
-          taskType: body.taskType,
-          prompt,
+          practiceId: body.practiceId || null,
+          taskType,
+          prompt: canonicalPrompt,
           essay,
-          taskImageObjectKey: body.taskImageObjectKey || null,
-          taskImageName: body.taskImageName || null,
+          taskImageObjectKey: taskImageObjectKey || null,
+          taskImageName: taskImageName || null,
           provider: body.provider || null,
           locale: body.locale || null,
           targetBand: body.targetBand || null
@@ -125,17 +151,17 @@ export async function POST(request: Request) {
 
     reservedRequest = { userId: session.user.id, requestId };
     const loadedImage =
-      body.taskImageObjectKey && body.taskImageName
+      taskImageObjectKey && taskImageName
         ? await loadTaskImageInputFromObject({
             userId: session.user.id,
-            objectKey: body.taskImageObjectKey,
-            name: body.taskImageName
+            objectKey: taskImageObjectKey,
+            name: taskImageName
           })
         : null;
 
     const result = await evaluateWriting({
-      taskType: body.taskType,
-      prompt,
+      taskType,
+      prompt: canonicalPrompt,
       essay,
       taskImage: loadedImage?.taskImage ?? null,
       provider: body.provider,
@@ -145,9 +171,9 @@ export async function POST(request: Request) {
 
     const savedReview = await createWritingReview({
       userId: session.user.id,
-      prompt,
+      prompt: canonicalPrompt,
       essay,
-      taskImageObjectKey: loadedImage ? body.taskImageObjectKey || null : null,
+      taskImageObjectKey: loadedImage ? taskImageObjectKey || null : null,
       taskImageName: loadedImage?.taskImage.name ?? null,
       taskImageMimeType: loadedImage?.mimeType ?? null,
       taskImageSizeBytes: loadedImage?.sizeBytes ?? null,

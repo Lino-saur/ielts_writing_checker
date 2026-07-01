@@ -108,6 +108,7 @@ export type PracticeMessages = Record<string, string> & {
   emptyBody: string;
   authTitle: string;
   authBody: string;
+  authDialogHint: string;
   authLogin: string;
   authSignUp: string;
   imageReady: string;

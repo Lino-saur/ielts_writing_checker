@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
-import { ActionButton, Pill, Surface } from "@/components/ui-kit";
+import { Pill, Surface } from "@/components/ui-kit";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import { useAuthSession } from "@/lib/auth-client-session";
@@ -23,12 +23,14 @@ export default function PracticePageClient() {
   const { practice: t, navbar } = getMessages(locale);
   const { sessionContext, sessionResolved } = useAuthSession();
   const [items, setItems] = useState<PracticeQuestion[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bookFilter, setBookFilter] = useState("all");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskType>("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
+  const [pendingPracticeHref, setPendingPracticeHref] = useState<string | null>(null);
 
   const isAuthenticated = Boolean(sessionContext.user);
 
@@ -46,15 +48,12 @@ export default function PracticePageClient() {
         const payload = (await response.json()) as PracticePayload | { error?: string };
 
         if (!response.ok || !("items" in payload)) {
-          if (response.status === 401) {
-            setItems([]);
-            return;
-          }
           throw new Error("LOAD_FAILED");
         }
 
         if (!cancelled) {
           setItems(payload.items);
+          setTotal(payload.total);
         }
       } catch {
         if (!cancelled) {
@@ -104,6 +103,17 @@ export default function PracticePageClient() {
     });
   }
 
+  function requestPractice(checkerHref: string) {
+    setPendingPracticeHref(checkerHref);
+    openAuth("signIn");
+  }
+
+  function handleSessionUpdated() {
+    if (pendingPracticeHref) {
+      window.location.assign(pendingPracticeHref);
+    }
+  }
+
   return (
     <main className="pageShell practicePage">
       <AppNavbar
@@ -112,6 +122,8 @@ export default function PracticePageClient() {
         copy={navbar}
         taskMenuMode="all"
         authRequest={authRequest}
+        authHint={t.authDialogHint}
+        onSessionUpdated={handleSessionUpdated}
       />
 
       <section className="practiceHero">
@@ -123,7 +135,7 @@ export default function PracticePageClient() {
           </div>
           <div className="practiceHeroStats">
             <Pill>
-              {items.length || 136} {t.questionCount}
+              {total ?? "—"} {t.questionCount}
             </Pill>
             <Pill>{t.task1}</Pill>
             <Pill>{t.task2}</Pill>
@@ -134,19 +146,6 @@ export default function PracticePageClient() {
       {!sessionResolved || loading ? (
         <Surface className="practiceStatePanel">
           <p>{t.loading}</p>
-        </Surface>
-      ) : !isAuthenticated ? (
-        <Surface className="practiceStatePanel practiceAuthPanel">
-          <h2>{t.authTitle}</h2>
-          <p>{t.authBody}</p>
-          <div className="practiceAuthActions">
-            <ActionButton variant="primary" onClick={() => openAuth("signIn")}>
-              {t.authLogin}
-            </ActionButton>
-            <ActionButton variant="secondary" onClick={() => openAuth("signUp")}>
-              {t.authSignUp}
-            </ActionButton>
-          </div>
         </Surface>
       ) : (
         <section className="practiceWorkspace">
@@ -220,9 +219,19 @@ export default function PracticePageClient() {
                     <p className="practicePromptPreview">{item.prompt}</p>
 
                     <div className="practiceCardActions">
-                      <Link href={checkerHref} className="uiButton practiceStartButton">
-                        {t.startPractice}
-                      </Link>
+                      {isAuthenticated ? (
+                        <Link href={checkerHref} className="uiButton practiceStartButton">
+                          {t.startPractice}
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          className="uiButton practiceStartButton"
+                          onClick={() => requestPractice(checkerHref)}
+                        >
+                          {t.startPractice}
+                        </button>
+                      )}
                     </div>
                   </Surface>
                 );

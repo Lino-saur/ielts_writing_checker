@@ -18,6 +18,7 @@
   "emptyBody": "调整筛选条件后再试。",
   "authTitle": "登录后开始真题练习",
   "authBody": "真题练习与批改历史绑定到你的账号，请先登录或注册。",
+  "authDialogHint": "登录后开始真题练习，作文草稿会自动保存。",
   "authLogin": "去登录",
   "authSignUp": "去注册",
   "imageReady": "Task 1 图片已入库",

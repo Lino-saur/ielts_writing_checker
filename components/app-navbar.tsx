@@ -23,6 +23,7 @@ type AppNavbarProps = {
     mode: AuthMode;
     id: number;
   } | null;
+  authHint?: string;
   onTaskNavigate?: (task: "task1" | "task2", href: string) => void;
 };
 
@@ -74,6 +75,7 @@ export function AppNavbar({
   energyBalance = null,
   energyLabel,
   authRequest = null,
+  authHint,
   onTaskNavigate
 }: AppNavbarProps) {
   const { sessionContext, sessionResolved, refreshSessionContext, setSessionContext } = useAuthSession();
@@ -614,7 +616,7 @@ export function AppNavbar({
           )}
         </div>
 
-        <div className="aroundTaskMenu" ref={actionMenuRef}>
+        <div className="aroundTaskMenu aroundActionMenu" ref={actionMenuRef}>
           <button
             type="button"
             className={`aroundTaskMenuButton${actionMenuOpen ? " is-open" : ""}`}
@@ -670,7 +672,7 @@ export function AppNavbar({
               </ActionButton>
             ) : (
               <ActionButton
-                className="ghostAction"
+                className="ghostAction aroundSignOutAction"
                 onClick={async () => {
                   setMoreMenuOpen(false);
                   await handleSignOut();
@@ -698,6 +700,36 @@ export function AppNavbar({
           </button>
 
           <div id="app-navbar-menu" className={`aroundUtilityDropdown aroundMoreDropdown${moreMenuOpen ? " is-open" : ""}`} role="menu">
+            <div className="aroundMenuSection aroundMobileMenuSection">
+              <Link href={practiceHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                {copy.practiceEntry}
+              </Link>
+              <Link href={historyHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                {copy.historyEntry}
+              </Link>
+            </div>
+            {currentUser ? (
+              <div className="aroundMenuSection aroundMobileAccountSection">
+                <div className="aroundMobileAccountSummary">
+                  <span>{formatUser(currentUser, copy)}</span>
+                  {energyLabel ? (
+                    <strong>
+                      {energyLabel}: {effectiveEnergyBalance ?? "--"}
+                    </strong>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="aroundMenuActionButton"
+                  onClick={async () => {
+                    setMoreMenuOpen(false);
+                    await handleSignOut();
+                  }}
+                >
+                  {copy.authSignOut}
+                </button>
+              </div>
+            ) : null}
             <div className="aroundMenuSection">
               <div className="aroundMenuSectionLabel">{copy.languageLabel}</div>
               <div className="aroundSegmentedControl">
@@ -802,7 +834,7 @@ export function AppNavbar({
             <div className="authDialogHeader">
               <div className="authCardIntro">
                 <h2>{authMode === "signIn" ? copy.signInTab : copy.signUpTab}</h2>
-                <p className="authHint">{authMode === "signIn" ? copy.authHintSignIn : copy.authHintSignUp}</p>
+                <p className="authHint">{authMode === "signIn" ? authHint ?? copy.authHintSignIn : copy.authHintSignUp}</p>
               </div>
               <button type="button" className="authDialogClose" onClick={() => setAuthDialogOpen(false)} disabled={authSubmitting}>
                 <i className="ai-cross" aria-hidden="true" />

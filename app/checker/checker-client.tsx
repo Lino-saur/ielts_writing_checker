@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppNavbar } from "@/components/app-navbar";
 import { useAuthSession } from "@/lib/auth-client-session";
@@ -180,6 +180,7 @@ function CheckerPageContent() {
   const [essay, setEssay] = useState("");
   const [taskImage, setTaskImage] = useState<UploadedTaskImage | null>(null);
   const [taskImageUploading, setTaskImageUploading] = useState(false);
+  const [taskImageDragActive, setTaskImageDragActive] = useState(false);
   const [result, setResult] = useState<WritingCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorSource, setErrorSource] = useState<ErrorSource>("general");
@@ -189,6 +190,7 @@ function CheckerPageContent() {
   const [energy, setEnergy] = useState<EnergyState | null>(sessionContext.energy as EnergyState | null);
   const [reviewCost, setReviewCost] = useState(sessionContext.reviewCost ?? 1);
   const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
+  const [pendingReviewAfterAuth, setPendingReviewAfterAuth] = useState(false);
   const [promptEditing, setPromptEditing] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [loadExampleDialogOpen, setLoadExampleDialogOpen] = useState(false);
@@ -755,6 +757,7 @@ function CheckerPageContent() {
           "Idempotency-Key": requestId
         },
         body: JSON.stringify({
+          practiceId,
           taskType,
           provider,
           locale,
@@ -825,23 +828,20 @@ function CheckerPageContent() {
     }
   }
 
-  async function handleTask1ImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      setTaskImage(null);
-      return;
-    }
-
+  async function processTask1Image(file: File) {
     if (!file.type.startsWith("image/")) {
       showError(t.task1ImageTypeError);
-      event.target.value = "";
+      if (taskImageInputRef.current) {
+        taskImageInputRef.current.value = "";
+      }
       return;
     }
 
     if (file.size > TASK1_UPLOAD_LIMIT_BYTES) {
       showError(t.task1ImageSizeError);
-      event.target.value = "";
+      if (taskImageInputRef.current) {
+        taskImageInputRef.current.value = "";
+      }
       return;
     }
 
@@ -913,9 +913,35 @@ function CheckerPageContent() {
       } else {
         showError(t.task1ImageUploadError);
       }
-      event.target.value = "";
+      if (taskImageInputRef.current) {
+        taskImageInputRef.current.value = "";
+      }
     } finally {
       setTaskImageUploading(false);
+    }
+  }
+
+  async function handleTask1ImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    await processTask1Image(file);
+  }
+
+  function handleTask1ImageDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setTaskImageDragActive(false);
+
+    if (taskImageUploading) {
+      return;
+    }
+
+    const file = event.dataTransfer.files?.[0];
+    if (file) {
+      void processTask1Image(file);
     }
   }
 
@@ -1032,6 +1058,8 @@ function CheckerPageContent() {
     }
 
     if (!isAuthenticated) {
+      persistCurrentDraft(currentDraftStorageKey);
+      setPendingReviewAfterAuth(true);
       showError(t.authRequired, "auth");
       setAuthRequest({ mode: "signIn", id: Date.now() });
       return;
@@ -1044,6 +1072,23 @@ function CheckerPageContent() {
 
     setConfirmDialogOpen(true);
   }
+
+  const handleSessionUpdated = useCallback(() => {
+    if (!pendingReviewAfterAuth) {
+      return;
+    }
+
+    setPendingReviewAfterAuth(false);
+    setError(null);
+    setErrorSource("general");
+
+    if (isTask1 && !taskImage) {
+      setError(t.task1ImageRequired);
+      return;
+    }
+
+    setConfirmDialogOpen(true);
+  }, [isTask1, pendingReviewAfterAuth, t.task1ImageRequired, taskImage]);
 
   return (
     <main className="pageShell">
@@ -1208,31 +1253,46 @@ function CheckerPageContent() {
         energyBalance={energy?.balance ?? null}
         energyLabel={t.energy}
         authRequest={authRequest}
+        authHint={t.authDialogHint}
+        onSessionUpdated={handleSessionUpdated}
         onTaskNavigate={handleTaskNavigate}
       />
 
       <section className="checkerStudio" id="workspace">
         <Surface as="form" className="checkerWorkbench" onSubmit={handleSubmit}>
+          <div className="checkerTaskContext" aria-label={t.taskContextLabel}>
+            <Pill>{isTask1 ? navbar.task1 : navbar.task2}</Pill>
+            <div>
+              <strong>{t.taskContextLabel}</strong>
+              <span>{isTask1 ? t.task1ContextBody : t.task2ContextBody}</span>
+            </div>
+          </div>
+
           <div className="checkerField checkerPromptBlock">
             <div className="checkerPromptHeader">
               <span>{t.prompt}</span>
               <div className="checkerPromptControls">
-                {!practiceId ? (
+                {practiceId ? (
+                  <span className="checkerReadonlyBadge">{t.practiceReadonly}</span>
+                ) : (
+                  <>
                   <button type="button" className="checkerPromptEditButton" onClick={requestExampleDraft}>
                     {t.loadExample}
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="checkerPromptEditButton"
-                  onClick={() => setPromptEditing((value) => !value)}
-                >
-                  {promptEditLabel}
-                </button>
+                    <button
+                      type="button"
+                      className="checkerPromptEditButton"
+                      onClick={() => setPromptEditing((value) => !value)}
+                      disabled={promptEditing && !prompt.trim()}
+                    >
+                      {promptEditLabel}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             <div className="checkerPromptBody">
-              {promptEditing ? (
+              {promptEditing && !practiceId ? (
                 <textarea
                   value={prompt}
                   onChange={(event) => {
@@ -1252,32 +1312,59 @@ function CheckerPageContent() {
             <div className="checkerField checkerUploadBlock">
               <div className="checkerPromptHeader">
                 <span>{t.task1ImageLabel}</span>
+                {practiceId ? <span className="checkerReadonlyBadge">{t.practiceReadonly}</span> : null}
               </div>
               <div className="checkerPromptBody checkerUploadBody">
-                <p className="checkerUploadHint">{t.task1ImageHint}</p>
-                <input
-                  ref={taskImageInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => void handleTask1ImageChange(event)}
-                  disabled={taskImageUploading}
-                />
-                {taskImage ? (
-                  <div className="checkerUploadMeta">
-                    <span>{taskImage.name}</span>
-                    <button type="button" className="checkerPromptEditButton" onClick={clearTask1Image}>
-                      {t.task1ImageRemove}
-                    </button>
+                <p className="checkerUploadHint">{practiceId ? t.practiceImageHint : t.task1ImageHint}</p>
+                {practiceId ? (
+                  <div className={`checkerUploadDropzone is-readonly${taskImage ? " has-preview" : ""}`}>
+                    {taskImage ? (
+                      <>
+                        {/* The source is an authenticated endpoint, so it must bypass Next's server image optimizer. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={taskImage.previewUrl} alt={t.task1ImageLabel} className="checkerUploadPreviewImage" />
+                      </>
+                    ) : (
+                      <span className="checkerUploadReadonlyEmpty">{t.practiceImageUnavailable}</span>
+                    )}
                   </div>
-                ) : null}
-                {taskImage ? (
-                  <div className="checkerUploadPreview">
-                    {/* The source is a local blob or authenticated endpoint, so it must bypass Next's server image optimizer. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={taskImage.previewUrl} alt={t.task1ImageLabel} className="checkerUploadPreviewImage" />
-                  </div>
-                ) : null}
-                {taskImageUploading ? <p className="checkerUploadStatus">{t.task1ImageProcessing}</p> : null}
+                ) : (
+                  <label
+                    className={`checkerUploadDropzone${taskImage ? " has-preview" : ""}${taskImageDragActive ? " is-dragging" : ""}${taskImageUploading ? " is-uploading" : ""}`}
+                    onDragEnter={(event) => {
+                      event.preventDefault();
+                      if (!taskImageUploading) {
+                        setTaskImageDragActive(true);
+                      }
+                    }}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDragLeave={() => setTaskImageDragActive(false)}
+                    onDrop={handleTask1ImageDrop}
+                  >
+                    <input
+                      ref={taskImageInputRef}
+                      className="srOnly"
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => void handleTask1ImageChange(event)}
+                      disabled={taskImageUploading}
+                    />
+                  {taskImage ? (
+                    <>
+                      {/* The source is a local blob or authenticated endpoint, so it must bypass Next's server image optimizer. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={taskImage.previewUrl} alt={t.task1ImageLabel} className="checkerUploadPreviewImage" />
+                    </>
+                  ) : (
+                    <>
+                      <span className="checkerUploadDropIcon" aria-hidden="true" />
+                      <strong>{t.task1ImageDropTitle}</strong>
+                      <span className="checkerUploadDropBody">{t.task1ImageDropBody}</span>
+                    </>
+                  )}
+                  </label>
+                )}
+                {!practiceId && taskImageUploading ? <p className="checkerUploadStatus">{t.task1ImageProcessing}</p> : null}
               </div>
             </div>
           ) : null}
@@ -1292,24 +1379,30 @@ function CheckerPageContent() {
                   </span>
                 ) : null}
               </div>
-              <label className="checkerInlineSelect">
-                <span>{t.targetBand}</span>
-                <select
-                  value={targetBand}
-                  onChange={(event) => {
-                    setTargetBand(Number(event.target.value) as TargetBand);
-                    markDraftDirty();
-                  }}
-                >
-                  <option value={5}>5.0</option>
-                  <option value={5.5}>5.5</option>
-                  <option value={6}>6.0</option>
-                  <option value={6.5}>6.5</option>
-                  <option value={7}>7.0</option>
-                  <option value={7.5}>7.5</option>
-                  <option value={8}>8.0</option>
-                </select>
-              </label>
+              <div className="checkerTargetBandControl">
+                <label className="checkerInlineSelect">
+                  <span>{t.targetBand}</span>
+                  <select
+                    value={targetBand}
+                    aria-describedby="target-band-hint"
+                    onChange={(event) => {
+                      setTargetBand(Number(event.target.value) as TargetBand);
+                      markDraftDirty();
+                    }}
+                  >
+                    <option value={5}>5.0</option>
+                    <option value={5.5}>5.5</option>
+                    <option value={6}>6.0</option>
+                    <option value={6.5}>6.5</option>
+                    <option value={7}>7.0</option>
+                    <option value={7.5}>7.5</option>
+                    <option value={8}>8.0</option>
+                  </select>
+                </label>
+                <span id="target-band-hint" className="checkerTargetBandHint">
+                  {t.targetBandHint}
+                </span>
+              </div>
             </div>
 
             {error && errorSource !== "auth" ? <p className="errorBox">{error}</p> : null}
@@ -1328,8 +1421,13 @@ function CheckerPageContent() {
               />
             </label>
 
-            <div className="checkerDraftFooter">
+            <div className={`checkerDraftFooter${result ? "" : " is-mobile-sticky"}`}>
               <div className="checkerDraftMeta">
+                {draftReady ? (
+                  <span className={`checkerMobileDraftStatus${draftDirty ? " is-saving" : ""}`}>
+                    {draftDirty ? t.draftSaving : t.draftSaved}
+                  </span>
+                ) : null}
                 <div className={`checkerWordProgress is-${wordCountTone}`}>
                   <div className="checkerWordProgressHeader">
                     <span className={`checkerWordHint is-${wordCountTone}`}>

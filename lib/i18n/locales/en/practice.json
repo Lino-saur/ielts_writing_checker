@@ -18,6 +18,7 @@
   "emptyBody": "Adjust the filters and try again.",
   "authTitle": "Sign in to practice",
   "authBody": "Practice questions and review history are linked to your account.",
+  "authDialogHint": "Sign in to start practicing. Your writing draft will be saved automatically.",
   "authLogin": "Sign in",
   "authSignUp": "Create account",
   "imageReady": "Task 1 image saved",
