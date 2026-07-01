@@ -44,6 +44,9 @@ OPENAI_REASONING_EFFORT=medium
 DEEPSEEK_API_KEY=your_deepseek_key_here
 QIANWEN_API_KEY=your_qianwen_key_here
 QIANWEN_MODEL=qwen3.7-plus
+AI_REQUEST_TIMEOUT_MS=45000
+AI_VISION_REQUEST_TIMEOUT_MS=120000
+AI_DEBUG_LOGS=false
 
 BETTER_AUTH_SECRET=your_long_random_secret
 BETTER_AUTH_URL=http://localhost:3000
@@ -125,6 +128,8 @@ Recommended production setup:
 ### `POST /api/check`
 
 Runs a full review and consumes one unit of energy.
+Send a stable `Idempotency-Key` header (16-128 letters, numbers, `_` or `-`) for each logical review attempt.
+The same key can safely replay a completed response, but cannot be reused with a different payload.
 
 Request body:
 

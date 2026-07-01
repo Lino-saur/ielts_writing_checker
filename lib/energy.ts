@@ -130,7 +130,15 @@ export async function consumeEnergy(userId: string, amount = REVIEW_ENERGY_COST)
   }
 }
 
-export async function consumeEnergyInTransaction(client: PoolClient, userId: string, amount = REVIEW_ENERGY_COST) {
+export async function consumeEnergyInTransaction(
+  client: PoolClient,
+  userId: string,
+  amount = REVIEW_ENERGY_COST,
+  options?: {
+    source?: string;
+    orderId?: string | null;
+  }
+) {
   const state = mapEnergyRow(await lockEnergyAccount(client, userId));
 
   if (state.balance < amount) {
@@ -153,9 +161,53 @@ export async function consumeEnergyInTransaction(client: PoolClient, userId: str
   );
 
   await client.query(
-    `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, source, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [randomUUID(), userId, "consume", amount, nextState.balance, "review", updatedAt]
+    `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, order_id, source, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      randomUUID(),
+      userId,
+      "consume",
+      amount,
+      nextState.balance,
+      options?.orderId || null,
+      options?.source || "review",
+      updatedAt
+    ]
+  );
+
+  return nextState;
+}
+
+export async function refundReviewEnergyInTransaction(
+  client: PoolClient,
+  userId: string,
+  amount: number,
+  requestId: string
+) {
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("INVALID_ENERGY_AMOUNT");
+  }
+
+  const state = mapEnergyRow(await lockEnergyAccount(client, userId));
+  const updatedAt = new Date().toISOString();
+  const nextState: EnergyState = {
+    balance: state.balance + amount,
+    totalConsumed: Math.max(0, state.totalConsumed - amount),
+    totalRecharged: state.totalRecharged,
+    updatedAt
+  };
+
+  await client.query(
+    `UPDATE energy_accounts
+     SET balance = $1, total_consumed = $2, updated_at = $3
+     WHERE user_id = $4`,
+    [nextState.balance, nextState.totalConsumed, nextState.updatedAt, userId]
+  );
+
+  await client.query(
+    `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, order_id, source, created_at)
+     VALUES ($1, $2, 'refund', $3, $4, $5, 'review_refund', $6)`,
+    [randomUUID(), userId, amount, nextState.balance, requestId, updatedAt]
   );
 
   return nextState;

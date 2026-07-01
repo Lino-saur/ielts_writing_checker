@@ -52,6 +52,7 @@ export const auth = betterAuth({
           await client.query("BEGIN");
           await client.query("DELETE FROM admin_users WHERE auth_user_id = $1", [user.id]);
           await client.query("DELETE FROM feedback_entries WHERE user_id = $1", [user.id]);
+          await client.query("DELETE FROM ai_review_requests WHERE user_id = $1", [user.id]);
           await client.query("DELETE FROM energy_transactions WHERE user_id = $1", [user.id]);
           await client.query("DELETE FROM energy_accounts WHERE user_id = $1", [user.id]);
           await client.query("DELETE FROM recharge_orders WHERE user_id = $1", [user.id]);

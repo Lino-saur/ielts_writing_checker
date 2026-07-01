@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { db, ensureDatabase } from "./db";
 import { consumeEnergyInTransaction, getReviewEnergyCost } from "./energy";
 import { recordMediaUpload } from "./media-usage";
-import { getReviewImageObject, putReviewImageObject } from "./object-storage";
+import {
+  getReviewImageObject,
+  MAX_REVIEW_IMAGE_BYTES,
+  putReviewImageObject,
+  REVIEW_IMAGE_MIME_TYPES
+} from "./object-storage";
 import { normalizeRevisionCategory } from "./ielts/revision-categories";
 import type {
   TaskImageInput,
@@ -146,6 +151,7 @@ export async function createWritingReview(input: {
   taskImageName?: string | null;
   taskImageMimeType?: string | null;
   taskImageSizeBytes?: number | null;
+  reviewRequestId?: string | null;
   result: WritingCheckResult;
 }) {
   await ensureDatabase();
@@ -163,11 +169,28 @@ export async function createWritingReview(input: {
         }
       : null;
   const imageSizeBytes = image && "sizeBytes" in image ? image.sizeBytes ?? null : null;
+  const shouldRecordMediaUpload = Boolean(input.taskImage && imageSizeBytes);
   const client = await db.connect();
 
   try {
     await client.query("BEGIN");
-    const energy = await consumeEnergyInTransaction(client, input.userId, getReviewEnergyCost());
+    const energy = input.reviewRequestId
+      ? null
+      : await consumeEnergyInTransaction(client, input.userId, getReviewEnergyCost());
+
+    if (input.reviewRequestId) {
+      const reservation = await client.query<{ status: string }>(
+        `SELECT status
+         FROM ai_review_requests
+         WHERE id = $1 AND user_id = $2
+         FOR UPDATE`,
+        [input.reviewRequestId, input.userId]
+      );
+
+      if (reservation.rows[0]?.status !== "pending") {
+        throw new Error("INVALID_REVIEW_RESERVATION");
+      }
+    }
 
     await client.query(
       `INSERT INTO writing_reviews (
@@ -213,9 +236,18 @@ export async function createWritingReview(input: {
       ]
     );
 
+    if (input.reviewRequestId) {
+      await client.query(
+        `UPDATE ai_review_requests
+         SET status = 'completed', review_id = $3, error_code = NULL, updated_at = NOW()
+         WHERE id = $1 AND user_id = $2 AND status = 'pending'`,
+        [input.reviewRequestId, input.userId, reviewId]
+      );
+    }
+
     await client.query("COMMIT");
 
-    if (imageSizeBytes) {
+    if (shouldRecordMediaUpload && imageSizeBytes) {
       await recordMediaUpload(imageSizeBytes);
     }
 
@@ -399,16 +431,67 @@ export async function getWritingReviewImage(userId: string, reviewId: string) {
 }
 
 export async function loadTaskImageInputFromObject(input: {
+  userId: string;
   objectKey: string;
   name: string;
-  mimeType: string;
 }) {
+  const userKeyPrefix = `writing-reviews/${sanitizeObjectKeySegment(input.userId)}/`;
+  if (!input.objectKey.startsWith(userKeyPrefix)) {
+    const practiceImage = await db.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+        SELECT 1
+        FROM practice_questions
+        WHERE image_object_key = $1 AND status = 'published'
+      ) AS exists`,
+      [input.objectKey]
+    );
+    if (!practiceImage.rows[0]?.exists) {
+      throw new Error("INVALID_TASK_IMAGE_OBJECT");
+    }
+  }
+
   const response = await getReviewImageObject(input.objectKey);
-  const bytes = Buffer.from(await response.arrayBuffer());
+  const responseMimeType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "";
+  const declaredSize = Number(response.headers.get("content-length"));
+
+  if (!REVIEW_IMAGE_MIME_TYPES.has(responseMimeType)) {
+    await response.body?.cancel();
+    throw new Error("INVALID_IMAGE_TYPE");
+  }
+  if (Number.isFinite(declaredSize) && declaredSize > MAX_REVIEW_IMAGE_BYTES) {
+    await response.body?.cancel();
+    throw new Error("INVALID_IMAGE_SIZE");
+  }
+  if (!response.body) {
+    throw new Error("IMAGE_LOAD_FAILED");
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_REVIEW_IMAGE_BYTES) {
+      await reader.cancel();
+      throw new Error("INVALID_IMAGE_SIZE");
+    }
+    chunks.push(value);
+  }
+
+  const bytes = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), totalBytes);
 
   return {
-    name: input.name,
-    mimeType: input.mimeType,
-    dataUrl: `data:${input.mimeType};base64,${bytes.toString("base64")}`
-  } satisfies TaskImageInput;
+    taskImage: {
+      name: sanitizeFileName(input.name).slice(0, 180),
+      mimeType: responseMimeType,
+      dataUrl: `data:${responseMimeType};base64,${bytes.toString("base64")}`
+    } satisfies TaskImageInput,
+    sizeBytes: totalBytes,
+    mimeType: responseMimeType
+  };
 }

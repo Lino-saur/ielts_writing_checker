@@ -1,8 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
-import { assertMediaUploadAllowed } from "@/lib/media-usage";
-import { createPresignedReviewImageUploadUrl } from "@/lib/object-storage";
+import { apiErrorResponse, enforceRateLimit, readJsonBody } from "@/lib/api-security";
+import { reserveMediaUpload } from "@/lib/media-usage";
+import {
+  createPresignedReviewImageUploadUrl,
+  MAX_REVIEW_IMAGE_BYTES,
+  REVIEW_IMAGE_MIME_TYPES
+} from "@/lib/object-storage";
 
 type RequestBody = {
   fileName?: string;
@@ -22,26 +27,35 @@ function sanitizeFileName(value: string) {
 export async function POST(request: Request) {
   try {
     const session = await requireSession();
-    const body = (await request.json()) as RequestBody;
-    const mimeType = body.mimeType?.trim() || "";
+    await enforceRateLimit({
+      scope: "review-image-upload-url",
+      subject: session.user.id,
+      limit: 20,
+      windowSeconds: 60
+    });
+    const body = await readJsonBody<RequestBody>(request, 32 * 1024);
+    const mimeType = body.mimeType?.trim().toLowerCase() || "";
     const fileName = body.fileName?.trim() || "";
     const fileSize = Number(body.fileSize);
 
-    if (!mimeType.startsWith("image/")) {
+    if (!REVIEW_IMAGE_MIME_TYPES.has(mimeType)) {
       return NextResponse.json({ error: "INVALID_IMAGE_TYPE" }, { status: 400 });
     }
 
-    if (!Number.isFinite(fileSize) || fileSize <= 0) {
+    if (!Number.isInteger(fileSize) || fileSize <= 0 || fileSize > MAX_REVIEW_IMAGE_BYTES) {
       return NextResponse.json({ error: "INVALID_IMAGE_SIZE" }, { status: 400 });
     }
-
-    await assertMediaUploadAllowed(fileSize);
+    if (!fileName || fileName.length > 180) {
+      return NextResponse.json({ error: "INVALID_IMAGE_NAME" }, { status: 400 });
+    }
 
     const objectKey = `writing-reviews/${sanitizeSegment(session.user.id)}/${randomUUID()}/${sanitizeFileName(fileName)}`;
     const signed = createPresignedReviewImageUploadUrl({
       key: objectKey,
-      mimeType
+      mimeType,
+      contentLength: fileSize
     });
+    await reserveMediaUpload(fileSize);
 
     return NextResponse.json({
       objectKey,
@@ -49,13 +63,19 @@ export async function POST(request: Request) {
       headers: signed.headers
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error.";
+    const normalized = apiErrorResponse(error);
     const status =
-      message === "UNAUTHORIZED"
-        ? 401
-        : message === "MEDIA_UPLOAD_LIMIT_REACHED" || message === "MEDIA_UPLOADS_BLOCKED"
-          ? 429
-          : 500;
-    return NextResponse.json({ error: message }, { status });
+      normalized.message === "MEDIA_UPLOAD_LIMIT_REACHED" || normalized.message === "MEDIA_UPLOADS_BLOCKED"
+        ? 429
+        : normalized.status;
+    return NextResponse.json(
+      { error: normalized.message },
+      {
+        status,
+        headers: normalized.retryAfterSeconds
+          ? { "Retry-After": String(normalized.retryAfterSeconds) }
+          : undefined
+      }
+    );
   }
 }

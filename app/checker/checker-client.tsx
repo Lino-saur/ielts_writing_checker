@@ -368,6 +368,7 @@ function CheckerPageContent() {
   const activeEditRef = useRef<HTMLDivElement | null>(null);
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
   const taskImageInputRef = useRef<HTMLInputElement | null>(null);
+  const checkRequestIdRef = useRef<string | null>(null);
   const sessionDraftsRef = useRef(new Map<string, SessionCheckerDraft>());
   const loadedDraftContextRef = useRef<LoadedDraftContext | null>(null);
   const [locale, setLocale] = useRouteLocale();
@@ -940,12 +941,15 @@ function CheckerPageContent() {
   async function runCheck() {
     setLoading(true);
     clearError();
+    const requestId = checkRequestIdRef.current || window.crypto.randomUUID();
+    checkRequestIdRef.current = requestId;
 
     try {
       const response = await fetch("/api/check", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Idempotency-Key": requestId
         },
         body: JSON.stringify({
           taskType,
@@ -955,9 +959,7 @@ function CheckerPageContent() {
           prompt,
           essay,
           taskImageObjectKey: taskImage?.objectKey,
-          taskImageName: taskImage?.name,
-          taskImageMimeType: taskImage?.mimeType,
-          taskImageSizeBytes: taskImage?.fileSize
+          taskImageName: taskImage?.name
         })
       });
 
@@ -968,6 +970,10 @@ function CheckerPageContent() {
             cost: number;
           }
         | { error?: string; energy?: EnergyState; cost?: number };
+
+      if (response.ok || !isErrorPayload(data) || data.error !== "REVIEW_IN_PROGRESS") {
+        checkRequestIdRef.current = null;
+      }
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -984,7 +990,10 @@ function CheckerPageContent() {
           return;
         }
 
-        if (isErrorPayload(data) && data.error === "AI_REVIEW_FAILED") {
+        if (
+          isErrorPayload(data) &&
+          (data.error === "AI_REVIEW_FAILED" || data.error === "AI_REVIEW_TIMEOUT")
+        ) {
           window.alert(t.aiReviewFailedAlert);
           return;
         }

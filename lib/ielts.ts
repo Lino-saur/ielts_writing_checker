@@ -55,12 +55,16 @@ export async function evaluateWriting(input: CheckInput): Promise<WritingCheckRe
       providerUsed: score.providerUsed
     };
   } catch (error) {
+    const isTimeout =
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError" || error.message.toLowerCase().includes("timeout"));
     console.error("[IELTS_CHECK][AI_REVIEW_FAILED]", {
       taskType: input.taskType,
       locale: getLocale(input.locale),
       wordCount: countWords(input.essay || ""),
-      error: error instanceof Error ? error.message : String(error)
+      errorType: error instanceof Error ? error.name : typeof error,
+      timedOut: isTimeout
     });
-    throw new Error("AI_REVIEW_FAILED");
+    throw new Error(isTimeout ? "AI_REVIEW_TIMEOUT" : "AI_REVIEW_FAILED");
   }
 }

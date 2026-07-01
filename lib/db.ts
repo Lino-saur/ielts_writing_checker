@@ -262,6 +262,57 @@ export async function ensureDatabase() {
     `);
 
     await db.query(`
+      CREATE TABLE IF NOT EXISTS ai_review_requests (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        energy_cost INTEGER NOT NULL,
+        review_id TEXT,
+        error_code TEXT,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    await db.query(`
+      ALTER TABLE ai_review_requests
+      ADD COLUMN IF NOT EXISTS request_hash TEXT;
+    `);
+
+    await db.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ai_review_requests_user_idempotency_idx
+      ON ai_review_requests (user_id, id);
+    `);
+
+    await db.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS ai_review_requests_one_pending_per_user_idx
+      ON ai_review_requests (user_id)
+      WHERE status = 'pending';
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS ai_review_requests_user_created_idx
+      ON ai_review_requests (user_id, created_at DESC);
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS api_rate_limits (
+        scope TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        bucket_key BIGINT NOT NULL,
+        request_count INTEGER NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (scope, subject, bucket_key)
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS api_rate_limits_updated_idx
+      ON api_rate_limits (updated_at);
+    `);
+
+    await db.query(`
       CREATE TABLE IF NOT EXISTS practice_questions (
         id TEXT PRIMARY KEY,
         source TEXT NOT NULL,

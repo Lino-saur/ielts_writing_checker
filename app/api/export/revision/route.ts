@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { requireSession } from "@/lib/auth-session";
+import {
+  apiErrorResponse,
+  enforceRateLimit,
+  readJsonBody,
+  requireBoundedString
+} from "@/lib/api-security";
 import type { CorrectionNote, Locale, WritingCheckResult } from "@/lib/types";
 
 type ExportRevisionBody = {
@@ -202,18 +208,34 @@ function buildFilename(locale: Locale) {
 
 export async function POST(request: Request) {
   try {
-    await requireSession();
-
-    const body = (await request.json()) as ExportRevisionBody;
+    const session = await requireSession();
+    await enforceRateLimit({
+      scope: "revision-export",
+      subject: session.user.id,
+      limit: 10,
+      windowSeconds: 60
+    });
+    const body = await readJsonBody<ExportRevisionBody>(request, 1024 * 1024);
 
     if (!body.result || !body.prompt || !body.essay) {
       return NextResponse.json({ error: "INVALID_EXPORT_PAYLOAD" }, { status: 400 });
     }
 
+    const prompt = requireBoundedString(body.prompt, "prompt", { maxLength: 10_000 });
+    const essay = requireBoundedString(body.essay, "essay", { maxLength: 20_000 });
+    if (
+      typeof body.result.annotatedEssay !== "string" ||
+      body.result.annotatedEssay.length > 100_000 ||
+      !Array.isArray(body.result.correctionNotes) ||
+      body.result.correctionNotes.length > 500
+    ) {
+      return NextResponse.json({ error: "INVALID_EXPORT_PAYLOAD" }, { status: 400 });
+    }
+
     const locale = body.locale === "zh-CN" ? "zh-CN" : "en";
     const doc = buildRevisionDoc({
-      prompt: body.prompt,
-      essay: body.essay,
+      prompt,
+      essay,
       locale,
       result: body.result
     });
@@ -227,8 +249,15 @@ export async function POST(request: Request) {
       }
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error.";
-    const status = message === "UNAUTHORIZED" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    const normalized = apiErrorResponse(error);
+    return NextResponse.json(
+      { error: normalized.message },
+      {
+        status: normalized.status,
+        headers: normalized.retryAfterSeconds
+          ? { "Retry-After": String(normalized.retryAfterSeconds) }
+          : undefined
+      }
+    );
   }
 }

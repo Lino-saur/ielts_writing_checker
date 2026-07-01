@@ -22,6 +22,20 @@ type VisionGenerateContentPayload = {
 
 type VisionProvider = "qianwen" | "gemini";
 
+function getAiRequestTimeoutMs(kind: "text" | "vision") {
+  const variableName = kind === "vision" ? "AI_VISION_REQUEST_TIMEOUT_MS" : "AI_REQUEST_TIMEOUT_MS";
+  const configured = Number(process.env[variableName]);
+  const defaultTimeout = kind === "vision" ? 120_000 : 45_000;
+  const maxTimeout = kind === "vision" ? 180_000 : 60_000;
+  return Number.isFinite(configured) ? Math.min(Math.max(configured, 5_000), maxTimeout) : defaultTimeout;
+}
+
+function logAiDebug(event: string, details: Record<string, unknown>) {
+  if (process.env.AI_DEBUG_LOGS === "true") {
+    console.log(event, details);
+  }
+}
+
 function getDeepSeekConfig(): ProviderConfig {
   return {
     name: "deepseek",
@@ -45,6 +59,7 @@ function getQianwenConfig(): ProviderConfig {
     endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
     model: process.env.QIANWEN_MODEL || "qwen3.7-plus",
     extraBody: {
+      enable_thinking: false,
       temperature: 0.3,
       max_tokens: 2200
     }
@@ -162,6 +177,7 @@ async function runTaggedCompletion<T>(
     try {
       response = await fetch(config.endpoint, {
         method: "POST",
+        signal: AbortSignal.timeout(getAiRequestTimeoutMs("text")),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.apiKey}`
@@ -190,17 +206,22 @@ async function runTaggedCompletion<T>(
         model: config.model,
         endpoint: config.endpoint,
         phase,
-        status: response.status,
+        status: response.status
+      });
+      logAiDebug("[IELTS_CHECK][HTTP_ERROR_BODY]", {
+        provider: config.name,
+        phase,
         bodyPreview: previewText(errorText)
       });
-      throw new Error(`${config.name} request failed: ${response.status} ${errorText}`);
+      throw new Error(`${config.name.toUpperCase()}_HTTP_${response.status}`);
     }
 
     const payload = (await response.json()) as ChatCompletionsPayload;
     const text = payload.choices?.[0]?.message?.content;
 
     if (!text) {
-      console.error("[IELTS_CHECK][EMPTY_RESPONSE]", {
+      console.error("[IELTS_CHECK][EMPTY_RESPONSE]", { provider: config.name, phase });
+      logAiDebug("[IELTS_CHECK][EMPTY_RESPONSE_PAYLOAD]", {
         provider: config.name,
         phase,
         payloadPreview: previewText(JSON.stringify(payload))
@@ -208,7 +229,7 @@ async function runTaggedCompletion<T>(
       throw new Error(`${config.name} response was empty.`);
     }
 
-    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][RAW_RESPONSE]`, {
+    logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][RAW_RESPONSE]`, {
       provider: config.name,
       phase,
       rawLength: text.length,
@@ -223,7 +244,7 @@ async function runTaggedCompletion<T>(
 
   try {
     const parsed = options.parse(firstText);
-    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+    logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
       provider: config.name,
       phase: "first",
       preview: previewText(JSON.stringify(parsed))
@@ -233,9 +254,7 @@ async function runTaggedCompletion<T>(
     console.error(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_FAIL]`, {
       provider: config.name,
       phase: "first",
-      error: firstError instanceof Error ? firstError.message : String(firstError),
-      rawPreview: previewText(firstText),
-      cleanedPreview: previewText(cleanModelText(firstText))
+      errorType: firstError instanceof Error ? firstError.name : typeof firstError
     });
 
     const retryText = await requestCompletion(
@@ -257,7 +276,7 @@ async function runTaggedCompletion<T>(
 
     try {
       const parsed = options.parse(retryText);
-      console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+      logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
         provider: config.name,
         phase: "retry",
         preview: previewText(JSON.stringify(parsed))
@@ -267,9 +286,7 @@ async function runTaggedCompletion<T>(
       console.error(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_FAIL]`, {
         provider: config.name,
         phase: "retry",
-        error: retryError instanceof Error ? retryError.message : String(retryError),
-        rawPreview: previewText(retryText),
-        cleanedPreview: previewText(cleanModelText(retryText))
+        errorType: retryError instanceof Error ? retryError.name : typeof retryError
       });
 
       const repairText = await requestCompletion(
@@ -291,7 +308,7 @@ async function runTaggedCompletion<T>(
 
       try {
         const parsed = options.parse(repairText);
-        console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+        logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
           provider: config.name,
           phase: "repair",
           preview: previewText(JSON.stringify(parsed))
@@ -301,9 +318,7 @@ async function runTaggedCompletion<T>(
         console.error(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_FAIL]`, {
           provider: config.name,
           phase: "repair",
-          error: repairError instanceof Error ? repairError.message : String(repairError),
-          rawPreview: previewText(repairText),
-          cleanedPreview: previewText(cleanModelText(repairText))
+          errorType: repairError instanceof Error ? repairError.name : typeof repairError
         });
         throw repairError instanceof Error ? repairError : retryError instanceof Error ? retryError : firstError;
       }
@@ -354,7 +369,6 @@ async function runAlternateVisionCompletion<T>(
     wordCount,
     promptLength: options.prompt.length,
     essayLength: input.essay.length,
-    imageName: input.taskImage.name,
     imageMimeType: taskImage.mimeType
   });
 
@@ -367,6 +381,7 @@ async function runAlternateVisionCompletion<T>(
     try {
       response = await fetch(endpoint, {
         method: "POST",
+        signal: AbortSignal.timeout(getAiRequestTimeoutMs("vision")),
         headers: {
           "Content-Type": "application/json"
         },
@@ -387,9 +402,8 @@ async function runAlternateVisionCompletion<T>(
       console.error("[IELTS_CHECK][GEMINI_NETWORK_ERROR]", {
         provider: config.name,
         model: config.model,
-        endpoint,
+        endpoint: config.endpoint,
         phase,
-        imageName: taskImage.name,
         imageMimeType: taskImage.mimeType,
         ...serializeError(error)
       });
@@ -401,19 +415,24 @@ async function runAlternateVisionCompletion<T>(
       console.error("[IELTS_CHECK][HTTP_ERROR]", {
         provider: config.name,
         model: config.model,
-        endpoint,
+        endpoint: config.endpoint,
         phase,
-        status: response.status,
+        status: response.status
+      });
+      logAiDebug("[IELTS_CHECK][HTTP_ERROR_BODY]", {
+        provider: config.name,
+        phase,
         bodyPreview: previewText(errorText)
       });
-      throw new Error(`${config.name} request failed: ${response.status} ${errorText}`);
+      throw new Error(`${config.name.toUpperCase()}_HTTP_${response.status}`);
     }
 
     const payload = (await response.json()) as VisionGenerateContentPayload;
     const text = readVisionPartsText(payload);
 
     if (!text) {
-      console.error("[IELTS_CHECK][EMPTY_RESPONSE]", {
+      console.error("[IELTS_CHECK][EMPTY_RESPONSE]", { provider: config.name, phase });
+      logAiDebug("[IELTS_CHECK][EMPTY_RESPONSE_PAYLOAD]", {
         provider: config.name,
         phase,
         payloadPreview: previewText(JSON.stringify(payload))
@@ -421,7 +440,7 @@ async function runAlternateVisionCompletion<T>(
       throw new Error(`${config.name} response was empty.`);
     }
 
-    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][RAW_RESPONSE]`, {
+    logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][RAW_RESPONSE]`, {
       provider: config.name,
       phase,
       rawLength: text.length,
@@ -436,7 +455,7 @@ async function runAlternateVisionCompletion<T>(
 
   try {
     const parsed = options.parse(firstText);
-    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+    logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
       provider: config.name,
       phase: "first",
       preview: previewText(JSON.stringify(parsed))
@@ -454,7 +473,7 @@ async function runAlternateVisionCompletion<T>(
 
     try {
       const parsed = options.parse(retryText);
-      console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+      logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
         provider: config.name,
         phase: "retry",
         preview: previewText(JSON.stringify(parsed))
@@ -471,7 +490,7 @@ async function runAlternateVisionCompletion<T>(
       );
 
       const parsed = options.parse(repairText);
-      console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+      logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
         provider: config.name,
         phase: "repair",
         preview: previewText(JSON.stringify(parsed))
@@ -509,7 +528,8 @@ async function runQianwenVisionCompletion<T>(
         {
           type: "image_url",
           image_url: {
-            url: taskImage.dataUrl
+            url: taskImage.dataUrl,
+            max_pixels: 4_194_304
           }
         },
         {
@@ -528,7 +548,6 @@ async function runQianwenVisionCompletion<T>(
     wordCount,
     promptLength: options.prompt.length,
     essayLength: input.essay.length,
-    imageName: taskImage.name,
     imageMimeType: taskImage.mimeType
   });
 
@@ -541,6 +560,7 @@ async function runQianwenVisionCompletion<T>(
     try {
       response = await fetch(config.endpoint, {
         method: "POST",
+        signal: AbortSignal.timeout(getAiRequestTimeoutMs("vision")),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.apiKey}`
@@ -568,7 +588,6 @@ async function runQianwenVisionCompletion<T>(
         model: config.model,
         endpoint: config.endpoint,
         phase,
-        imageName: taskImage.name,
         imageMimeType: taskImage.mimeType,
         ...serializeError(error)
       });
@@ -582,17 +601,22 @@ async function runQianwenVisionCompletion<T>(
         model: config.model,
         endpoint: config.endpoint,
         phase,
-        status: response.status,
+        status: response.status
+      });
+      logAiDebug("[IELTS_CHECK][HTTP_ERROR_BODY]", {
+        provider: config.name,
+        phase,
         bodyPreview: previewText(errorText)
       });
-      throw new Error(`${config.name} request failed: ${response.status} ${errorText}`);
+      throw new Error(`${config.name.toUpperCase()}_HTTP_${response.status}`);
     }
 
     const payload = (await response.json()) as ChatCompletionsPayload;
     const text = payload.choices?.[0]?.message?.content;
 
     if (!text) {
-      console.error("[IELTS_CHECK][EMPTY_RESPONSE]", {
+      console.error("[IELTS_CHECK][EMPTY_RESPONSE]", { provider: config.name, phase });
+      logAiDebug("[IELTS_CHECK][EMPTY_RESPONSE_PAYLOAD]", {
         provider: config.name,
         phase,
         payloadPreview: previewText(JSON.stringify(payload))
@@ -600,7 +624,7 @@ async function runQianwenVisionCompletion<T>(
       throw new Error(`${config.name} response was empty.`);
     }
 
-    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][RAW_RESPONSE]`, {
+    logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][RAW_RESPONSE]`, {
       provider: config.name,
       phase,
       rawLength: text.length,
@@ -615,7 +639,7 @@ async function runQianwenVisionCompletion<T>(
 
   try {
     const parsed = options.parse(firstText);
-    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+    logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
       provider: config.name,
       phase: "first",
       preview: previewText(JSON.stringify(parsed))
@@ -633,7 +657,7 @@ async function runQianwenVisionCompletion<T>(
 
     try {
       const parsed = options.parse(retryText);
-      console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+      logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
         provider: config.name,
         phase: "retry",
         preview: previewText(JSON.stringify(parsed))
@@ -650,7 +674,7 @@ async function runQianwenVisionCompletion<T>(
       );
 
       const parsed = options.parse(repairText);
-      console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
+      logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][PARSE_SUCCESS]`, {
         provider: config.name,
         phase: "repair",
         preview: previewText(JSON.stringify(parsed))

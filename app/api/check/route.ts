@@ -1,61 +1,143 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
+import {
+  apiErrorResponse,
+  enforceRateLimit,
+  readJsonBody,
+  requireBoundedString,
+  requireIdempotencyKey
+} from "@/lib/api-security";
 import { evaluateWriting } from "@/lib/ielts";
 import { getEnergyState, getReviewEnergyCost } from "@/lib/energy";
-import { AiProvider, Locale, TargetBand, TaskImageInput, TaskType } from "@/lib/types";
-import { createWritingReview, loadTaskImageInputFromObject } from "@/lib/writing-reviews";
+import { beginReviewRequest, failReviewRequest } from "@/lib/review-requests";
+import type { AiProvider, Locale, TargetBand, TaskType } from "@/lib/types";
+import {
+  createWritingReview,
+  getWritingReview,
+  loadTaskImageInputFromObject
+} from "@/lib/writing-reviews";
+
+const MAX_CHECK_BODY_BYTES = 64 * 1024;
+const MAX_PROMPT_LENGTH = 10_000;
+const MAX_ESSAY_LENGTH = 20_000;
+const TARGET_BANDS: TargetBand[] = [5, 5.5, 6, 6.5, 7, 7.5, 8];
+const PROVIDERS: AiProvider[] = ["deepseek", "gemini", "qianwen"];
+
+export const maxDuration = 300;
 
 type RequestBody = {
   taskType?: TaskType;
   prompt?: string;
   essay?: string;
-  taskImage?: TaskImageInput | null;
   taskImageObjectKey?: string;
   taskImageName?: string;
-  taskImageMimeType?: string;
-  taskImageSizeBytes?: number;
   provider?: AiProvider;
   locale?: Locale;
   targetBand?: TargetBand;
 };
 
 export async function POST(request: Request) {
+  let reservedRequest: { userId: string; requestId: string } | null = null;
+  let sessionUserId: string | null = null;
+
   try {
     const session = await requireSession();
-    const body = (await request.json()) as RequestBody;
+    sessionUserId = session.user.id;
+    await enforceRateLimit({
+      scope: "ai-writing-check",
+      subject: session.user.id,
+      limit: 8,
+      windowSeconds: 60
+    });
 
+    const requestId = requireIdempotencyKey(request);
+    const body = await readJsonBody<RequestBody>(request, MAX_CHECK_BODY_BYTES);
     if (body.taskType !== "task1" && body.taskType !== "task2") {
-      return NextResponse.json({ error: "taskType must be task1 or task2." }, { status: 400 });
+      return NextResponse.json({ error: "INVALID_TASK_TYPE" }, { status: 400 });
     }
 
-    const currentEnergy = await getEnergyState(session.user.id);
+    const prompt = requireBoundedString(body.prompt, "prompt", { maxLength: MAX_PROMPT_LENGTH });
+    const essay = requireBoundedString(body.essay, "essay", { maxLength: MAX_ESSAY_LENGTH });
+    if (body.locale !== undefined && body.locale !== "en" && body.locale !== "zh-CN") {
+      return NextResponse.json({ error: "INVALID_LOCALE" }, { status: 400 });
+    }
+    if (body.provider !== undefined && !PROVIDERS.includes(body.provider)) {
+      return NextResponse.json({ error: "INVALID_PROVIDER" }, { status: 400 });
+    }
+    if (body.targetBand !== undefined && !TARGET_BANDS.includes(body.targetBand)) {
+      return NextResponse.json({ error: "INVALID_TARGET_BAND" }, { status: 400 });
+    }
+    if (
+      body.taskImageObjectKey !== undefined &&
+      (typeof body.taskImageObjectKey !== "string" || body.taskImageObjectKey.length > 512)
+    ) {
+      return NextResponse.json({ error: "INVALID_TASK_IMAGE_OBJECT" }, { status: 400 });
+    }
+    if (
+      body.taskImageName !== undefined &&
+      (typeof body.taskImageName !== "string" || body.taskImageName.length > 180)
+    ) {
+      return NextResponse.json({ error: "INVALID_IMAGE_NAME" }, { status: 400 });
+    }
+
+    const requestHash = createHash("sha256")
+      .update(
+        JSON.stringify({
+          taskType: body.taskType,
+          prompt,
+          essay,
+          taskImageObjectKey: body.taskImageObjectKey || null,
+          taskImageName: body.taskImageName || null,
+          provider: body.provider || null,
+          locale: body.locale || null,
+          targetBand: body.targetBand || null
+        })
+      )
+      .digest("hex");
+    const reservation = await beginReviewRequest(session.user.id, requestId, requestHash);
     const cost = getReviewEnergyCost();
 
-    if (currentEnergy.balance < cost) {
-      return NextResponse.json(
-        {
-          error: "INSUFFICIENT_ENERGY",
-          energy: currentEnergy,
-          cost
-        },
-        { status: 402 }
-      );
+    if (reservation.status === "conflict") {
+      return NextResponse.json({ error: "IDEMPOTENCY_KEY_REUSED" }, { status: 409 });
+    }
+    if (reservation.status === "pending") {
+      return NextResponse.json({ error: "REVIEW_IN_PROGRESS" }, { status: 409 });
+    }
+    if (reservation.status === "failed") {
+      return NextResponse.json({ error: "REVIEW_REQUEST_FAILED" }, { status: 409 });
+    }
+    if (reservation.status === "completed") {
+      const [review, energy] = await Promise.all([
+        getWritingReview(session.user.id, reservation.reviewId),
+        getEnergyState(session.user.id)
+      ]);
+      if (!review) {
+        throw new Error("REVIEW_RESULT_NOT_FOUND");
+      }
+      return NextResponse.json({
+        result: review.result,
+        energy,
+        cost,
+        idempotentReplay: true
+      });
     }
 
-    const resolvedTaskImage =
-      body.taskImageObjectKey && body.taskImageName && body.taskImageMimeType
+    reservedRequest = { userId: session.user.id, requestId };
+    const loadedImage =
+      body.taskImageObjectKey && body.taskImageName
         ? await loadTaskImageInputFromObject({
+            userId: session.user.id,
             objectKey: body.taskImageObjectKey,
-            name: body.taskImageName,
-            mimeType: body.taskImageMimeType
+            name: body.taskImageName
           })
-        : body.taskImage || null;
+        : null;
 
     const result = await evaluateWriting({
       taskType: body.taskType,
-      prompt: body.prompt || "",
-      essay: body.essay || "",
-      taskImage: resolvedTaskImage,
+      prompt,
+      essay,
+      taskImage: loadedImage?.taskImage ?? null,
       provider: body.provider,
       locale: body.locale,
       targetBand: body.targetBand
@@ -63,24 +145,57 @@ export async function POST(request: Request) {
 
     const savedReview = await createWritingReview({
       userId: session.user.id,
-      prompt: body.prompt || "",
-      essay: body.essay || "",
-      taskImage: body.taskImage || null,
-      taskImageObjectKey: body.taskImageObjectKey || null,
-      taskImageName: body.taskImageName || null,
-      taskImageMimeType: body.taskImageMimeType || null,
-      taskImageSizeBytes: typeof body.taskImageSizeBytes === "number" ? body.taskImageSizeBytes : null,
+      prompt,
+      essay,
+      taskImageObjectKey: loadedImage ? body.taskImageObjectKey || null : null,
+      taskImageName: loadedImage?.taskImage.name ?? null,
+      taskImageMimeType: loadedImage?.mimeType ?? null,
+      taskImageSizeBytes: loadedImage?.sizeBytes ?? null,
+      reviewRequestId: requestId,
       result
     });
+    reservedRequest = null;
+    const energy = await getEnergyState(session.user.id);
 
     return NextResponse.json({
       result,
-      energy: savedReview.energy,
-      cost
+      energy,
+      cost,
+      reviewId: savedReview.reviewId
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error.";
-    const status = message === "UNAUTHORIZED" ? 401 : message === "AI_REVIEW_FAILED" ? 502 : 500;
-    return NextResponse.json({ error: message }, { status });
+    const normalized = apiErrorResponse(error);
+    if (reservedRequest) {
+      try {
+        await failReviewRequest(
+          reservedRequest.userId,
+          reservedRequest.requestId,
+          normalized.message
+        );
+      } catch (refundError) {
+        console.error("[IELTS_CHECK][RESERVATION_REFUND_FAILED]", {
+          requestId: reservedRequest.requestId,
+          error: refundError instanceof Error ? refundError.message : "UNKNOWN_ERROR"
+        });
+      }
+    }
+
+    const energy =
+      normalized.message === "INSUFFICIENT_ENERGY" && sessionUserId
+        ? await getEnergyState(sessionUserId).catch(() => null)
+        : null;
+
+    return NextResponse.json(
+      {
+        error: normalized.message,
+        ...(energy ? { energy, cost: getReviewEnergyCost() } : {})
+      },
+      {
+        status: normalized.status,
+        headers: normalized.retryAfterSeconds
+          ? { "Retry-After": String(normalized.retryAfterSeconds) }
+          : undefined
+      }
+    );
   }
 }

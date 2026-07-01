@@ -17,8 +17,12 @@ type SignedRequestInput = {
 type PresignedPutUrlInput = {
   key: string;
   mimeType: string;
+  contentLength: number;
   expiresInSeconds?: number;
 };
+
+export const MAX_REVIEW_IMAGE_BYTES = 8 * 1024 * 1024;
+export const REVIEW_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function getStorageConfig(): StorageConfig | null {
   const endpoint = process.env.REVIEW_IMAGE_STORAGE_ENDPOINT?.trim();
@@ -186,7 +190,7 @@ export function createPresignedReviewImageUploadUrl(input: PresignedPutUrlInput)
     "X-Amz-Credential": `${config.accessKeyId}/${credentialScope}`,
     "X-Amz-Date": amzDate,
     "X-Amz-Expires": String(expires),
-    "X-Amz-SignedHeaders": "content-type;host"
+    "X-Amz-SignedHeaders": "content-length;content-type;host"
   });
   const canonicalQueryString = [
     `X-Amz-Algorithm=${encodeUriComponentStrict(query.get("X-Amz-Algorithm") || "")}`,
@@ -195,13 +199,16 @@ export function createPresignedReviewImageUploadUrl(input: PresignedPutUrlInput)
     `X-Amz-Expires=${encodeUriComponentStrict(query.get("X-Amz-Expires") || "")}`,
     `X-Amz-SignedHeaders=${encodeUriComponentStrict(query.get("X-Amz-SignedHeaders") || "")}`
   ].join("&");
-  const canonicalHeaders = `content-type:${input.mimeType}\nhost:${endpointUrl.host}\n`;
+  const canonicalHeaders =
+    `content-length:${input.contentLength}\n` +
+    `content-type:${input.mimeType}\n` +
+    `host:${endpointUrl.host}\n`;
   const canonicalRequest = [
     "PUT",
     canonicalUri,
     canonicalQueryString,
     canonicalHeaders,
-    "content-type;host",
+    "content-length;content-type;host",
     "UNSIGNED-PAYLOAD"
   ].join("\n");
   const stringToSign = [

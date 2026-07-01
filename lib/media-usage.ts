@@ -175,6 +175,70 @@ export async function assertMediaUploadAllowed(plannedBytes: number) {
   }
 }
 
+export async function reserveMediaUpload(plannedBytes: number) {
+  await ensureDatabase();
+  const bytes = Math.max(0, Math.floor(plannedBytes));
+  const monthKey = toMonthKey();
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO media_usage_monthly (
+        month_key, upload_bytes, download_bytes, upload_count, download_count, updated_at
+      )
+      VALUES ($1, 0, 0, 0, 0, NOW())
+      ON CONFLICT (month_key) DO NOTHING`,
+      [monthKey]
+    );
+    const usageResult = await client.query<MediaUsageRow>(
+      `SELECT month_key, upload_bytes, download_bytes, upload_count, download_count, updated_at
+       FROM media_usage_monthly
+       WHERE month_key = $1
+       FOR UPDATE`,
+      [monthKey]
+    );
+    const settingsResult = await client.query<MediaQuotaRow>(
+      `SELECT upload_limit_bytes, download_limit_bytes, hard_block_uploads, hard_block_downloads, updated_at
+       FROM media_quota_settings
+       WHERE id = 'global'
+       LIMIT 1`
+    );
+    const usage = mapUsageRow(usageResult.rows[0]);
+    const settings = mapSettingsRow(
+      settingsResult.rows[0] ?? {
+        upload_limit_bytes: null,
+        download_limit_bytes: null,
+        hard_block_uploads: false,
+        hard_block_downloads: false,
+        updated_at: new Date().toISOString()
+      }
+    );
+
+    if (settings.hardBlockUploads) {
+      throw new Error("MEDIA_UPLOADS_BLOCKED");
+    }
+    if (settings.uploadLimitBytes != null && usage.uploadBytes + bytes > settings.uploadLimitBytes) {
+      throw new Error("MEDIA_UPLOAD_LIMIT_REACHED");
+    }
+
+    await client.query(
+      `UPDATE media_usage_monthly
+       SET upload_bytes = upload_bytes + $2,
+           upload_count = upload_count + 1,
+           updated_at = NOW()
+       WHERE month_key = $1`,
+      [monthKey, bytes]
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function assertMediaDownloadAllowed() {
   const [usage, settings] = await Promise.all([getMediaUsageMonth(), getMediaQuotaSettings()]);
 
