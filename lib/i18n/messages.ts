@@ -113,6 +113,15 @@ export type PracticeMessages = Record<string, string> & {
   authSignUp: string;
   imageReady: string;
   tags: string;
+  sourceLabel: string;
+  sourceCambridge: string;
+  sourceHistorical: string;
+  yearLabel: string;
+  allYears: string;
+  categoryLabel: string;
+  allCategories: string;
+  questionTypeLabel: string;
+  allQuestionTypes: string;
 };
 
 const navbarMessages: Record<Locale, NavbarMessages> = {

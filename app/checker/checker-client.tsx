@@ -101,12 +101,31 @@ const TASK1_COMPRESSED_QUALITY = 0.85;
 const DRAFT_STORAGE_PREFIX = "ielts-writing-checker:draft:v1";
 const DRAFT_SAVE_DELAY_MS = 600;
 
-function getDraftStorageScope(taskType: TaskType, practiceId: string | null) {
-  return practiceId ? `practice:${practiceId}:${taskType}` : `freeform:${taskType}`;
+function getDraftStorageScope(
+  taskType: TaskType,
+  practiceId: string | null,
+  historicalId: string | null
+) {
+  if (practiceId) {
+    return `practice:${practiceId}:${taskType}`;
+  }
+  if (historicalId) {
+    return `historical:${historicalId}:${taskType}`;
+  }
+  return `freeform:${taskType}`;
 }
 
-function getDraftStorageKey(ownerId: string, taskType: TaskType, practiceId: string | null) {
-  return `${DRAFT_STORAGE_PREFIX}:user:${encodeURIComponent(ownerId)}:${getDraftStorageScope(taskType, practiceId)}`;
+function getDraftStorageKey(
+  ownerId: string,
+  taskType: TaskType,
+  practiceId: string | null,
+  historicalId: string | null
+) {
+  return `${DRAFT_STORAGE_PREFIX}:user:${encodeURIComponent(ownerId)}:${getDraftStorageScope(
+    taskType,
+    practiceId,
+    historicalId
+  )}`;
 }
 
 function isTargetBand(value: unknown): value is TargetBand {
@@ -176,6 +195,9 @@ function CheckerPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const practiceId = searchParams.get("practiceId");
+  const historicalId = searchParams.get("historicalId");
+  const libraryQuestionId = practiceId || historicalId;
+  const isLibraryQuestion = Boolean(libraryQuestionId);
   const provider: AiProvider = "deepseek";
   const [taskType, setTaskType] = useState<TaskType>(searchParams.get("task") === "task1" ? "task1" : "task2");
   const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
@@ -286,12 +308,12 @@ function CheckerPageContent() {
   const isTask1 = taskType === "task1";
   const draftOwnerId = sessionContext.user?.id ?? "guest";
   const currentDraftScope = useMemo(
-    () => getDraftStorageScope(taskType, practiceId),
-    [practiceId, taskType]
+    () => getDraftStorageScope(taskType, practiceId, historicalId),
+    [historicalId, practiceId, taskType]
   );
   const currentDraftStorageKey = useMemo(
-    () => getDraftStorageKey(draftOwnerId, taskType, practiceId),
-    [draftOwnerId, practiceId, taskType]
+    () => getDraftStorageKey(draftOwnerId, taskType, practiceId, historicalId),
+    [draftOwnerId, historicalId, practiceId, taskType]
   );
   draftSnapshotRef.current = {
     prompt,
@@ -404,7 +426,7 @@ function CheckerPageContent() {
   }
 
   function handleTaskNavigate(nextTaskType: TaskType, href: string) {
-    if (nextTaskType === taskType && !practiceId) {
+    if (nextTaskType === taskType && !isLibraryQuestion) {
       return;
     }
 
@@ -444,7 +466,7 @@ function CheckerPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (practiceId || !sessionReady) {
+    if (isLibraryQuestion || !sessionReady) {
       return;
     }
 
@@ -464,21 +486,32 @@ function CheckerPageContent() {
     setPromptEditing(!draft?.prompt);
     setDraftDirty(false);
     setDraftReady(true);
-  }, [currentDraftScope, currentDraftStorageKey, practiceId, prepareDraft, sessionReady, taskType]);
+  }, [
+    currentDraftScope,
+    currentDraftStorageKey,
+    isLibraryQuestion,
+    prepareDraft,
+    sessionReady,
+    taskType
+  ]);
 
   useEffect(() => {
-    if (!practiceId || !sessionReady) {
+    if (!libraryQuestionId || !sessionReady) {
       return;
     }
 
     let cancelled = false;
+    const questionId = libraryQuestionId;
     setDraftReady(false);
 
     async function loadPracticeQuestion() {
       clearError();
 
       try {
-        const response = await fetch(`/api/practice/questions/${encodeURIComponent(practiceId || "")}`, {
+        const endpoint = practiceId
+          ? `/api/practice/questions/${encodeURIComponent(practiceId)}`
+          : `/api/practice/historical/${encodeURIComponent(questionId)}`;
+        const response = await fetch(endpoint, {
           cache: "no-store"
         });
         const data = (await response.json()) as PracticeQuestionPayload | { error?: string };
@@ -492,8 +525,13 @@ function CheckerPageContent() {
         }
 
         const question = data.question;
-        const practiceDraftScope = getDraftStorageScope(question.taskType, practiceId);
-        const practiceDraftKey = getDraftStorageKey(draftOwnerId, question.taskType, practiceId);
+        const practiceDraftScope = getDraftStorageScope(question.taskType, practiceId, historicalId);
+        const practiceDraftKey = getDraftStorageKey(
+          draftOwnerId,
+          question.taskType,
+          practiceId,
+          historicalId
+        );
         const savedDraft = prepareDraft(practiceDraftKey, practiceDraftScope);
         const questionImage =
           question.taskType === "task1" && question.imageObjectKey && question.imageName && question.imageMimeType
@@ -507,7 +545,7 @@ function CheckerPageContent() {
             : null;
 
         setTaskType(question.taskType);
-        setPrompt(savedDraft?.prompt ?? question.prompt);
+        setPrompt(question.prompt);
         setEssay(savedDraft?.essay ?? "");
         setTargetBand(savedDraft?.targetBand ?? 6.5);
         setPromptEditing(false);
@@ -518,7 +556,7 @@ function CheckerPageContent() {
         setFeedbackComment("");
         setFeedbackSubmitted(false);
         setFeedbackError(null);
-        setTaskImage(savedDraft?.taskImage ?? questionImage);
+        setTaskImage(questionImage);
         setDraftDirty(false);
       } catch {
         if (!cancelled) {
@@ -536,7 +574,15 @@ function CheckerPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [draftOwnerId, practiceId, prepareDraft, sessionReady, t.authRequired, t.genericError]);
+  }, [
+    draftOwnerId,
+    historicalId,
+    libraryQuestionId,
+    practiceId,
+    prepareDraft,
+    sessionReady,
+    t.genericError
+  ]);
 
   useEffect(() => {
     const sessionDrafts = sessionDraftsRef.current;
@@ -818,6 +864,7 @@ function CheckerPageContent() {
         },
         body: JSON.stringify({
           ...(practiceId ? { practiceId } : {}),
+          ...(historicalId ? { historicalId } : {}),
           taskType,
           provider,
           locale,
@@ -1404,7 +1451,7 @@ function CheckerPageContent() {
             <div className="checkerPromptHeader">
               <span>{t.prompt}</span>
               <div className="checkerPromptControls">
-                {!practiceId ? (
+                {!isLibraryQuestion ? (
                   <>
                   <button type="button" className="checkerPromptEditButton" onClick={requestExampleDraft}>
                     {t.loadExample}
@@ -1422,7 +1469,7 @@ function CheckerPageContent() {
               </div>
             </div>
             <div className="checkerPromptBody">
-              {promptEditing && !practiceId ? (
+              {promptEditing && !isLibraryQuestion ? (
                 <textarea
                   value={prompt}
                   onChange={(event) => {
@@ -1444,8 +1491,8 @@ function CheckerPageContent() {
                 <span>{t.task1ImageLabel}</span>
               </div>
               <div className="checkerPromptBody checkerUploadBody">
-                {!practiceId ? <p className="checkerUploadHint">{t.task1ImageHint}</p> : null}
-                {practiceId ? (
+                {!isLibraryQuestion ? <p className="checkerUploadHint">{t.task1ImageHint}</p> : null}
+                {isLibraryQuestion ? (
                   <div className={`checkerUploadDropzone is-readonly${taskImage ? " has-preview" : ""}`}>
                     {taskImage ? (
                       <>
@@ -1493,7 +1540,9 @@ function CheckerPageContent() {
                   )}
                   </label>
                 )}
-                {!practiceId && taskImageUploading ? <p className="checkerUploadStatus">{t.task1ImageProcessing}</p> : null}
+                {!isLibraryQuestion && taskImageUploading ? (
+                  <p className="checkerUploadStatus">{t.task1ImageProcessing}</p>
+                ) : null}
               </div>
             </div>
           ) : null}

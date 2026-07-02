@@ -885,6 +885,39 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   gap: 18px;
 }
 
+.practiceSourceSwitch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-self: start;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.practiceSourceSwitch button {
+  min-height: 40px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.9rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.practiceSourceSwitch button.is-active {
+  background: rgba(var(--accent-rgb), 0.13);
+  color: var(--accent-deep);
+}
+
+.practiceSourceSwitch button:focus-visible {
+  outline: 3px solid rgba(var(--accent-rgb), 0.24);
+  outline-offset: 2px;
+}
+
 .practiceFilters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5440,6 +5473,14 @@ html[data-theme="dark"] .authSwitchButton {
 
   .practiceCardActions {
     justify-content: stretch;
+  }
+
+  .practiceSourceSwitch {
+    width: 100%;
+  }
+
+  .practiceSourceSwitch button {
+    padding-inline: 12px;
   }
 
   .practiceStartButton {

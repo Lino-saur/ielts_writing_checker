@@ -12,6 +12,7 @@ import { evaluateWriting } from "@/lib/ielts";
 import { getEnergyState, getReviewEnergyCost } from "@/lib/energy";
 import { beginReviewRequest, failReviewRequest } from "@/lib/review-requests";
 import { getPracticeQuestion } from "@/lib/practice-library";
+import { getHistoricalPracticeQuestion } from "@/lib/historical-practice";
 import type { AiProvider, Locale, TargetBand, TaskType } from "@/lib/types";
 import {
   createWritingReview,
@@ -29,6 +30,7 @@ export const maxDuration = 300;
 
 type RequestBody = {
   practiceId?: string | null;
+  historicalId?: string | null;
   taskType?: TaskType;
   prompt?: string;
   essay?: string;
@@ -83,11 +85,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "INVALID_IMAGE_NAME" }, { status: 400 });
     }
     const practiceId = body.practiceId ?? undefined;
+    const historicalId = body.historicalId ?? undefined;
     if (
       practiceId !== undefined &&
       (typeof practiceId !== "string" || practiceId.length < 1 || practiceId.length > 180)
     ) {
       return NextResponse.json({ error: "INVALID_PRACTICE_ID" }, { status: 400 });
+    }
+    if (
+      historicalId !== undefined &&
+      (typeof historicalId !== "string" || historicalId.length < 1 || historicalId.length > 180)
+    ) {
+      return NextResponse.json({ error: "INVALID_HISTORICAL_ID" }, { status: 400 });
+    }
+    if (practiceId && historicalId) {
+      return NextResponse.json({ error: "MULTIPLE_PRACTICE_SOURCES" }, { status: 400 });
     }
 
     let taskType = body.taskType;
@@ -106,11 +118,23 @@ export async function POST(request: Request) {
       taskImageObjectKey = practiceQuestion.imageObjectKey ?? undefined;
       taskImageName = practiceQuestion.imageName ?? undefined;
     }
+    if (historicalId) {
+      const historicalQuestion = await getHistoricalPracticeQuestion(historicalId);
+      if (!historicalQuestion) {
+        return NextResponse.json({ error: "HISTORICAL_QUESTION_NOT_FOUND" }, { status: 404 });
+      }
+
+      taskType = "task2";
+      canonicalPrompt = historicalQuestion.prompt;
+      taskImageObjectKey = undefined;
+      taskImageName = undefined;
+    }
 
     const requestHash = createHash("sha256")
       .update(
         JSON.stringify({
           practiceId: practiceId || null,
+          historicalId: historicalId || null,
           taskType,
           prompt: canonicalPrompt,
           essay,

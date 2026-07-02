@@ -6,7 +6,7 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -578,6 +578,37 @@ export async function ensureDatabase() {
         `INSERT INTO schema_migrations (version, applied_at)
          VALUES (1, NOW())`
       );
+      }
+      if (appliedVersion < 2) {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS historical_practice_questions (
+            id TEXT PRIMARY KEY,
+            year INTEGER NOT NULL CHECK (year BETWEEN 2000 AND 2100),
+            exam_date DATE NOT NULL,
+            category TEXT NOT NULL,
+            question_type TEXT NOT NULL CHECK (
+              question_type IN ('观点类', '讨论类', '问题解决类', '混合类')
+            ),
+            prompt TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+          );
+        `);
+
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS historical_practice_questions_date_idx
+          ON historical_practice_questions (exam_date DESC, id ASC);
+        `);
+
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS historical_practice_questions_filters_idx
+          ON historical_practice_questions (year DESC, category, question_type);
+        `);
+
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (2, NOW())`
+        );
       }
       await db.query("COMMIT");
     } catch (error) {

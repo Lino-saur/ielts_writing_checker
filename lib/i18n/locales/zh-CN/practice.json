@@ -23,5 +23,14 @@
   "authSignUp": "去注册",
   "imageReady": "Task 1 图片已入库",
   "promptPreview": "题干预览",
-  "tags": "标签"
+  "tags": "标签",
+  "sourceLabel": "真题来源",
+  "sourceCambridge": "剑桥真题",
+  "sourceHistorical": "历年真题",
+  "yearLabel": "年份",
+  "allYears": "全部年份",
+  "categoryLabel": "主题",
+  "allCategories": "全部主题",
+  "questionTypeLabel": "题型",
+  "allQuestionTypes": "全部题型"
 }

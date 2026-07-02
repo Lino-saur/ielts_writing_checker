@@ -179,6 +179,16 @@ Run the standalone seed script if you need to initialize the table outside a nor
 npm run db:seed:practice
 ```
 
+The historical Task 2 library is stored separately in
+`historical_practice_questions`. Import or update it from the source JSON with:
+
+```bash
+npm run db:import:historical -- /absolute/path/to/data.json
+```
+
+The import validates and normalizes the source, then upserts by question id, so
+the command is safe to run again when the dataset changes.
+
 You can also sync external metadata from Koolearn into the same records:
 
 ```bash

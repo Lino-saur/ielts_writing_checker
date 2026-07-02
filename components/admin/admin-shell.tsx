@@ -10,6 +10,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isSupportPage = pathname.startsWith("/admin/support");
   const isEnergyPage = pathname.startsWith("/admin/energy");
   const isMediaUsagePage = pathname.startsWith("/admin/media-usage");
+  const isHistoricalPracticePage = pathname.startsWith("/admin/historical-practice");
 
   if (pathname === "/admin/login" || pathname === "/admin/unauthorized") {
     return <div className={styles.shell}>{children}</div>;
@@ -22,7 +23,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div className={styles.brand}>
             <span className={styles.eyebrow}>Hyper-style Admin</span>
             <strong className={styles.title}>IELTS Ops</strong>
-            <p className={styles.caption}>A dedicated internal surface for feedback triage and future admin workflows.</p>
+            <p className={styles.caption}>Internal tools for content, user support and operational controls.</p>
           </div>
 
           <nav className={styles.nav}>
@@ -51,6 +52,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             >
               Media Quota
             </Link>
+            <Link
+              href="/admin/historical-practice"
+              className={`${styles.navLink} ${isHistoricalPracticePage ? styles.navLinkActive : ""}`}
+            >
+              Historical Questions
+            </Link>
             <span className={styles.navSection}>App</span>
             <Link href="/" className={styles.navLink}>
               Public Site
@@ -61,7 +68,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className={styles.sidebarFooter}>
-            <p className={styles.caption}>Admin UI is intentionally isolated from the public product UI to keep future app split cheap.</p>
+            <p className={styles.caption}>Changes to historical questions are published to the practice library immediately.</p>
           </div>
         </aside>
 

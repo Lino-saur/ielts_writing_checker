@@ -23,5 +23,14 @@
   "authSignUp": "Create account",
   "imageReady": "Task 1 image saved",
   "promptPreview": "Prompt preview",
-  "tags": "Tags"
+  "tags": "Tags",
+  "sourceLabel": "Practice source",
+  "sourceCambridge": "Cambridge",
+  "sourceHistorical": "Past exams",
+  "yearLabel": "Year",
+  "allYears": "All years",
+  "categoryLabel": "Topic",
+  "allCategories": "All topics",
+  "questionTypeLabel": "Question type",
+  "allQuestionTypes": "All question types"
 }

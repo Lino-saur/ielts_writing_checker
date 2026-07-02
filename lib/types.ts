@@ -1,5 +1,16 @@
 export type TaskType = "task1" | "task2";
 
+export type HistoricalQuestionType = "观点类" | "讨论类" | "问题解决类" | "混合类";
+
+export type HistoricalPracticeQuestion = {
+  id: string;
+  year: number;
+  date: string;
+  category: string;
+  type: HistoricalQuestionType;
+  prompt: string;
+};
+
 export type TaskImageInput = {
   name: string;
   mimeType: string;
