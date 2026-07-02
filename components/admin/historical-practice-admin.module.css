@@ -207,13 +207,36 @@
   font-size: 0.88rem;
 }
 
-.cardTopline > span {
+.cardMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.taskBadge {
   padding: 4px 8px;
   border-radius: 999px;
   color: #4338ca;
   background: rgba(99, 102, 241, 0.1);
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+.importanceStars {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.importanceStarsFilled {
+  color: #f59e0b;
+}
+
+.importanceStarsEmpty {
+  color: rgba(148, 163, 184, 0.62);
 }
 
 .category {

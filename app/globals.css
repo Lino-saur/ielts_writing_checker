@@ -975,6 +975,31 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   letter-spacing: -0.03em;
 }
 
+.practiceCardMeta {
+  display: flex;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.importanceStars {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.92rem;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.importanceStarsFilled {
+  color: #f59e0b;
+}
+
+.importanceStarsEmpty {
+  color: rgba(148, 163, 184, 0.55);
+}
+
 .practiceTag {
   display: inline-flex;
   align-items: center;

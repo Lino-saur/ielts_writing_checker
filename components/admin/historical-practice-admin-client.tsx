@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ActionButton, Surface } from "@/components/ui-kit";
 import type {
+  HistoricalImportance,
   HistoricalPracticeQuestion,
   HistoricalQuestionType
 } from "@/lib/types";
@@ -23,6 +24,7 @@ type FormState = {
   taskType: "task1" | "task2";
   category: string;
   type: HistoricalQuestionType;
+  importance: HistoricalImportance;
   prompt: string;
 };
 
@@ -31,8 +33,26 @@ const EMPTY_FORM: FormState = {
   taskType: "task2",
   category: "",
   type: "观点类",
+  importance: 3,
   prompt: ""
 };
+
+function ImportanceStars({ importance }: { importance: HistoricalImportance }) {
+  return (
+    <span
+      className={styles.importanceStars}
+      aria-label={`Importance: ${importance} out of 5 stars`}
+      title={`${importance} / 5`}
+    >
+      <span className={styles.importanceStarsFilled} aria-hidden="true">
+        {"★".repeat(importance)}
+      </span>
+      <span className={styles.importanceStarsEmpty} aria-hidden="true">
+        {"★".repeat(5 - importance)}
+      </span>
+    </span>
+  );
+}
 
 function getErrorMessage(payload: unknown) {
   if (typeof payload === "object" && payload !== null && "error" in payload) {
@@ -127,6 +147,7 @@ export function HistoricalPracticeAdminClient() {
       taskType: question.taskType,
       category: question.category,
       type: question.type ?? "观点类",
+      importance: question.importance,
       prompt: question.prompt
     });
     setError(null);
@@ -170,6 +191,7 @@ export function HistoricalPracticeAdminClient() {
           taskType: payload.question.taskType,
           category: payload.question.category,
           type: payload.question.type ?? "观点类",
+          importance: payload.question.importance,
         prompt: payload.question.prompt
       });
       setSuccess(editingId ? "Question updated." : "Question created.");
@@ -252,7 +274,12 @@ export function HistoricalPracticeAdminClient() {
                 >
                   <span className={styles.cardTopline}>
                     <strong>{question.date}</strong>
-                    <span>{question.taskType === "task1" ? "Task 1" : question.type}</span>
+                    <span className={styles.cardMeta}>
+                      <span className={styles.taskBadge}>
+                        {question.taskType === "task1" ? "Task 1" : question.type}
+                      </span>
+                      <ImportanceStars importance={question.importance} />
+                    </span>
                   </span>
                   <span className={styles.category}>{question.category}</span>
                   <span className={styles.prompt}>{question.prompt}</span>
@@ -314,6 +341,24 @@ export function HistoricalPracticeAdminClient() {
                 value={form.date}
                 onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
               />
+            </label>
+            <label className={styles.field}>
+              <span>Importance</span>
+              <select
+                value={form.importance}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    importance: Number(event.target.value) as HistoricalImportance
+                  }))
+                }
+              >
+                {[5, 4, 3, 2, 1].map((importance) => (
+                  <option key={importance} value={importance}>
+                    {"★".repeat(importance)}{"☆".repeat(5 - importance)} · {importance} / 5
+                  </option>
+                ))}
+              </select>
             </label>
             {form.taskType === "task2" ? <label className={styles.field}>
               <span>Question type</span>

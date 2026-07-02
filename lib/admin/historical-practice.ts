@@ -3,6 +3,7 @@ import { ApiError, requireBoundedString } from "@/lib/api-security";
 import { db, ensureDatabase } from "@/lib/db";
 import { mapHistoricalPracticeRow } from "@/lib/historical-practice";
 import type {
+  HistoricalImportance,
   HistoricalPracticeQuestion,
   HistoricalQuestionType,
   TaskType
@@ -22,6 +23,7 @@ type HistoricalPracticeRow = {
   task_type: TaskType;
   category: string;
   question_type: HistoricalQuestionType | null;
+  importance: number;
   prompt: string;
   image_object_key: string | null;
   image_name: string | null;
@@ -42,6 +44,7 @@ export type HistoricalQuestionInput = {
   taskType?: unknown;
   category?: unknown;
   type?: unknown;
+  importance?: unknown;
   prompt?: unknown;
 };
 
@@ -69,7 +72,10 @@ export function normalizeAdminHistoricalQuestionFilters(input: {
 
 export function validateHistoricalQuestionInput(
   input: HistoricalQuestionInput
-): Pick<HistoricalPracticeQuestion, "year" | "date" | "taskType" | "category" | "type" | "prompt"> {
+): Pick<
+  HistoricalPracticeQuestion,
+  "year" | "date" | "taskType" | "category" | "type" | "importance" | "prompt"
+> {
   const date = requireBoundedString(input.date, "date", { maxLength: 10 });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new ApiError("INVALID_DATE", 400);
@@ -84,6 +90,10 @@ export function validateHistoricalQuestionInput(
   if (taskType === "task2" && !QUESTION_TYPES.includes(input.type as HistoricalQuestionType)) {
     throw new ApiError("INVALID_QUESTION_TYPE", 400);
   }
+  const importance = Number(input.importance ?? 3);
+  if (!Number.isInteger(importance) || importance < 1 || importance > 5) {
+    throw new ApiError("INVALID_IMPORTANCE", 400);
+  }
 
   return {
     year: Number(date.slice(0, 4)),
@@ -91,6 +101,7 @@ export function validateHistoricalQuestionInput(
     taskType,
     category: requireBoundedString(input.category, "category", { maxLength: 80 }),
     type: taskType === "task1" ? null : input.type as HistoricalQuestionType,
+    importance: importance as HistoricalImportance,
     prompt: requireBoundedString(input.prompt, "prompt", {
       minLength: 10,
       maxLength: 5000
@@ -126,7 +137,8 @@ export async function listAdminHistoricalQuestions(
 
   const [itemsResult, countResult, yearsResult] = await Promise.all([
     db.query<HistoricalPracticeRow>(
-      `SELECT id, year, exam_date::text AS exam_date, task_type, category, question_type, prompt,
+      `SELECT id, year, exam_date::text AS exam_date, task_type, category, question_type,
+              importance, prompt,
               image_object_key, image_name, image_mime_type, image_size_bytes
        FROM historical_practice_questions
        ${where}
@@ -166,10 +178,12 @@ export async function createAdminHistoricalQuestion(input: HistoricalQuestionInp
   const id = `historical_${question.date.replaceAll("-", "")}_${randomUUID().slice(0, 8)}`;
   const result = await db.query<HistoricalPracticeRow>(
     `INSERT INTO historical_practice_questions (
-       id, year, exam_date, task_type, category, question_type, prompt, created_at, updated_at
+       id, year, exam_date, task_type, category, question_type, importance, prompt,
+       created_at, updated_at
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-     RETURNING id, year, exam_date::text AS exam_date, task_type, category, question_type, prompt,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+     RETURNING id, year, exam_date::text AS exam_date, task_type, category, question_type,
+               importance, prompt,
                image_object_key, image_name, image_mime_type, image_size_bytes`,
     [
       id,
@@ -178,6 +192,7 @@ export async function createAdminHistoricalQuestion(input: HistoricalQuestionInp
       question.taskType,
       question.category,
       question.type,
+      question.importance,
       question.prompt
     ]
   );
@@ -198,10 +213,12 @@ export async function updateAdminHistoricalQuestion(
          task_type = $4,
          category = $5,
          question_type = $6,
-         prompt = $7,
+         importance = $7,
+         prompt = $8,
          updated_at = NOW()
      WHERE id = $1
-     RETURNING id, year, exam_date::text AS exam_date, task_type, category, question_type, prompt,
+     RETURNING id, year, exam_date::text AS exam_date, task_type, category, question_type,
+               importance, prompt,
                image_object_key, image_name, image_mime_type, image_size_bytes`,
     [
       questionId,
@@ -210,6 +227,7 @@ export async function updateAdminHistoricalQuestion(
       question.taskType,
       question.category,
       question.type,
+      question.importance,
       question.prompt
     ]
   );

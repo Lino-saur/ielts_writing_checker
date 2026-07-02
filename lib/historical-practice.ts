@@ -1,6 +1,7 @@
 import { db, ensureDatabase } from "@/lib/db";
 import { getReviewImageObject } from "@/lib/object-storage";
 import type {
+  HistoricalImportance,
   HistoricalPracticeQuestion,
   HistoricalQuestionType,
   TaskType
@@ -21,6 +22,7 @@ type HistoricalPracticeRow = {
   task_type: HistoricalPracticeQuestion["taskType"];
   category: string;
   question_type: HistoricalPracticeQuestion["type"];
+  importance: number;
   prompt: string;
   image_object_key: string | null;
   image_name: string | null;
@@ -33,6 +35,7 @@ export type HistoricalPracticeFilters = {
   year: number | null;
   category: string | null;
   type: HistoricalQuestionType | null;
+  importance: HistoricalImportance | null;
   page: number;
   pageSize: number;
 };
@@ -42,10 +45,12 @@ export function normalizeHistoricalPracticeFilters(input: {
   year?: string | null;
   category?: string | null;
   type?: string | null;
+  importance?: string | null;
   page?: string | null;
 }): HistoricalPracticeFilters {
   const parsedYear = Number.parseInt(input.year ?? "", 10);
   const parsedPage = Number.parseInt(input.page ?? "", 10);
+  const parsedImportance = Number.parseInt(input.importance ?? "", 10);
   const category = input.category?.trim().slice(0, 80) ?? "";
 
   return {
@@ -61,6 +66,12 @@ export function normalizeHistoricalPracticeFilters(input: {
     type: QUESTION_TYPES.includes(input.type as HistoricalQuestionType)
       ? (input.type as HistoricalQuestionType)
       : null,
+    importance:
+      Number.isInteger(parsedImportance) &&
+      parsedImportance >= 1 &&
+      parsedImportance <= 5
+        ? (parsedImportance as HistoricalImportance)
+        : null,
     page: Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1,
     pageSize: HISTORICAL_PAGE_SIZE
   };
@@ -79,6 +90,7 @@ export function mapHistoricalPracticeRow(
     taskType: row.task_type,
     category: row.category,
     type: row.question_type,
+    importance: Number(row.importance) as HistoricalImportance,
     prompt: row.prompt,
     imageObjectKey: row.image_object_key,
     imageName: row.image_name,
@@ -110,6 +122,10 @@ export async function listHistoricalPracticeQuestions(
     values.push(filters.type);
     conditions.push(`question_type = $${values.length}`);
   }
+  if (filters.importance) {
+    values.push(filters.importance);
+    conditions.push(`importance >= $${values.length}`);
+  }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const offset = (filters.page - 1) * filters.pageSize;
@@ -127,7 +143,8 @@ export async function listHistoricalPracticeQuestions(
   const [itemsResult, countResult, yearsResult, categoriesResult, typesResult] =
     await Promise.all([
       db.query<HistoricalPracticeRow>(
-        `SELECT id, year, exam_date::text AS exam_date, task_type, category, question_type, prompt,
+        `SELECT id, year, exam_date::text AS exam_date, task_type, category, question_type,
+                importance, prompt,
                 image_object_key, image_name, image_mime_type, image_size_bytes
          FROM historical_practice_questions
          ${where}
@@ -180,7 +197,8 @@ export async function listHistoricalPracticeQuestions(
 export async function getHistoricalPracticeQuestion(questionId: string) {
   await ensureDatabase();
   const result = await db.query<HistoricalPracticeRow>(
-    `SELECT id, year, exam_date::text AS exam_date, task_type, category, question_type, prompt,
+    `SELECT id, year, exam_date::text AS exam_date, task_type, category, question_type,
+            importance, prompt,
             image_object_key, image_name, image_mime_type, image_size_bytes
      FROM historical_practice_questions
      WHERE id = $1

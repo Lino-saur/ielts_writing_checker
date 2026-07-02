@@ -34,6 +34,8 @@
   "allCategories": "All topics",
   "questionTypeLabel": "Question type",
   "allQuestionTypes": "All question types",
+  "importanceLabel": "Importance",
+  "allImportance": "All importance levels",
   "paginationLabel": "Question library pagination",
   "previousPage": "Previous",
   "nextPage": "Next"

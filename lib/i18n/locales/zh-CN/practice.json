@@ -34,6 +34,8 @@
   "allCategories": "全部主题",
   "questionTypeLabel": "题型",
   "allQuestionTypes": "全部题型",
+  "importanceLabel": "重点程度",
+  "allImportance": "全部重点程度",
   "paginationLabel": "题库分页",
   "previousPage": "上一页",
   "nextPage": "下一页"

@@ -123,6 +123,8 @@ export type PracticeMessages = Record<string, string> & {
   allCategories: string;
   questionTypeLabel: string;
   allQuestionTypes: string;
+  importanceLabel: string;
+  allImportance: string;
   paginationLabel: string;
   previousPage: string;
   nextPage: string;

@@ -77,6 +77,7 @@ function flattenSource(source: SourceData): HistoricalPracticeQuestion[] {
         taskType: "task2" as const,
         category,
         type: normalizeQuestionType(entry.type, entry.prompt),
+        importance: 3 as const,
         prompt: normalizePrompt(entry.prompt),
         imageObjectKey: null,
         imageName: null,

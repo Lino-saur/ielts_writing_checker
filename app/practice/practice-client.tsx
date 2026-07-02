@@ -8,6 +8,7 @@ import { Pill, Surface } from "@/components/ui-kit";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import type {
+  HistoricalImportance,
   HistoricalPracticeQuestion,
   HistoricalQuestionType,
   Locale,
@@ -101,6 +102,36 @@ function getPaginationPages(page: number, totalPages: number) {
   return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 }
 
+function ImportanceStars({
+  importance,
+  locale
+}: {
+  importance: HistoricalImportance;
+  locale: Locale;
+}) {
+  const label =
+    locale === "zh-CN"
+      ? `重点程度 ${importance} 星（满分 5 星）`
+      : `Importance: ${importance} out of 5 stars`;
+  return (
+    <span className="importanceStars" aria-label={label} title={label}>
+      <span className="importanceStarsFilled" aria-hidden="true">
+        {"★".repeat(importance)}
+      </span>
+      <span className="importanceStarsEmpty" aria-hidden="true">
+        {"★".repeat(5 - importance)}
+      </span>
+    </span>
+  );
+}
+
+function formatImportanceFilter(importance: number, locale: Locale) {
+  if (locale === "zh-CN") {
+    return importance === 5 ? "5 星" : `${importance} 星及以上`;
+  }
+  return importance === 5 ? "5 stars" : `${importance}+ stars`;
+}
+
 export default function PracticePageClient() {
   const router = useRouter();
   const pathname = usePathname();
@@ -136,6 +167,7 @@ export default function PracticePageClient() {
   const [yearFilter, setYearFilter] = useState(searchParams.get("year") ?? "all");
   const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category") ?? "all");
   const [questionTypeFilter, setQuestionTypeFilter] = useState(searchParams.get("type") ?? "all");
+  const [importanceFilter, setImportanceFilter] = useState(searchParams.get("importance") ?? "all");
   const [historicalTaskFilter, setHistoricalTaskFilter] = useState<"all" | TaskType>(
     searchParams.get("task") === "task1" || searchParams.get("task") === "task2"
       ? searchParams.get("task") as TaskType
@@ -218,6 +250,7 @@ export default function PracticePageClient() {
         if (questionTypeFilter !== "all" && historicalTaskFilter !== "task1") {
           params.set("type", questionTypeFilter);
         }
+        if (importanceFilter !== "all") params.set("importance", importanceFilter);
         const response = await fetch(`/api/practice/historical?${params.toString()}`, {
           signal: controller.signal
         });
@@ -257,6 +290,7 @@ export default function PracticePageClient() {
     categoryFilter,
     historicalPage,
     historicalTaskFilter,
+    importanceFilter,
     questionTypeFilter,
     source,
     t.loadFailed,
@@ -280,6 +314,8 @@ export default function PracticePageClient() {
       } else {
         params.set("type", questionTypeFilter);
       }
+      if (importanceFilter === "all") params.delete("importance");
+      else params.set("importance", importanceFilter);
       if (historicalPage === 1) params.delete("page");
       else params.set("page", String(historicalPage));
     } else {
@@ -287,6 +323,7 @@ export default function PracticePageClient() {
       params.delete("year");
       params.delete("category");
       params.delete("type");
+      params.delete("importance");
       if (bookFilter === "all") params.delete("book");
       else params.set("book", bookFilter);
       if (taskFilter === "all") params.delete("task");
@@ -306,6 +343,7 @@ export default function PracticePageClient() {
     bookFilter,
     historicalPage,
     historicalTaskFilter,
+    importanceFilter,
     pathname,
     practicePage,
     questionTypeFilter,
@@ -580,6 +618,23 @@ export default function PracticePageClient() {
                     ))}
                   </select>
                 </label>
+                <label>
+                  <span>{t.importanceLabel}</span>
+                  <select
+                    value={importanceFilter}
+                    onChange={(event) => {
+                      setImportanceFilter(event.target.value);
+                      setHistoricalPage(1);
+                    }}
+                  >
+                    <option value="all">{t.allImportance}</option>
+                    {[5, 4, 3, 2].map((importance) => (
+                      <option key={importance} value={importance}>
+                        {formatImportanceFilter(importance, locale)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </Surface>
 
               {historicalItems.length === 0 ? (
@@ -595,7 +650,10 @@ export default function PracticePageClient() {
                       <Surface as="article" key={item.id} className="practiceCard">
                         <div className="practiceCardTop">
                           <h2>{formatHistoricalDate(item.date, locale)}</h2>
-                          <Pill>{normalizeTaskLabel(item.taskType, t)}</Pill>
+                          <div className="practiceCardMeta">
+                            <Pill>{normalizeTaskLabel(item.taskType, t)}</Pill>
+                            <ImportanceStars importance={item.importance} locale={locale} />
+                          </div>
                         </div>
 
                         <div className="practiceTagRow">

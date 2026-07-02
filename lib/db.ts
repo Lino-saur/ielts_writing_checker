@@ -6,7 +6,7 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -668,6 +668,29 @@ export async function ensureDatabase() {
         await db.query(
           `INSERT INTO schema_migrations (version, applied_at)
            VALUES (4, NOW())`
+        );
+      }
+      if (appliedVersion < 5) {
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD COLUMN IF NOT EXISTS importance INTEGER NOT NULL DEFAULT 3;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          DROP CONSTRAINT IF EXISTS historical_practice_questions_importance_check;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD CONSTRAINT historical_practice_questions_importance_check
+          CHECK (importance BETWEEN 1 AND 5);
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS historical_practice_questions_importance_date_idx
+          ON historical_practice_questions (importance DESC, exam_date DESC);
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (5, NOW())`
         );
       }
       await db.query("COMMIT");

@@ -13,6 +13,7 @@ export async function GET(request: Request) {
         year: searchParams.get("year"),
         category: searchParams.get("category"),
         type: searchParams.get("type"),
+        importance: searchParams.get("importance"),
         page: searchParams.get("page")
       })
     );

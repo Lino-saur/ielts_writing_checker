@@ -1,6 +1,7 @@
 export type TaskType = "task1" | "task2";
 
 export type HistoricalQuestionType = "观点类" | "讨论类" | "问题解决类" | "混合类";
+export type HistoricalImportance = 1 | 2 | 3 | 4 | 5;
 
 export type HistoricalPracticeQuestion = {
   id: string;
@@ -9,6 +10,7 @@ export type HistoricalPracticeQuestion = {
   taskType: TaskType;
   category: string;
   type: HistoricalQuestionType | null;
+  importance: HistoricalImportance;
   prompt: string;
   imageObjectKey: string | null;
   imageName: string | null;

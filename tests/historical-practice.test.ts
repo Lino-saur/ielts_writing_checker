@@ -18,6 +18,7 @@ describe("historical practice data", () => {
         task_type: "task2",
         category: "教育",
         question_type: "观点类",
+        importance: 4,
         prompt: "Sample prompt",
         image_object_key: null,
         image_name: null,
@@ -31,6 +32,7 @@ describe("historical practice data", () => {
       taskType: "task2",
       category: "教育",
       type: "观点类",
+      importance: 4,
       prompt: "Sample prompt",
       imageObjectKey: null,
       imageName: null,
@@ -53,6 +55,7 @@ describe("historical practice data", () => {
       taskType: "task2",
       category: "社会",
       type: "讨论类",
+      importance: 3,
       prompt: "Discuss both views and give your own opinion."
     });
 
@@ -64,6 +67,16 @@ describe("historical practice data", () => {
         prompt: "Discuss both views and give your own opinion."
       })
     ).toThrow("INVALID_DATE");
+
+    expect(() =>
+      validateHistoricalQuestionInput({
+        date: "2026-06-21",
+        category: "社会",
+        type: "讨论类",
+        importance: 6,
+        prompt: "Discuss both views and give your own opinion."
+      })
+    ).toThrow("INVALID_IMPORTANCE");
   });
 
   it("normalizes admin list filters", () => {
@@ -90,6 +103,7 @@ describe("historical practice data", () => {
         year: "2026",
         category: " 表格 ",
         type: "not-a-type",
+        importance: "4",
         page: "3"
       })
     ).toEqual({
@@ -97,6 +111,7 @@ describe("historical practice data", () => {
       year: 2026,
       category: "表格",
       type: null,
+      importance: 4,
       page: 3,
       pageSize: 24
     });
