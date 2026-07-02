@@ -56,7 +56,7 @@ AUTH_EMAIL_FROM=IELTS Writing Checker <no-reply@example.com>
 SUPPORT_EMAIL_FROM=IELTS Writing Checker <support@example.com>
 RESEND_INBOUND_WEBHOOK_SECRET=your_random_webhook_token
 
-DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=verify-full
 
 REVIEW_IMAGE_STORAGE_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
 REVIEW_IMAGE_STORAGE_REGION=auto
@@ -123,7 +123,7 @@ Recommended production setup:
 - Host the app on Vercel.
 - Host Postgres on Neon.
 - Use `BETTER_AUTH_URL=https://your-app.vercel.app`.
-- Use a Neon connection string with `sslmode=require`.
+- Use a Neon connection string with `sslmode=verify-full`.
 - Configure `RESEND_API_KEY` and `AUTH_EMAIL_FROM` so sign-up verification emails can be delivered.
 - Configure `RESEND_INBOUND_WEBHOOK_SECRET` and point your Resend receiving webhook to:
   `https://your-domain.com/api/resend/inbound?token=YOUR_SECRET`

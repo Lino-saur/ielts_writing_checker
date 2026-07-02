@@ -200,7 +200,7 @@ export async function getPracticeQuestionImage(questionId: string) {
   const result = await db.query<Pick<PracticeQuestionRow, "image_object_key" | "image_mime_type">>(
     `SELECT image_object_key, image_mime_type
      FROM practice_questions
-     WHERE id = $1
+     WHERE id = $1 AND status = 'published'
      LIMIT 1`,
     [questionId]
   );

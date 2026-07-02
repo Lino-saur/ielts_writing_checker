@@ -28,7 +28,7 @@ const PROVIDERS: AiProvider[] = ["deepseek", "gemini", "qianwen"];
 export const maxDuration = 300;
 
 type RequestBody = {
-  practiceId?: string;
+  practiceId?: string | null;
   taskType?: TaskType;
   prompt?: string;
   essay?: string;
@@ -82,9 +82,10 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json({ error: "INVALID_IMAGE_NAME" }, { status: 400 });
     }
+    const practiceId = body.practiceId ?? undefined;
     if (
-      body.practiceId !== undefined &&
-      (typeof body.practiceId !== "string" || body.practiceId.length < 1 || body.practiceId.length > 180)
+      practiceId !== undefined &&
+      (typeof practiceId !== "string" || practiceId.length < 1 || practiceId.length > 180)
     ) {
       return NextResponse.json({ error: "INVALID_PRACTICE_ID" }, { status: 400 });
     }
@@ -94,8 +95,8 @@ export async function POST(request: Request) {
     let taskImageObjectKey = body.taskImageObjectKey;
     let taskImageName = body.taskImageName;
 
-    if (body.practiceId) {
-      const practiceQuestion = await getPracticeQuestion(body.practiceId);
+    if (practiceId) {
+      const practiceQuestion = await getPracticeQuestion(practiceId);
       if (!practiceQuestion || practiceQuestion.status !== "published") {
         return NextResponse.json({ error: "PRACTICE_QUESTION_NOT_FOUND" }, { status: 404 });
       }
@@ -109,7 +110,7 @@ export async function POST(request: Request) {
     const requestHash = createHash("sha256")
       .update(
         JSON.stringify({
-          practiceId: body.practiceId || null,
+          practiceId: practiceId || null,
           taskType,
           prompt: canonicalPrompt,
           essay,

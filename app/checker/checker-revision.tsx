@@ -2,6 +2,8 @@ import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
 import type { CheckerMessages } from "@/lib/i18n/messages";
 import type { CorrectionNote, Locale } from "@/lib/types";
 
+export type RevisionDecision = "accepted" | "ignored";
+
 export function ScoreCard({
   label,
   score,
@@ -101,10 +103,29 @@ export function groupRevisionEditsByCategory(
   return Array.from(groups.values());
 }
 
+export function materializeRevisionEssay(
+  text: string,
+  correctionNotes: CorrectionNote[],
+  decisions: Record<string, RevisionDecision>
+) {
+  const { parts } = parseAnnotatedEssay(text, correctionNotes);
+
+  return parts
+    .map((part) => {
+      if (part.type === "edit") {
+        return decisions[part.id] === "accepted" ? part.corrected : part.original;
+      }
+
+      return part.text;
+    })
+    .join("");
+}
+
 export function renderAnnotatedEssay(
   text: string,
   highlightedSentences: string[],
   correctionNotes: CorrectionNote[],
+  decisions: Record<string, RevisionDecision>,
   activeEditIndex: number | null,
   onToggleEdit: (index: number) => void,
   t: CheckerMessages
@@ -164,11 +185,12 @@ export function renderAnnotatedEssay(
   return parts.map((part, index) => {
     if (part.type === "edit") {
       const isActive = activeEditIndex === part.index;
+      const decision = decisions[part.id];
 
       return (
         <span
           key={`edit-${part.index}-${index}`}
-          className={`editChip${isActive ? " active" : ""}`}
+          className={`editChip${isActive ? " active" : ""}${decision ? ` is-${decision}` : ""}`}
           role="button"
           tabIndex={0}
           onClick={() => onToggleEdit(part.index)}
@@ -179,8 +201,16 @@ export function renderAnnotatedEssay(
             }
           }}
         >
-          <del className="essayDel">{part.original}</del>
-          <ins className="essayAdd">{part.corrected}</ins>
+          {decision === "accepted" ? (
+            <ins className="essayAdd essayAccepted">{part.corrected}</ins>
+          ) : decision === "ignored" ? (
+            <span className="essayIgnored">{part.original}</span>
+          ) : (
+            <>
+              <del className="essayDel">{part.original}</del>
+              <ins className="essayAdd">{part.corrected}</ins>
+            </>
+          )}
           {part.note ? (
             <span className={`editTooltip${isActive ? " visible" : ""}`}>
               <strong>{t.correctionReason}:</strong> {part.note.reason}

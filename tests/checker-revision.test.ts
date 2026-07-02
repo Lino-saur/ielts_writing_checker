@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   groupRevisionEditsByCategory,
+  materializeRevisionEssay,
   parseAnnotatedEssay
 } from "../app/checker/checker-revision";
 
@@ -47,5 +48,33 @@ describe("checker revision helpers", () => {
 
     const groups = groupRevisionEditsByCategory(parsed.edits, "en");
     expect(groups.map((group) => group.key)).toEqual(["subject_verb_agreement", "preposition"]);
+  });
+
+  it("materializes only accepted revisions and keeps ignored or pending text", () => {
+    const annotated =
+      "Students [del#a]is[/del#a][add#a]are[/add#a] ready [del#b]in Monday[/del#b][add#b]on Monday[/add#b].";
+    const notes = [
+      {
+        id: "a",
+        category: "subject_verb_agreement",
+        original: "is",
+        corrected: "are",
+        reason: "Agreement."
+      },
+      {
+        id: "b",
+        category: "preposition",
+        original: "in Monday",
+        corrected: "on Monday",
+        reason: "Use on with days."
+      }
+    ];
+
+    expect(materializeRevisionEssay(annotated, notes, { a: "accepted", b: "ignored" })).toBe(
+      "Students are ready in Monday."
+    );
+    expect(materializeRevisionEssay(annotated, notes, {})).toBe(
+      "Students is ready in Monday."
+    );
   });
 });

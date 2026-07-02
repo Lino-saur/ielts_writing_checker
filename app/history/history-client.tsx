@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
@@ -40,7 +41,8 @@ export default function HistoryPageClient() {
   const [energy, setEnergy] = useState<EnergyState | null>(sessionContext.energy as EnergyState | null);
   const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
   const [items, setItems] = useState<WritingReviewListItem[]>([]);
-  const [loadingList, setLoadingList] = useState(false);
+  const [totalReviews, setTotalReviews] = useState(0);
+  const [loadingList, setLoadingList] = useState(true);
   const [loadingStats, setLoadingStats] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -55,6 +57,8 @@ export default function HistoryPageClient() {
 
   const loadReviews = useCallback(async () => {
     setLoadingList(true);
+    setItems([]);
+    setTotalReviews(0);
     setError(null);
 
     try {
@@ -72,6 +76,7 @@ export default function HistoryPageClient() {
       }
 
       setItems(data.items);
+      setTotalReviews(data.total);
     } catch {
       setError(t.historyLoadError);
     } finally {
@@ -117,6 +122,7 @@ export default function HistoryPageClient() {
 
     if (!isAuthenticated) {
       setItems([]);
+      setTotalReviews(0);
       setError(null);
       setStats(null);
       setStatsError(null);
@@ -145,103 +151,13 @@ export default function HistoryPageClient() {
         authRequest={authRequest}
       />
 
-      <section className="historyHero">
-        <Surface className="historyHeroCard">
-          <div>
-            <p className="eyebrow">{t.historyTitle}</p>
-            <h1>{t.historyTitle}</h1>
-            <p className="uiSectionBody">{t.historyBody}</p>
-          </div>
-          <ActionLink href={checkerHref} variant="secondary">
-            {t.historyBackToChecker}
-          </ActionLink>
-        </Surface>
-      </section>
-
-      {sessionReady && isAuthenticated ? (
-        <section className="historyAnalytics">
-          <Surface className="historyAnalyticsCard">
-            <div className="historyAnalyticsHeader">
-              <div>
-                <p className="sectionLabel">{t.historyAnalyticsTitle}</p>
-                <p className="uiSectionBody">
-                  {describeTaskFilter(taskFilter, navbar, t.historyTaskFilterAll)} · {recentCount} {t.historyRecentCountSuffix}
-                </p>
-              </div>
-              <div className="historyFilters">
-                <div className="historyFilterGroup" role="group" aria-label={t.historyTaskFilterLabel}>
-                  {(["all", "task1", "task2"] as const).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`historyFilterButton${taskFilter === value ? " is-active" : ""}`}
-                      onClick={() => setTaskFilter(value)}
-                    >
-                      {value === "all" ? t.historyTaskFilterAll : value === "task1" ? navbar.task1 : navbar.task2}
-                    </button>
-                  ))}
-                </div>
-                <div className="historyFilterGroup" role="group" aria-label={t.historyRecentCountLabel}>
-                  {RECENT_COUNT_OPTIONS.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`historyFilterButton${recentCount === value ? " is-active" : ""}`}
-                      onClick={() => setRecentCount(value)}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {loadingStats ? <p>{t.historyLoading}</p> : null}
-            {statsError && !loadingStats ? <p className="errorBox">{statsError}</p> : null}
-
-            {!loadingStats && !statsError ? (
-              <>
-                <div className="historyAnalyticsOverview">
-                  <div className="historyAnalyticsMetric">
-                    <span>{t.historyStatsTotalReviews}</span>
-                    <strong>{stats?.totalReviews ?? 0}</strong>
-                  </div>
-                  <div className="historyAnalyticsMetric">
-                    <span>{t.historyStatsTotalGrammarFixes}</span>
-                    <strong>{stats?.totalGrammarCorrections ?? 0}</strong>
-                  </div>
-                </div>
-
-                <div className="historyChartGrid">
-                  <article className="historyChartCard">
-                    <div className="historyChartHeader">
-                      <p className="sectionLabel">{t.historyGrammarPieTitle}</p>
-                      <p className="uiSectionBody">{t.historyGrammarPieBody}</p>
-                    </div>
-                    <PieChart stats={stats} locale={locale} emptyLabel={t.historyChartEmpty} />
-                  </article>
-
-                  <article className="historyChartCard">
-                    <div className="historyChartHeader">
-                      <p className="sectionLabel">{t.historyScoreTrendTitle}</p>
-                      <p className="uiSectionBody">{t.historyScoreTrendBody}</p>
-                    </div>
-                    <ScoreTrendChart stats={stats} locale={locale} emptyLabel={t.historyChartEmpty} />
-                  </article>
-                </div>
-              </>
-            ) : null}
-          </Surface>
-        </section>
-      ) : null}
-
       {!sessionReady ? (
         <Surface className="historyEmptyState">
           <p>{t.historyLoading}</p>
         </Surface>
       ) : !isAuthenticated ? (
         <Surface className="historyEmptyState">
-          <h2>{t.historyAuthTitle}</h2>
+          <h1>{t.historyAuthTitle}</h1>
           <p>{t.historyAuthBody}</p>
           <div className="historyAuthActions">
             <ActionButton onClick={() => setAuthRequest({ mode: "signIn", id: Date.now() })}>{t.authRequiredLogin}</ActionButton>
@@ -251,51 +167,170 @@ export default function HistoryPageClient() {
           </div>
         </Surface>
       ) : (
-        <section className="historyRecordsSection">
-          <Surface className="historyListSurface">
-            <div className="historySidebarHeader">
-              <div>
-                <p className="sectionLabel">{t.historyListTitle}</p>
-                <p className="uiSectionBody">{items.length}</p>
+        <>
+          <section className="historyRecordsSection">
+            <Surface className="historyListSurface">
+              <div className="historyPageHeader">
+                <div>
+                  <h1 className="historyPageTitle">{t.historyTitle}</h1>
+                  <p className="uiSectionBody">
+                    {t.historyListCount.replace("{count}", String(totalReviews))}
+                  </p>
+                </div>
+                <ActionLink href={checkerHref} variant="secondary">
+                  {t.historyBackToChecker}
+                </ActionLink>
               </div>
-            </div>
 
-            {loadingList ? <p>{t.historyLoading}</p> : null}
-            {error && !loadingList ? <p className="errorBox">{error}</p> : null}
-            {!loadingList && !items.length ? (
-              <div className="historyEmptyPanel">
-                <h3>{t.historyEmptyTitle}</h3>
-                <p>{t.historyEmptyBody}</p>
+              <div className="historyFilters">
+                <div className="historyFilterControl">
+                  <span className="historyFilterLabel">{t.historyTaskFilterLabel}</span>
+                  <div className="historyFilterGroup" role="group" aria-label={t.historyTaskFilterLabel}>
+                    {(["all", "task1", "task2"] as const).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`historyFilterButton${taskFilter === value ? " is-active" : ""}`}
+                        aria-pressed={taskFilter === value}
+                        onClick={() => setTaskFilter(value)}
+                      >
+                        {value === "all" ? t.historyTaskFilterAll : value === "task1" ? navbar.task1 : navbar.task2}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="historyFilterControl">
+                  <span className="historyFilterLabel">{t.historyRecentCountLabel}</span>
+                  <div className="historyFilterGroup" role="group" aria-label={t.historyRecentCountLabel}>
+                    {RECENT_COUNT_OPTIONS.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`historyFilterButton${recentCount === value ? " is-active" : ""}`}
+                        aria-pressed={recentCount === value}
+                        onClick={() => setRecentCount(value)}
+                      >
+                        {value} {t.historyRecentCountSuffix}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            ) : null}
 
-            <div className="historyList">
-              {items.map((item) => {
-                const detailHref = `/${locale}/history/${item.id}`;
-                return (
-                  <Link key={item.id} href={detailHref} className="historyListItem">
-                    <div className="historyListItemTop">
-                      <div className="historyListHeading">
-                        <strong>{item.taskType === "task1" ? navbar.task1 : navbar.task2}</strong>
-                        <span className="historyListTimestamp">{formatReviewTime(item.createdAt, locale)}</span>
+              <div className="historyListHeader">
+                <h2>{t.historyListTitle}</h2>
+                <span>{describeTaskFilter(taskFilter, navbar, t.historyTaskFilterAll)}</span>
+              </div>
+
+              {loadingList ? <p className="historyLoadingText">{t.historyLoading}</p> : null}
+              {error && !loadingList ? <p className="errorBox">{error}</p> : null}
+              {!loadingList && !items.length ? (
+                <div className="historyEmptyPanel">
+                  <h3>{t.historyEmptyTitle}</h3>
+                  <p>{t.historyEmptyBody}</p>
+                  <ActionLink href={checkerHref}>{t.historyBackToChecker}</ActionLink>
+                </div>
+              ) : null}
+
+              <div className="historyList">
+                {items.map((item) => {
+                  const detailHref = `/${locale}/history/${item.id}`;
+                  return (
+                    <Link key={item.id} href={detailHref} className="historyListItem">
+                      <div className="historyListItemTop">
+                        <div className="historyListHeading">
+                          <strong>{item.taskType === "task1" ? navbar.task1 : navbar.task2}</strong>
+                          <span className="historyListTimestamp">{formatReviewTime(item.createdAt, locale)}</span>
+                        </div>
+                        <Pill>Band {item.estimatedBand.toFixed(1)}</Pill>
                       </div>
-                      <Pill>{item.estimatedBand.toFixed(1)}</Pill>
+                      <div className={`historyListContent${item.hasImage ? " has-image" : ""}`}>
+                        <div className="historyListCopy">
+                          <p className="historyListPreview">{item.promptPreview}</p>
+                          <p className="historyListEssayPreview">{item.essayPreview}</p>
+                        </div>
+                        {item.hasImage ? (
+                          <div className="historyListThumbnail">
+                            <Image
+                              src={`/api/reviews/${encodeURIComponent(item.id)}/image`}
+                              alt={t.historyOriginalImage}
+                              width={360}
+                              height={203}
+                              loading="lazy"
+                              unoptimized
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="historyListFooter">
+                        <div className="historyListMeta">
+                          <span>
+                            {item.wordCount} {t.wordsUnit}
+                          </span>
+                        </div>
+                        <span className="historyListAction" aria-hidden="true">
+                          {t.historyViewDetail} <span>→</span>
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </Surface>
+          </section>
+
+          {!loadingList && items.length > 0 ? (
+            <section className="historyAnalytics">
+              <Surface className="historyAnalyticsCard">
+                <div className="historyAnalyticsHeader">
+                  <div>
+                    <h2>{t.historyAnalyticsTitle}</h2>
+                    <p className="uiSectionBody">
+                      {describeTaskFilter(taskFilter, navbar, t.historyTaskFilterAll)} · {recentCount}{" "}
+                      {t.historyRecentCountSuffix}
+                    </p>
+                  </div>
+                </div>
+
+                {loadingStats ? <p>{t.historyLoading}</p> : null}
+                {statsError && !loadingStats ? <p className="errorBox">{statsError}</p> : null}
+
+                {!loadingStats && !statsError ? (
+                  <>
+                    <div className="historyAnalyticsOverview">
+                      <div className="historyAnalyticsMetric">
+                        <span>{t.historyStatsTotalReviews}</span>
+                        <strong>{stats?.totalReviews ?? 0}</strong>
+                      </div>
+                      <div className="historyAnalyticsMetric">
+                        <span>{t.historyStatsTotalGrammarFixes}</span>
+                        <strong>{stats?.totalGrammarCorrections ?? 0}</strong>
+                      </div>
                     </div>
-                    <p className="historyListPreview">{item.promptPreview}</p>
-                    <p className="historyListEssayPreview">{item.essayPreview}</p>
-                    <div className="historyListMeta">
-                      <span>
-                        {item.wordCount} {t.wordsUnit}
-                      </span>
-                      <span>{item.hasImage ? t.task1ImageLabel : t.historyNoImage}</span>
-                      <span>{item.providerUsed}</span>
+
+                    <div className="historyChartGrid">
+                      <article className="historyChartCard">
+                        <div className="historyChartHeader">
+                          <p className="sectionLabel">{t.historyGrammarPieTitle}</p>
+                          <p className="uiSectionBody">{t.historyGrammarPieBody}</p>
+                        </div>
+                        <PieChart stats={stats} locale={locale} emptyLabel={t.historyChartEmpty} />
+                      </article>
+
+                      <article className="historyChartCard">
+                        <div className="historyChartHeader">
+                          <p className="sectionLabel">{t.historyScoreTrendTitle}</p>
+                          <p className="uiSectionBody">{t.historyScoreTrendBody}</p>
+                        </div>
+                        <ScoreTrendChart stats={stats} locale={locale} emptyLabel={t.historyChartEmpty} />
+                      </article>
                     </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </Surface>
-        </section>
+                  </>
+                ) : null}
+              </Surface>
+            </section>
+          ) : null}
+        </>
       )}
     </main>
   );

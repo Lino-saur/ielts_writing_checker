@@ -10,8 +10,10 @@ import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
 import type { AiProvider, FeedbackPayload, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
 import {
   groupRevisionEditsByCategory,
+  materializeRevisionEssay,
   parseAnnotatedEssay,
   renderAnnotatedEssay,
+  type RevisionDecision,
   ScoreCard
 } from "./checker-revision";
 
@@ -45,6 +47,7 @@ type ErrorSource = "auth" | "general";
 type ReportView = "overview" | "revise";
 type ReviseLayout = "split" | "stack";
 type RevisionStageKey = "grammar" | "optimization";
+type RevisionDecisions = Record<RevisionStageKey, Record<string, RevisionDecision>>;
 type FeedbackChoice = "helpful" | "notHelpful";
 type UploadedTaskImage = {
   objectKey: string;
@@ -157,7 +160,7 @@ async function readResponseError(response: Response) {
 
 function CheckerPageContent() {
   const { sessionContext, sessionResolved, refreshSessionContext: refreshAuthSessionContext } = useAuthSession();
-  const activeEditRef = useRef<HTMLDivElement | null>(null);
+  const reviseWorkspaceRef = useRef<HTMLElement | null>(null);
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
   const taskImageInputRef = useRef<HTMLInputElement | null>(null);
   const checkRequestIdRef = useRef<string | null>(null);
@@ -186,7 +189,7 @@ function CheckerPageContent() {
   const [errorSource, setErrorSource] = useState<ErrorSource>("general");
   const [loading, setLoading] = useState(false);
   const [activeEditIndex, setActiveEditIndex] = useState<number | null>(null);
-  const [activeRevisionStage, setActiveRevisionStage] = useState<RevisionStageKey>("optimization");
+  const [activeRevisionStage, setActiveRevisionStage] = useState<RevisionStageKey>("grammar");
   const [energy, setEnergy] = useState<EnergyState | null>(sessionContext.energy as EnergyState | null);
   const [reviewCost, setReviewCost] = useState(sessionContext.reviewCost ?? 1);
   const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
@@ -206,6 +209,12 @@ function CheckerPageContent() {
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [exportingRevision, setExportingRevision] = useState(false);
   const [expandedRevisionCategories, setExpandedRevisionCategories] = useState<Record<string, boolean>>({});
+  const [revisionCategoryFilter, setRevisionCategoryFilter] = useState("all");
+  const [revisionDecisions, setRevisionDecisions] = useState<RevisionDecisions>({
+    grammar: {},
+    optimization: {}
+  });
+  const [revisionCopyState, setRevisionCopyState] = useState<"idle" | "copied" | "error">("idle");
 
   const { checker: t, navbar } = getMessages(locale);
   const sessionReady = sessionResolved;
@@ -241,6 +250,38 @@ function CheckerPageContent() {
   const groupedRevisionEdits = useMemo(
     () => (parsedRevision ? groupRevisionEditsByCategory(parsedRevision.edits, locale) : []),
     [parsedRevision, locale]
+  );
+  const filteredRevisionGroups = useMemo(
+    () =>
+      revisionCategoryFilter === "all"
+        ? groupedRevisionEdits
+        : groupedRevisionEdits.filter((group) => group.key === revisionCategoryFilter),
+    [groupedRevisionEdits, revisionCategoryFilter]
+  );
+  const filteredRevisionEdits = useMemo(
+    () => filteredRevisionGroups.flatMap((group) => group.edits).sort((left, right) => left.index - right.index),
+    [filteredRevisionGroups]
+  );
+  const currentRevisionDecisions = revisionDecisions[activeRevisionStage];
+  const revisionDecisionCount =
+    parsedRevision?.edits.filter((edit) => currentRevisionDecisions[edit.id] != null).length ?? 0;
+  const acceptedRevisionCount =
+    parsedRevision?.edits.filter((edit) => currentRevisionDecisions[edit.id] === "accepted").length ?? 0;
+  const revisionTotalCount = parsedRevision?.edits.length ?? 0;
+  const activeFilteredEditPosition =
+    activeEditIndex === null
+      ? -1
+      : filteredRevisionEdits.findIndex((edit) => edit.index === activeEditIndex);
+  const resolvedRevisionEssay = useMemo(
+    () =>
+      currentRevisionStage
+        ? materializeRevisionEssay(
+            currentRevisionStage.annotatedEssay,
+            currentRevisionStage.correctionNotes,
+            currentRevisionDecisions
+          )
+        : essay,
+    [currentRevisionDecisions, currentRevisionStage, essay]
   );
   const isTask1 = taskType === "task1";
   const draftOwnerId = sessionContext.user?.id ?? "guest";
@@ -410,7 +451,7 @@ function CheckerPageContent() {
     setDraftReady(false);
     setResult(null);
     setActiveEditIndex(null);
-    setActiveRevisionStage("optimization");
+    setActiveRevisionStage("grammar");
     setFeedbackChoice(null);
     setFeedbackComment("");
     setFeedbackSubmitted(false);
@@ -443,10 +484,6 @@ function CheckerPageContent() {
         const data = (await response.json()) as PracticeQuestionPayload | { error?: string };
 
         if (!response.ok || !("question" in data)) {
-          if (response.status === 401) {
-            showError(t.authRequired, "auth");
-            return;
-          }
           throw new Error("PRACTICE_QUESTION_LOAD_FAILED");
         }
 
@@ -476,7 +513,7 @@ function CheckerPageContent() {
         setPromptEditing(false);
         setResult(null);
         setActiveEditIndex(null);
-        setActiveRevisionStage("optimization");
+        setActiveRevisionStage("grammar");
         setFeedbackChoice(null);
         setFeedbackComment("");
         setFeedbackSubmitted(false);
@@ -614,12 +651,12 @@ function CheckerPageContent() {
     }
 
     function handlePointerDown(event: MouseEvent | TouchEvent) {
-      if (!activeEditRef.current) {
+      if (!reviseWorkspaceRef.current) {
         return;
       }
 
       const target = event.target;
-      if (target instanceof Node && !activeEditRef.current.contains(target)) {
+      if (target instanceof Node && !reviseWorkspaceRef.current.contains(target)) {
         setActiveEditIndex(null);
       }
     }
@@ -684,6 +721,23 @@ function CheckerPageContent() {
   }, [activeEditIndex, parsedRevision]);
 
   useEffect(() => {
+    if (
+      revisionCategoryFilter !== "all" &&
+      !groupedRevisionEdits.some((group) => group.key === revisionCategoryFilter)
+    ) {
+      setRevisionCategoryFilter("all");
+      return;
+    }
+
+    if (
+      activeEditIndex !== null &&
+      !filteredRevisionEdits.some((edit) => edit.index === activeEditIndex)
+    ) {
+      setActiveEditIndex(null);
+    }
+  }, [activeEditIndex, filteredRevisionEdits, groupedRevisionEdits, revisionCategoryFilter]);
+
+  useEffect(() => {
     if (!result || !reportSectionRef.current) {
       return;
     }
@@ -704,7 +758,13 @@ function CheckerPageContent() {
     setReportView("overview");
     setReviseLayout("split");
     setActiveEditIndex(null);
-    setActiveRevisionStage("optimization");
+    setActiveRevisionStage("grammar");
+    setRevisionCategoryFilter("all");
+    setRevisionDecisions({
+      grammar: {},
+      optimization: {}
+    });
+    setRevisionCopyState("idle");
     setFeedbackChoice(null);
     setFeedbackComment("");
     setFeedbackSubmitting(false);
@@ -757,7 +817,7 @@ function CheckerPageContent() {
           "Idempotency-Key": requestId
         },
         body: JSON.stringify({
-          practiceId,
+          ...(practiceId ? { practiceId } : {}),
           taskType,
           provider,
           locale,
@@ -1051,6 +1111,78 @@ function CheckerPageContent() {
     }
   }
 
+  function updateRevisionDecision(editId: string, decision: RevisionDecision) {
+    setRevisionDecisions((current) => ({
+      ...current,
+      [activeRevisionStage]: {
+        ...current[activeRevisionStage],
+        [editId]: decision
+      }
+    }));
+    setRevisionCopyState("idle");
+  }
+
+  function navigateRevision(direction: "previous" | "next") {
+    if (!filteredRevisionEdits.length) {
+      return;
+    }
+
+    const nextPosition =
+      activeFilteredEditPosition === -1
+        ? direction === "next"
+          ? 0
+          : filteredRevisionEdits.length - 1
+        : activeFilteredEditPosition + (direction === "next" ? 1 : -1);
+    const nextEdit = filteredRevisionEdits[nextPosition];
+
+    if (nextEdit) {
+      setActiveEditIndex(nextEdit.index);
+    }
+  }
+
+  function acceptAllGrammarRevisions() {
+    if (activeRevisionStage !== "grammar" || !parsedRevision) {
+      return;
+    }
+
+    const accepted = Object.fromEntries(
+      parsedRevision.edits.map((edit) => [edit.id, "accepted" as const])
+    );
+    setRevisionDecisions((current) => ({
+      ...current,
+      grammar: accepted
+    }));
+    setRevisionCopyState("idle");
+  }
+
+  async function copyResolvedRevision() {
+    try {
+      await navigator.clipboard.writeText(resolvedRevisionEssay);
+      setRevisionCopyState("copied");
+      window.setTimeout(() => setRevisionCopyState("idle"), 1800);
+    } catch {
+      setRevisionCopyState("error");
+    }
+  }
+
+  function continueWithResolvedRevision() {
+    if (!acceptedRevisionCount) {
+      return;
+    }
+
+    setEssay(resolvedRevisionEssay);
+    setResult(null);
+    setReportView("overview");
+    setActiveEditIndex(null);
+    markDraftDirty();
+
+    window.requestAnimationFrame(() => {
+      const editor = document.querySelector<HTMLTextAreaElement>(".checkerEssayInput");
+      editor?.scrollIntoView({ behavior: "smooth", block: "center" });
+      editor?.focus();
+    });
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!sessionReady || loading) {
@@ -1272,9 +1404,7 @@ function CheckerPageContent() {
             <div className="checkerPromptHeader">
               <span>{t.prompt}</span>
               <div className="checkerPromptControls">
-                {practiceId ? (
-                  <span className="checkerReadonlyBadge">{t.practiceReadonly}</span>
-                ) : (
+                {!practiceId ? (
                   <>
                   <button type="button" className="checkerPromptEditButton" onClick={requestExampleDraft}>
                     {t.loadExample}
@@ -1288,7 +1418,7 @@ function CheckerPageContent() {
                       {promptEditLabel}
                     </button>
                   </>
-                )}
+                ) : null}
               </div>
             </div>
             <div className="checkerPromptBody">
@@ -1312,10 +1442,9 @@ function CheckerPageContent() {
             <div className="checkerField checkerUploadBlock">
               <div className="checkerPromptHeader">
                 <span>{t.task1ImageLabel}</span>
-                {practiceId ? <span className="checkerReadonlyBadge">{t.practiceReadonly}</span> : null}
               </div>
               <div className="checkerPromptBody checkerUploadBody">
-                <p className="checkerUploadHint">{practiceId ? t.practiceImageHint : t.task1ImageHint}</p>
+                {!practiceId ? <p className="checkerUploadHint">{t.task1ImageHint}</p> : null}
                 {practiceId ? (
                   <div className={`checkerUploadDropzone is-readonly${taskImage ? " has-preview" : ""}`}>
                     {taskImage ? (
@@ -1564,7 +1693,60 @@ function CheckerPageContent() {
                   </article>
                 </>
               ) : (
-                <section className={`reviseWorkspace${reviseLayout === "stack" ? " is-stacked" : ""}`}>
+                <section
+                  className={`reviseWorkspace${reviseLayout === "stack" ? " is-stacked" : ""}`}
+                  ref={reviseWorkspaceRef}
+                >
+                  <div className="reviseWorkbenchToolbar">
+                    <div className="reviseProgressBlock">
+                      <div className="reviseProgressHeader">
+                        <span>{t.revisionProgress}</span>
+                        <strong>
+                          {revisionDecisionCount} / {revisionTotalCount}
+                        </strong>
+                      </div>
+                      <progress
+                        className="reviseProgress"
+                        max={revisionTotalCount || 1}
+                        value={revisionDecisionCount}
+                        aria-label={t.revisionProgress}
+                      />
+                      <p>{t.revisionPendingKeepsOriginal}</p>
+                    </div>
+                    <div className="reviseWorkbenchActions">
+                      {activeRevisionStage === "grammar" ? (
+                        <ActionButton
+                          type="button"
+                          variant="secondary"
+                          onClick={acceptAllGrammarRevisions}
+                          disabled={!revisionTotalCount || revisionDecisionCount === revisionTotalCount}
+                        >
+                          {t.revisionAcceptAllGrammar}
+                        </ActionButton>
+                      ) : null}
+                      <ActionButton
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void copyResolvedRevision()}
+                        disabled={!acceptedRevisionCount}
+                      >
+                        {revisionCopyState === "copied"
+                          ? t.revisionCopied
+                          : revisionCopyState === "error"
+                            ? t.revisionCopyFailed
+                            : t.revisionCopyFullText}
+                      </ActionButton>
+                      <ActionButton
+                        type="button"
+                        variant="primary"
+                        onClick={continueWithResolvedRevision}
+                        disabled={!acceptedRevisionCount}
+                      >
+                        {t.revisionContinueReview}
+                      </ActionButton>
+                    </div>
+                  </div>
+
                   <article className="feedbackSection reviseEssayPanel">
                     <div className="revisePanelHeader">
                       <p className="sectionLabel">{t.reviseTitle}</p>
@@ -1598,13 +1780,15 @@ function CheckerPageContent() {
                       </div>
                     </div>
                     <p className="revisionHint">{t.reviseBody}</p>
-                    <div className="reviseLayoutSwitch" role="group" aria-label="Revision stage">
+                    <div className="reviseLayoutSwitch revisionStageSwitch" role="group" aria-label="Revision stage">
                       <button
                         type="button"
                         className={`reviseLayoutButton${activeRevisionStage === "grammar" ? " is-active" : ""}`}
                         onClick={() => {
                           setActiveRevisionStage("grammar");
                           setActiveEditIndex(null);
+                          setRevisionCategoryFilter("all");
+                          setRevisionCopyState("idle");
                         }}
                       >
                         <span>{t.revisionStageGrammar}</span>
@@ -1615,17 +1799,20 @@ function CheckerPageContent() {
                         onClick={() => {
                           setActiveRevisionStage("optimization");
                           setActiveEditIndex(null);
+                          setRevisionCategoryFilter("all");
+                          setRevisionCopyState("idle");
                         }}
                       >
                         <span>{t.revisionStageOptimization}</span>
                       </button>
                     </div>
-                    <div className="annotatedEssay reviseAnnotatedEssay" ref={activeEditRef}>
+                    <div className="annotatedEssay reviseAnnotatedEssay">
                       {currentRevisionStage
                         ? renderAnnotatedEssay(
                             currentRevisionStage.annotatedEssay,
                             result.highlightedSentences.map((item) => item.sentence),
                             currentRevisionStage.correctionNotes,
+                            currentRevisionDecisions,
                             activeEditIndex,
                             (index) => setActiveEditIndex((current) => (current === index ? null : index)),
                             t
@@ -1638,10 +1825,63 @@ function CheckerPageContent() {
                     <p className="sectionLabel">
                       {activeRevisionStage === "grammar" ? t.revisionStageGrammar : t.revisionStageOptimization}
                     </p>
+                    <div className="reviseCategoryFilter" role="group" aria-label={t.revisionCategoryFilter}>
+                      <button
+                        type="button"
+                        className={`reviseFilterButton${revisionCategoryFilter === "all" ? " is-active" : ""}`}
+                        aria-pressed={revisionCategoryFilter === "all"}
+                        onClick={() => setRevisionCategoryFilter("all")}
+                      >
+                        {t.revisionFilterAll}
+                      </button>
+                      {groupedRevisionEdits.map((group) => (
+                        <button
+                          key={`revision-filter-${group.key}`}
+                          type="button"
+                          className={`reviseFilterButton${revisionCategoryFilter === group.key ? " is-active" : ""}`}
+                          aria-pressed={revisionCategoryFilter === group.key}
+                          onClick={() => {
+                            setRevisionCategoryFilter(group.key);
+                            setExpandedRevisionCategories((current) => ({
+                              ...current,
+                              [group.key]: true
+                            }));
+                          }}
+                        >
+                          {group.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="reviseNavigation">
+                      <button
+                        type="button"
+                        onClick={() => navigateRevision("previous")}
+                        disabled={activeFilteredEditPosition <= 0}
+                      >
+                        <span aria-hidden="true">←</span> {t.revisionPrevious}
+                      </button>
+                      <span>
+                        {activeFilteredEditPosition >= 0 ? activeFilteredEditPosition + 1 : 0} /{" "}
+                        {filteredRevisionEdits.length}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => navigateRevision("next")}
+                        disabled={
+                          !filteredRevisionEdits.length ||
+                          activeFilteredEditPosition === filteredRevisionEdits.length - 1
+                        }
+                      >
+                        {t.revisionNext} <span aria-hidden="true">→</span>
+                      </button>
+                    </div>
                     {groupedRevisionEdits.length ? (
                       <div className="reviseDetailList">
-                        {groupedRevisionEdits.map((group) => {
+                        {filteredRevisionGroups.map((group) => {
                           const isOpen = expandedRevisionCategories[group.key] ?? false;
+                          const completedInGroup = group.edits.filter(
+                            (edit) => currentRevisionDecisions[edit.id] != null
+                          ).length;
 
                           return (
                             <section key={`revise-group-${group.key}`} className="reviseCategoryGroup">
@@ -1657,7 +1897,7 @@ function CheckerPageContent() {
                               >
                                 <span className="reviseCategoryTitle">{group.label}</span>
                                 <span className="reviseCategoryMeta">
-                                  {group.edits.length}
+                                  {completedInGroup}/{group.edits.length}
                                   <i className={`ai-chevron-${isOpen ? "up" : "down"}`} aria-hidden="true" />
                                 </span>
                               </button>
@@ -1665,34 +1905,74 @@ function CheckerPageContent() {
                                 <div className="reviseCategoryItems">
                                   {group.edits.map((edit) => {
                                     const isActive = activeEditIndex === edit.index;
+                                    const decision = currentRevisionDecisions[edit.id];
 
                                     return (
-                                      <button
+                                      <article
                                         key={`revise-detail-${edit.id}-${edit.index}`}
-                                        type="button"
                                         data-revise-card-index={edit.index}
-                                        className={`reviseDetailCard${isActive ? " is-active" : ""}`}
-                                        onClick={() =>
-                                          setActiveEditIndex((current) => (current === edit.index ? null : edit.index))
-                                        }
+                                        className={`reviseDetailCard${isActive ? " is-active" : ""}${
+                                          decision ? ` is-${decision}` : ""
+                                        }`}
                                       >
-                                        <div className="reviseDetailHeader">
-                                          <span className="reviseDetailIndex">{String(edit.index + 1).padStart(2, "0")}</span>
-                                        </div>
-                                        <div className="reviseDetailSummary">
-                                          <p className="reviseDetailOriginal">{edit.original}</p>
-                                          <i className="ai-arrow-right" aria-hidden="true" />
-                                          <p className="reviseDetailSuggested">{edit.corrected}</p>
-                                        </div>
+                                        <button
+                                          type="button"
+                                          className="reviseDetailSelect"
+                                          onClick={() =>
+                                            setActiveEditIndex((current) =>
+                                              current === edit.index ? null : edit.index
+                                            )
+                                          }
+                                        >
+                                          <div className="reviseDetailHeader">
+                                            <span className="reviseDetailIndex">
+                                              {String(edit.index + 1).padStart(2, "0")}
+                                            </span>
+                                            {decision ? (
+                                              <span className={`reviseDecisionBadge is-${decision}`}>
+                                                {decision === "accepted"
+                                                  ? t.revisionAccepted
+                                                  : t.revisionIgnored}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          <div className="reviseDetailSummary">
+                                            <p className="reviseDetailOriginal">{edit.original}</p>
+                                            <i className="ai-arrow-right" aria-hidden="true" />
+                                            <p className="reviseDetailSuggested">{edit.corrected}</p>
+                                          </div>
+                                        </button>
                                         {isActive ? (
                                           <div className="reviseDetailBody">
                                             <div className="reviseReason">
                                               <span>{t.correctionReason}</span>
                                               <p>{edit.note?.reason ?? ""}</p>
                                             </div>
+                                            <div className="reviseDecisionActions">
+                                              <button
+                                                type="button"
+                                                className={`reviseDecisionButton is-ignore${
+                                                  decision === "ignored" ? " is-active" : ""
+                                                }`}
+                                                aria-pressed={decision === "ignored"}
+                                                onClick={() => updateRevisionDecision(edit.id, "ignored")}
+                                              >
+                                                {t.revisionIgnore}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className={`reviseDecisionButton is-accept${
+                                                  decision === "accepted" ? " is-active" : ""
+                                                }`}
+                                                aria-pressed={decision === "accepted"}
+                                                onClick={() => updateRevisionDecision(edit.id, "accepted")}
+                                              >
+                                                {t.revisionAccept}
+                                              </button>
+                                            </div>
                                           </div>
                                         ) : null}
-                                      </button>
+                                      </article>
                                     );
                                   })}
                                 </div>

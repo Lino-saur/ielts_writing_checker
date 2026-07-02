@@ -6,7 +6,6 @@ import { AppNavbar } from "@/components/app-navbar";
 import { Pill, Surface } from "@/components/ui-kit";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
-import { useAuthSession } from "@/lib/auth-client-session";
 import type { PracticeQuestion, TaskType } from "@/lib/types";
 
 type PracticePayload = {
@@ -21,7 +20,6 @@ function normalizeTaskLabel(taskType: TaskType, labels: { task1: string; task2: 
 export default function PracticePageClient() {
   const [locale, setLocale] = useRouteLocale();
   const { practice: t, navbar } = getMessages(locale);
-  const { sessionContext, sessionResolved } = useAuthSession();
   const [items, setItems] = useState<PracticeQuestion[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,10 +27,6 @@ export default function PracticePageClient() {
   const [bookFilter, setBookFilter] = useState("all");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskType>("all");
   const [tagFilter, setTagFilter] = useState("all");
-  const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
-  const [pendingPracticeHref, setPendingPracticeHref] = useState<string | null>(null);
-
-  const isAuthenticated = Boolean(sessionContext.user);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +65,7 @@ export default function PracticePageClient() {
     return () => {
       cancelled = true;
     };
-  }, [t.loadFailed, isAuthenticated]);
+  }, [t.loadFailed]);
 
   const books = useMemo(() => {
     return [...new Set(items.map((item) => item.bookNumber))].sort((left, right) => right - left);
@@ -96,24 +90,6 @@ export default function PracticePageClient() {
     });
   }, [bookFilter, items, tagFilter, taskFilter]);
 
-  function openAuth(mode: "signIn" | "signUp") {
-    setAuthRequest({
-      mode,
-      id: Date.now()
-    });
-  }
-
-  function requestPractice(checkerHref: string) {
-    setPendingPracticeHref(checkerHref);
-    openAuth("signIn");
-  }
-
-  function handleSessionUpdated() {
-    if (pendingPracticeHref) {
-      window.location.assign(pendingPracticeHref);
-    }
-  }
-
   return (
     <main className="pageShell practicePage">
       <AppNavbar
@@ -121,9 +97,7 @@ export default function PracticePageClient() {
         onLocaleChange={setLocale}
         copy={navbar}
         taskMenuMode="all"
-        authRequest={authRequest}
         authHint={t.authDialogHint}
-        onSessionUpdated={handleSessionUpdated}
       />
 
       <section className="practiceHero">
@@ -143,7 +117,7 @@ export default function PracticePageClient() {
         </Surface>
       </section>
 
-      {!sessionResolved || loading ? (
+      {loading ? (
         <Surface className="practiceStatePanel">
           <p>{t.loading}</p>
         </Surface>
@@ -219,19 +193,9 @@ export default function PracticePageClient() {
                     <p className="practicePromptPreview">{item.prompt}</p>
 
                     <div className="practiceCardActions">
-                      {isAuthenticated ? (
-                        <Link href={checkerHref} className="uiButton practiceStartButton">
-                          {t.startPractice}
-                        </Link>
-                      ) : (
-                        <button
-                          type="button"
-                          className="uiButton practiceStartButton"
-                          onClick={() => requestPractice(checkerHref)}
-                        >
-                          {t.startPractice}
-                        </button>
-                      )}
+                      <Link href={checkerHref} className="uiButton practiceStartButton">
+                        {t.startPractice}
+                      </Link>
                     </div>
                   </Surface>
                 );
