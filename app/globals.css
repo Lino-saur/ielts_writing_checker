@@ -989,14 +989,9 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
 }
 
 .practicePromptPreview {
-  display: -webkit-box;
-  min-height: 5.4em;
   margin: 0;
-  overflow: hidden;
   color: var(--muted);
   line-height: 1.8;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
 }
 
 .practiceCardActions {
@@ -5536,6 +5531,10 @@ html[data-theme="dark"] .authSwitchButton {
 
   .practicePaginationActions {
     justify-content: space-between;
+  }
+
+  .practicePaginationActions .practicePageNumber:not(.is-active) {
+    display: none;
   }
 
   .practiceSourceSwitch {

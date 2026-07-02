@@ -41,6 +41,7 @@ export type PracticeQuestionFilters = {
   bookNumber?: number;
   testNumber?: number;
   taskType?: TaskType;
+  tag?: string;
   contentStatus?: PracticeQuestionContentStatus;
   status?: PracticeQuestionStatus;
   limit?: number;
@@ -100,6 +101,10 @@ export async function listPracticeQuestions(filters: PracticeQuestionFilters = {
   appendFilter(where, values, "book_number", filters.bookNumber);
   appendFilter(where, values, "test_number", filters.testNumber);
   appendFilter(where, values, "task_type", filters.taskType);
+  if (filters.tag) {
+    values.push(filters.tag);
+    where.push(`tags_json ? $${values.length}`);
+  }
   appendFilter(where, values, "content_status", filters.contentStatus);
   appendFilter(where, values, "status", filters.status);
 
@@ -112,48 +117,71 @@ export async function listPracticeQuestions(filters: PracticeQuestionFilters = {
   values.push(offset);
   const offsetRef = `$${values.length}`;
 
-  const result = await db.query<PracticeQuestionRow>(
-    `SELECT
-       id,
-       source,
-       module,
-       book_number,
-       test_number,
-       task_type,
-       title,
-       tags_json,
-       prompt_text,
-       source_ref,
-       source_url,
-       metadata_json,
-       image_source_url,
-       image_source_urls_json,
-       image_object_key,
-       image_name,
-       image_mime_type,
-       image_size_bytes,
-       content_status,
-       status,
-       sort_order,
-       created_at,
-       updated_at
-     FROM practice_questions
-     ${whereSql}
-     ORDER BY book_number DESC, test_number ASC, task_type ASC
-     LIMIT ${limitRef} OFFSET ${offsetRef}`,
-    values
-  );
-
-  const countResult = await db.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count
-     FROM practice_questions
-     ${whereSql}`,
-    values.slice(0, values.length - 2)
-  );
+  const facetValues: Array<string> = [
+    filters.source ?? "cambridge_ielts",
+    filters.module ?? "academic",
+    filters.status ?? "published"
+  ];
+  const facetWhere = "WHERE source = $1 AND module = $2 AND status = $3";
+  const [result, countResult, booksResult, tagsResult] = await Promise.all([
+    db.query<PracticeQuestionRow>(
+      `SELECT
+         id,
+         source,
+         module,
+         book_number,
+         test_number,
+         task_type,
+         title,
+         tags_json,
+         prompt_text,
+         source_ref,
+         source_url,
+         metadata_json,
+         image_source_url,
+         image_source_urls_json,
+         image_object_key,
+         image_name,
+         image_mime_type,
+         image_size_bytes,
+         content_status,
+         status,
+         sort_order,
+         created_at,
+         updated_at
+       FROM practice_questions
+       ${whereSql}
+       ORDER BY book_number DESC, test_number ASC, task_type ASC
+       LIMIT ${limitRef} OFFSET ${offsetRef}`,
+      values
+    ),
+    db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM practice_questions
+       ${whereSql}`,
+      values.slice(0, values.length - 2)
+    ),
+    db.query<{ book_number: number }>(
+      `SELECT DISTINCT book_number
+       FROM practice_questions
+       ${facetWhere}
+       ORDER BY book_number DESC`,
+      facetValues
+    ),
+    db.query<{ tag: string }>(
+      `SELECT DISTINCT jsonb_array_elements_text(tags_json) AS tag
+       FROM practice_questions
+       ${facetWhere}
+       ORDER BY tag ASC`,
+      facetValues
+    )
+  ]);
 
   return {
     items: result.rows.map(mapPracticeQuestion),
-    total: Number(countResult.rows[0]?.count || 0)
+    total: Number(countResult.rows[0]?.count || 0),
+    books: booksResult.rows.map((row) => Number(row.book_number)),
+    tags: tagsResult.rows.map((row) => row.tag)
   };
 }
 

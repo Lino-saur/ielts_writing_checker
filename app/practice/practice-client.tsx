@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { Pill, Surface } from "@/components/ui-kit";
 import { getMessages } from "@/lib/i18n/messages";
@@ -18,6 +18,11 @@ import type {
 type PracticePayload = {
   items: PracticeQuestion[];
   total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  books: number[];
+  tags: string[];
 };
 
 type HistoricalPayload = {
@@ -106,6 +111,10 @@ export default function PracticePageClient() {
     searchParams.get("source") === "historical" ? "historical" : "cambridge"
   );
   const [items, setItems] = useState<PracticeQuestion[]>([]);
+  const [practiceTotal, setPracticeTotal] = useState(0);
+  const [practiceTotalPages, setPracticeTotalPages] = useState(1);
+  const [books, setBooks] = useState<number[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [historicalItems, setHistoricalItems] = useState<HistoricalPracticeQuestion[]>([]);
   const [historicalTotal, setHistoricalTotal] = useState(0);
   const [historicalTotalPages, setHistoricalTotalPages] = useState(1);
@@ -114,11 +123,16 @@ export default function PracticePageClient() {
   const [historicalTypes, setHistoricalTypes] = useState<HistoricalQuestionType[]>([]);
   const [historicalLoading, setHistoricalLoading] = useState(false);
   const [historicalError, setHistoricalError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(source === "cambridge");
   const [error, setError] = useState<string | null>(null);
-  const [bookFilter, setBookFilter] = useState("all");
-  const [taskFilter, setTaskFilter] = useState<"all" | TaskType>("all");
-  const [tagFilter, setTagFilter] = useState("all");
+  const [bookFilter, setBookFilter] = useState(searchParams.get("book") ?? "all");
+  const [taskFilter, setTaskFilter] = useState<"all" | TaskType>(
+    searchParams.get("task") === "task1" || searchParams.get("task") === "task2"
+      ? searchParams.get("task") as TaskType
+      : "all"
+  );
+  const [tagFilter, setTagFilter] = useState(searchParams.get("tag") ?? "all");
+  const [practicePage, setPracticePage] = useState(parsePage(searchParams.get("page")));
   const [yearFilter, setYearFilter] = useState(searchParams.get("year") ?? "all");
   const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category") ?? "all");
   const [questionTypeFilter, setQuestionTypeFilter] = useState(searchParams.get("type") ?? "all");
@@ -130,15 +144,25 @@ export default function PracticePageClient() {
   const [historicalPage, setHistoricalPage] = useState(parsePage(searchParams.get("page")));
 
   useEffect(() => {
-    let cancelled = false;
+    if (source !== "cambridge") {
+      return;
+    }
+
+    const controller = new AbortController();
 
     async function loadPracticeQuestions() {
       setLoading(true);
       setError(null);
 
       try {
-        const response = await fetch("/api/practice/questions?limit=200&status=published", {
-          cache: "no-store"
+        const params = new URLSearchParams({
+          page: String(practicePage)
+        });
+        if (bookFilter !== "all") params.set("book", bookFilter);
+        if (taskFilter !== "all") params.set("task", taskFilter);
+        if (tagFilter !== "all") params.set("tag", tagFilter);
+        const response = await fetch(`/api/practice/questions?${params.toString()}`, {
+          signal: controller.signal
         });
         const payload = (await response.json()) as PracticePayload | { error?: string };
 
@@ -146,15 +170,21 @@ export default function PracticePageClient() {
           throw new Error("LOAD_FAILED");
         }
 
-        if (!cancelled) {
-          setItems(payload.items);
+        if (practicePage > payload.totalPages) {
+          setPracticePage(payload.totalPages);
+          return;
         }
-      } catch {
-        if (!cancelled) {
-          setError(t.loadFailed);
-        }
+
+        setItems(payload.items);
+        setPracticeTotal(payload.total);
+        setPracticeTotalPages(payload.totalPages);
+        setBooks(payload.books);
+        setTags(payload.tags);
+      } catch (loadError) {
+        if (loadError instanceof DOMException && loadError.name === "AbortError") return;
+        setError(t.loadFailed);
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
@@ -163,9 +193,9 @@ export default function PracticePageClient() {
     void loadPracticeQuestions();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [t.loadFailed]);
+  }, [bookFilter, practicePage, source, t.loadFailed, tagFilter, taskFilter]);
 
   useEffect(() => {
     if (source !== "historical") {
@@ -237,6 +267,8 @@ export default function PracticePageClient() {
     const params = new URLSearchParams(searchParams.toString());
     if (source === "historical") {
       params.set("source", "historical");
+      params.delete("book");
+      params.delete("tag");
       if (historicalTaskFilter === "all") params.delete("task");
       else params.set("task", historicalTaskFilter);
       if (yearFilter === "all") params.delete("year");
@@ -252,11 +284,17 @@ export default function PracticePageClient() {
       else params.set("page", String(historicalPage));
     } else {
       params.delete("source");
-      params.delete("task");
       params.delete("year");
       params.delete("category");
       params.delete("type");
-      params.delete("page");
+      if (bookFilter === "all") params.delete("book");
+      else params.set("book", bookFilter);
+      if (taskFilter === "all") params.delete("task");
+      else params.set("task", taskFilter);
+      if (tagFilter === "all") params.delete("tag");
+      else params.set("tag", tagFilter);
+      if (practicePage === 1) params.delete("page");
+      else params.set("page", String(practicePage));
     }
 
     const nextQuery = params.toString();
@@ -265,38 +303,19 @@ export default function PracticePageClient() {
     }
   }, [
     categoryFilter,
+    bookFilter,
     historicalPage,
     historicalTaskFilter,
     pathname,
+    practicePage,
     questionTypeFilter,
     router,
     searchParams,
     source,
+    tagFilter,
+    taskFilter,
     yearFilter
   ]);
-
-  const books = useMemo(() => {
-    return [...new Set(items.map((item) => item.bookNumber))].sort((left, right) => right - left);
-  }, [items]);
-
-  const tags = useMemo(() => {
-    return [...new Set(items.flatMap((item) => item.tags))].sort((left, right) => left.localeCompare(right));
-  }, [items]);
-
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      if (bookFilter !== "all" && item.bookNumber !== Number(bookFilter)) {
-        return false;
-      }
-      if (taskFilter !== "all" && item.taskType !== taskFilter) {
-        return false;
-      }
-      if (tagFilter !== "all" && !item.tags.includes(tagFilter)) {
-        return false;
-      }
-      return true;
-    });
-  }, [bookFilter, items, tagFilter, taskFilter]);
 
   return (
     <main className="pageShell practicePage">
@@ -310,12 +329,7 @@ export default function PracticePageClient() {
 
       <h1 className="srOnly">{t.title}</h1>
 
-      {loading ? (
-        <Surface className="practiceStatePanel">
-          <p>{t.loading}</p>
-        </Surface>
-      ) : (
-        <section className="practiceWorkspace">
+      <section className="practiceWorkspace">
           <div className="practiceSourceSwitch" role="tablist" aria-label={t.sourceLabel}>
             <button
               type="button"
@@ -325,6 +339,7 @@ export default function PracticePageClient() {
               onClick={() => {
                 setSource("cambridge");
                 setHistoricalPage(1);
+                setPracticePage(1);
               }}
             >
               {t.sourceCambridge}
@@ -337,6 +352,7 @@ export default function PracticePageClient() {
               onClick={() => {
                 setSource("historical");
                 setHistoricalPage(1);
+                setPracticePage(1);
               }}
             >
               {t.sourceHistorical}
@@ -348,7 +364,13 @@ export default function PracticePageClient() {
               <Surface className="practiceFilters">
                 <label>
                   <span>{t.bookLabel}</span>
-                  <select value={bookFilter} onChange={(event) => setBookFilter(event.target.value)}>
+                  <select
+                    value={bookFilter}
+                    onChange={(event) => {
+                      setBookFilter(event.target.value);
+                      setPracticePage(1);
+                    }}
+                  >
                     <option value="all">{t.allBooks}</option>
                     {books.map((book) => (
                       <option key={book} value={book}>
@@ -361,7 +383,10 @@ export default function PracticePageClient() {
                   <span>Task</span>
                   <select
                     value={taskFilter}
-                    onChange={(event) => setTaskFilter(event.target.value as "all" | TaskType)}
+                    onChange={(event) => {
+                      setTaskFilter(event.target.value as "all" | TaskType);
+                      setPracticePage(1);
+                    }}
                   >
                     <option value="all">{t.allTasks}</option>
                     <option value="task1">{t.task1}</option>
@@ -370,7 +395,13 @@ export default function PracticePageClient() {
                 </label>
                 <label>
                   <span>{t.tags}</span>
-                  <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+                  <select
+                    value={tagFilter}
+                    onChange={(event) => {
+                      setTagFilter(event.target.value);
+                      setPracticePage(1);
+                    }}
+                  >
                     <option value="all">{t.allTags}</option>
                     {tags.map((tag) => (
                       <option key={tag} value={tag}>
@@ -381,18 +412,22 @@ export default function PracticePageClient() {
                 </label>
               </Surface>
 
-              {error ? (
+              {loading ? (
+                <Surface className="practiceStatePanel">
+                  <p>{t.loading}</p>
+                </Surface>
+              ) : error ? (
                 <Surface className="practiceStatePanel">
                   <p>{error}</p>
                 </Surface>
-              ) : filteredItems.length === 0 ? (
+              ) : items.length === 0 ? (
                 <Surface className="practiceStatePanel">
                   <h2>{t.emptyTitle}</h2>
                   <p>{t.emptyBody}</p>
                 </Surface>
               ) : (
                 <div className="practiceGrid">
-                  {filteredItems.map((item) => {
+                  {items.map((item) => {
                     const checkerHref = `/${locale}/checker?task=${item.taskType}&practiceId=${encodeURIComponent(item.id)}`;
                     return (
                       <Surface as="article" key={item.id} className="practiceCard">
@@ -423,6 +458,48 @@ export default function PracticePageClient() {
                   })}
                 </div>
               )}
+
+              {practiceTotal > 0 ? (
+                <nav className="practicePagination" aria-label={t.paginationLabel}>
+                  <p>
+                    {locale === "zh-CN"
+                      ? `共 ${practiceTotal} 道题 · 第 ${practicePage} / ${practiceTotalPages} 页`
+                      : `${practiceTotal} questions · Page ${practicePage} of ${practiceTotalPages}`}
+                  </p>
+                  <div className="practicePaginationActions">
+                    <button
+                      type="button"
+                      disabled={practicePage <= 1 || loading}
+                      onClick={() => setPracticePage((page) => Math.max(1, page - 1))}
+                    >
+                      {t.previousPage}
+                    </button>
+                    {getPaginationPages(practicePage, practiceTotalPages).map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        aria-current={page === practicePage ? "page" : undefined}
+                        className={`practicePageNumber ${
+                          page === practicePage ? "is-active" : ""
+                        }`}
+                        disabled={loading}
+                        onClick={() => setPracticePage(page)}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={practicePage >= practiceTotalPages || loading}
+                      onClick={() =>
+                        setPracticePage((page) => Math.min(practiceTotalPages, page + 1))
+                      }
+                    >
+                      {t.nextPage}
+                    </button>
+                  </div>
+                </nav>
+              ) : null}
             </>
           ) : historicalLoading ? (
             <Surface className="practiceStatePanel">
@@ -565,7 +642,9 @@ export default function PracticePageClient() {
                         key={page}
                         type="button"
                         aria-current={page === historicalPage ? "page" : undefined}
-                        className={page === historicalPage ? "is-active" : ""}
+                        className={`practicePageNumber ${
+                          page === historicalPage ? "is-active" : ""
+                        }`}
                         disabled={historicalLoading}
                         onClick={() => setHistoricalPage(page)}
                       >
@@ -586,8 +665,7 @@ export default function PracticePageClient() {
               ) : null}
             </>
           )}
-        </section>
-      )}
+      </section>
     </main>
   );
 }

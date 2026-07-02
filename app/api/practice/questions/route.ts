@@ -22,17 +22,31 @@ function parseContentStatus(value: string | null): PracticeQuestionContentStatus
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const page = Math.max(parseInteger(searchParams.get("page")) ?? 1, 1);
+    const pageSize = 24;
+    const tag = searchParams.get("tag")?.trim().slice(0, 80) || undefined;
     const data = await listPracticeQuestions({
       bookNumber: parseInteger(searchParams.get("book")),
       testNumber: parseInteger(searchParams.get("test")),
-      taskType: parseTaskType(searchParams.get("taskType")),
+      taskType: parseTaskType(searchParams.get("task") ?? searchParams.get("taskType")),
+      tag,
       contentStatus: parseContentStatus(searchParams.get("contentStatus")),
       status: "published",
-      limit: parseInteger(searchParams.get("limit")),
-      offset: parseInteger(searchParams.get("offset"))
+      limit: pageSize,
+      offset: (page - 1) * pageSize
     });
 
-    return NextResponse.json(data);
+    const totalPages = Math.max(1, Math.ceil(data.total / pageSize));
+    return NextResponse.json({
+      ...data,
+      page,
+      pageSize,
+      totalPages
+    }, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600"
+      }
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error.";
     return NextResponse.json({ error: message }, { status: 500 });
