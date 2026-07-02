@@ -21,7 +21,6 @@ export default function PracticePageClient() {
   const [locale, setLocale] = useRouteLocale();
   const { practice: t, navbar } = getMessages(locale);
   const [items, setItems] = useState<PracticeQuestion[]>([]);
-  const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bookFilter, setBookFilter] = useState("all");
@@ -47,7 +46,6 @@ export default function PracticePageClient() {
 
         if (!cancelled) {
           setItems(payload.items);
-          setTotal(payload.total);
         }
       } catch {
         if (!cancelled) {
@@ -100,22 +98,7 @@ export default function PracticePageClient() {
         authHint={t.authDialogHint}
       />
 
-      <section className="practiceHero">
-        <Surface className="practiceHeroPanel">
-          <div>
-            <p className="sectionLabel">{t.eyebrow}</p>
-            <h1>{t.title}</h1>
-            <p>{t.body}</p>
-          </div>
-          <div className="practiceHeroStats">
-            <Pill>
-              {total ?? "—"} {t.questionCount}
-            </Pill>
-            <Pill>{t.task1}</Pill>
-            <Pill>{t.task2}</Pill>
-          </div>
-        </Surface>
-      </section>
+      <h1 className="srOnly">{t.title}</h1>
 
       {loading ? (
         <Surface className="practiceStatePanel">
@@ -172,12 +155,9 @@ export default function PracticePageClient() {
                 return (
                   <Surface as="article" key={item.id} className="practiceCard">
                     <div className="practiceCardTop">
-                      <div>
-                        <p className="sectionLabel">
-                          {t.bookLabel} {item.bookNumber} / {t.testLabel} {item.testNumber}
-                        </p>
-                        <h2>{item.title}</h2>
-                      </div>
+                      <h2>
+                        {t.bookLabel} {item.bookNumber} · {t.testLabel} {item.testNumber}
+                      </h2>
                       <Pill>{normalizeTaskLabel(item.taskType, t)}</Pill>
                     </div>
 
@@ -187,7 +167,6 @@ export default function PracticePageClient() {
                           {tag}
                         </span>
                       ))}
-                      {item.imageObjectKey ? <span className="practiceTag is-image">{t.imageReady}</span> : null}
                     </div>
 
                     <p className="practicePromptPreview">{item.prompt}</p>

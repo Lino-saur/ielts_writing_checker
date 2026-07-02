@@ -872,44 +872,12 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   max-width: 1320px;
 }
 
-.practiceHero {
-  margin-bottom: 18px;
-}
-
-.practiceHeroPanel {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 24px;
-}
-
-.practiceHeroPanel h1 {
-  margin: 8px 0 10px;
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  letter-spacing: -0.04em;
-}
-
-.practiceHeroPanel p {
-  max-width: 720px;
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.8;
-}
-
-.practiceHeroStats,
-.practiceAuthActions,
 .practiceTagRow,
 .practiceCardActions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-}
-
-.practiceHeroStats {
-  justify-content: flex-end;
-  min-width: 260px;
 }
 
 .practiceWorkspace {
@@ -969,7 +937,7 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
 }
 
 .practiceCardTop h2 {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 1.45rem;
   letter-spacing: -0.03em;
 }
@@ -985,12 +953,6 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   color: var(--muted-strong);
   font-size: 0.78rem;
   font-weight: 800;
-}
-
-.practiceTag.is-image {
-  border-color: rgba(var(--accent-rgb), 0.28);
-  background: var(--accent-soft);
-  color: var(--accent-deep);
 }
 
 .practicePromptPreview {
@@ -1064,14 +1026,6 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   margin: 0;
   color: var(--muted);
   line-height: 1.8;
-}
-
-.practiceAuthPanel {
-  max-width: 720px;
-}
-
-.practiceAuthActions {
-  margin-top: 18px;
 }
 
 .heroStatCard,
@@ -5237,15 +5191,6 @@ html[data-theme="dark"] .authSwitchButton {
     grid-template-columns: 1fr;
   }
 
-  .practiceHeroPanel {
-    flex-direction: column;
-  }
-
-  .practiceHeroStats {
-    justify-content: flex-start;
-    min-width: 0;
-  }
-
   .historyFilters {
     align-items: flex-start;
     flex-direction: column;
@@ -5438,7 +5383,6 @@ html[data-theme="dark"] .authSwitchButton {
   .resultHero,
   .resultHeroActions,
   .historyHeroCard,
-  .practiceHeroPanel,
   .previewHeader,
   .editorFooter,
   .authDialogHeader,
