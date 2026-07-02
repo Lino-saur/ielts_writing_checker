@@ -540,7 +540,9 @@ function CheckerPageContent() {
                 name: question.imageName,
                 mimeType: question.imageMimeType,
                 fileSize: question.imageSizeBytes ?? 0,
-                previewUrl: `/api/practice/questions/${encodeURIComponent(question.id)}/image`
+                previewUrl: historicalId
+                  ? `/api/practice/historical/${encodeURIComponent(question.id)}/image`
+                  : `/api/practice/questions/${encodeURIComponent(question.id)}/image`
               }
             : null;
 

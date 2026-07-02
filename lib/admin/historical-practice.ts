@@ -4,7 +4,8 @@ import { db, ensureDatabase } from "@/lib/db";
 import { mapHistoricalPracticeRow } from "@/lib/historical-practice";
 import type {
   HistoricalPracticeQuestion,
-  HistoricalQuestionType
+  HistoricalQuestionType,
+  TaskType
 } from "@/lib/types";
 
 const QUESTION_TYPES: HistoricalQuestionType[] = [
@@ -18,9 +19,14 @@ type HistoricalPracticeRow = {
   id: string;
   year: number;
   exam_date: string | Date;
+  task_type: TaskType;
   category: string;
-  question_type: HistoricalQuestionType;
+  question_type: HistoricalQuestionType | null;
   prompt: string;
+  image_object_key: string | null;
+  image_name: string | null;
+  image_mime_type: string | null;
+  image_size_bytes: string | number | null;
 };
 
 export type AdminHistoricalQuestionFilters = {
@@ -33,6 +39,7 @@ export type AdminHistoricalQuestionFilters = {
 
 export type HistoricalQuestionInput = {
   date?: unknown;
+  taskType?: unknown;
   category?: unknown;
   type?: unknown;
   prompt?: unknown;
@@ -62,7 +69,7 @@ export function normalizeAdminHistoricalQuestionFilters(input: {
 
 export function validateHistoricalQuestionInput(
   input: HistoricalQuestionInput
-): Omit<HistoricalPracticeQuestion, "id"> {
+): Pick<HistoricalPracticeQuestion, "year" | "date" | "taskType" | "category" | "type" | "prompt"> {
   const date = requireBoundedString(input.date, "date", { maxLength: 10 });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new ApiError("INVALID_DATE", 400);
@@ -73,15 +80,17 @@ export function validateHistoricalQuestionInput(
     throw new ApiError("INVALID_DATE", 400);
   }
 
-  if (!QUESTION_TYPES.includes(input.type as HistoricalQuestionType)) {
+  const taskType = input.taskType === "task1" ? "task1" : "task2";
+  if (taskType === "task2" && !QUESTION_TYPES.includes(input.type as HistoricalQuestionType)) {
     throw new ApiError("INVALID_QUESTION_TYPE", 400);
   }
 
   return {
     year: Number(date.slice(0, 4)),
     date,
+    taskType,
     category: requireBoundedString(input.category, "category", { maxLength: 80 }),
-    type: input.type as HistoricalQuestionType,
+    type: taskType === "task1" ? null : input.type as HistoricalQuestionType,
     prompt: requireBoundedString(input.prompt, "prompt", {
       minLength: 10,
       maxLength: 5000
@@ -117,7 +126,8 @@ export async function listAdminHistoricalQuestions(
 
   const [itemsResult, countResult, yearsResult] = await Promise.all([
     db.query<HistoricalPracticeRow>(
-      `SELECT id, year, exam_date, category, question_type, prompt
+      `SELECT id, year, exam_date::text AS exam_date, task_type, category, question_type, prompt,
+              image_object_key, image_name, image_mime_type, image_size_bytes
        FROM historical_practice_questions
        ${where}
        ORDER BY exam_date DESC, id ASC
@@ -156,11 +166,20 @@ export async function createAdminHistoricalQuestion(input: HistoricalQuestionInp
   const id = `historical_${question.date.replaceAll("-", "")}_${randomUUID().slice(0, 8)}`;
   const result = await db.query<HistoricalPracticeRow>(
     `INSERT INTO historical_practice_questions (
-       id, year, exam_date, category, question_type, prompt, created_at, updated_at
+       id, year, exam_date, task_type, category, question_type, prompt, created_at, updated_at
      )
-     VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-     RETURNING id, year, exam_date, category, question_type, prompt`,
-    [id, question.year, question.date, question.category, question.type, question.prompt]
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+     RETURNING id, year, exam_date::text AS exam_date, task_type, category, question_type, prompt,
+               image_object_key, image_name, image_mime_type, image_size_bytes`,
+    [
+      id,
+      question.year,
+      question.date,
+      question.taskType,
+      question.category,
+      question.type,
+      question.prompt
+    ]
   );
   return mapHistoricalPracticeRow(result.rows[0]);
 }
@@ -176,16 +195,19 @@ export async function updateAdminHistoricalQuestion(
     `UPDATE historical_practice_questions
      SET year = $2,
          exam_date = $3,
-         category = $4,
-         question_type = $5,
-         prompt = $6,
+         task_type = $4,
+         category = $5,
+         question_type = $6,
+         prompt = $7,
          updated_at = NOW()
      WHERE id = $1
-     RETURNING id, year, exam_date, category, question_type, prompt`,
+     RETURNING id, year, exam_date::text AS exam_date, task_type, category, question_type, prompt,
+               image_object_key, image_name, image_mime_type, image_size_bytes`,
     [
       questionId,
       question.year,
       question.date,
+      question.taskType,
       question.category,
       question.type,
       question.prompt

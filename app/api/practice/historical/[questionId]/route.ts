@@ -15,13 +15,8 @@ export async function GET(
   return NextResponse.json({
     question: {
       ...question,
-      taskType: "task2",
       title: `${question.year} · ${question.date}`,
-      tags: [question.category, question.type],
-      imageObjectKey: null,
-      imageName: null,
-      imageMimeType: null,
-      imageSizeBytes: null
+      tags: [question.category, question.type].filter(Boolean)
     }
   });
 }

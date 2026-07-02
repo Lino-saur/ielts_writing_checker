@@ -74,9 +74,14 @@ function flattenSource(source: SourceData): HistoricalPracticeQuestion[] {
         id: entry.id,
         year: Number(year),
         date: normalizeDate(entry.date),
+        taskType: "task2" as const,
         category,
         type: normalizeQuestionType(entry.type, entry.prompt),
-        prompt: normalizePrompt(entry.prompt)
+        prompt: normalizePrompt(entry.prompt),
+        imageObjectKey: null,
+        imageName: null,
+        imageMimeType: null,
+        imageSizeBytes: null
       }))
     )
   );

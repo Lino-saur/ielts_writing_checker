@@ -3,6 +3,7 @@
   "eyebrow": "Cambridge IELTS 5-21",
   "body": "Filter official-style writing practice by book, test, task, and tag, then open the checker with the prompt prefilled.",
   "allBooks": "All books",
+  "taskLabel": "Task",
   "allTasks": "All tasks",
   "allTags": "All tags",
   "task1": "Task 1",
@@ -26,11 +27,14 @@
   "tags": "Tags",
   "sourceLabel": "Practice source",
   "sourceCambridge": "Cambridge",
-  "sourceHistorical": "Past exams",
+  "sourceHistorical": "Historical Library",
   "yearLabel": "Year",
   "allYears": "All years",
   "categoryLabel": "Topic",
   "allCategories": "All topics",
   "questionTypeLabel": "Question type",
-  "allQuestionTypes": "All question types"
+  "allQuestionTypes": "All question types",
+  "paginationLabel": "Question library pagination",
+  "previousPage": "Previous",
+  "nextPage": "Next"
 }

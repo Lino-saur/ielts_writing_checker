@@ -124,10 +124,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "HISTORICAL_QUESTION_NOT_FOUND" }, { status: 404 });
       }
 
-      taskType = "task2";
+      taskType = historicalQuestion.taskType;
       canonicalPrompt = historicalQuestion.prompt;
-      taskImageObjectKey = undefined;
-      taskImageName = undefined;
+      taskImageObjectKey = historicalQuestion.imageObjectKey ?? undefined;
+      taskImageName = historicalQuestion.imageName ?? undefined;
     }
 
     const requestHash = createHash("sha256")

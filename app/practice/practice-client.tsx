@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { Pill, Surface } from "@/components/ui-kit";
@@ -21,6 +22,13 @@ type PracticePayload = {
 
 type HistoricalPayload = {
   items: HistoricalPracticeQuestion[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  years: number[];
+  categories: string[];
+  types: HistoricalQuestionType[];
 };
 
 type PracticeSource = "cambridge" | "historical";
@@ -66,20 +74,44 @@ function formatHistoricalType(type: HistoricalQuestionType, locale: Locale) {
 
 function formatHistoricalDate(date: string, locale: Locale) {
   const [year, month, day] = date.split("-").map((part) => Number.parseInt(part, 10));
-  return new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en-US", {
+  if (locale === "zh-CN") {
+    return `${year}/${month}/${day}`;
+  }
+  return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
-    month: locale === "zh-CN" ? "numeric" : "short",
-    day: "numeric"
-  }).format(new Date(year, month - 1, day));
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC"
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function parsePage(value: string | null) {
+  const page = Number.parseInt(value ?? "", 10);
+  return Number.isInteger(page) && page > 0 ? page : 1;
+}
+
+function getPaginationPages(page: number, totalPages: number) {
+  const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+  const end = Math.min(totalPages, start + 4);
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 }
 
 export default function PracticePageClient() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [locale, setLocale] = useRouteLocale();
   const { practice: t, navbar } = getMessages(locale);
-  const [source, setSource] = useState<PracticeSource>("cambridge");
+  const [source, setSource] = useState<PracticeSource>(
+    searchParams.get("source") === "historical" ? "historical" : "cambridge"
+  );
   const [items, setItems] = useState<PracticeQuestion[]>([]);
   const [historicalItems, setHistoricalItems] = useState<HistoricalPracticeQuestion[]>([]);
-  const [historicalLoaded, setHistoricalLoaded] = useState(false);
+  const [historicalTotal, setHistoricalTotal] = useState(0);
+  const [historicalTotalPages, setHistoricalTotalPages] = useState(1);
+  const [historicalYears, setHistoricalYears] = useState<number[]>([]);
+  const [historicalCategories, setHistoricalCategories] = useState<string[]>([]);
+  const [historicalTypes, setHistoricalTypes] = useState<HistoricalQuestionType[]>([]);
   const [historicalLoading, setHistoricalLoading] = useState(false);
   const [historicalError, setHistoricalError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,9 +119,15 @@ export default function PracticePageClient() {
   const [bookFilter, setBookFilter] = useState("all");
   const [taskFilter, setTaskFilter] = useState<"all" | TaskType>("all");
   const [tagFilter, setTagFilter] = useState("all");
-  const [yearFilter, setYearFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [questionTypeFilter, setQuestionTypeFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState(searchParams.get("year") ?? "all");
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category") ?? "all");
+  const [questionTypeFilter, setQuestionTypeFilter] = useState(searchParams.get("type") ?? "all");
+  const [historicalTaskFilter, setHistoricalTaskFilter] = useState<"all" | TaskType>(
+    searchParams.get("task") === "task1" || searchParams.get("task") === "task2"
+      ? searchParams.get("task") as TaskType
+      : "all"
+  );
+  const [historicalPage, setHistoricalPage] = useState(parsePage(searchParams.get("page")));
 
   useEffect(() => {
     let cancelled = false;
@@ -130,19 +168,28 @@ export default function PracticePageClient() {
   }, [t.loadFailed]);
 
   useEffect(() => {
-    if (source !== "historical" || historicalLoaded) {
+    if (source !== "historical") {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
 
     async function loadHistoricalQuestions() {
       setHistoricalLoading(true);
       setHistoricalError(null);
 
       try {
-        const response = await fetch("/api/practice/historical", {
-          cache: "no-store"
+        const params = new URLSearchParams({
+          page: String(historicalPage)
+        });
+        if (historicalTaskFilter !== "all") params.set("task", historicalTaskFilter);
+        if (yearFilter !== "all") params.set("year", yearFilter);
+        if (categoryFilter !== "all") params.set("category", categoryFilter);
+        if (questionTypeFilter !== "all" && historicalTaskFilter !== "task1") {
+          params.set("type", questionTypeFilter);
+        }
+        const response = await fetch(`/api/practice/historical?${params.toString()}`, {
+          signal: controller.signal
         });
         const payload = (await response.json()) as HistoricalPayload | { error?: string };
 
@@ -150,18 +197,22 @@ export default function PracticePageClient() {
           throw new Error("LOAD_FAILED");
         }
 
-        if (!cancelled) {
-          setHistoricalItems(payload.items);
-          setHistoricalLoaded(true);
-          const latestYear = Math.max(...payload.items.map((item) => item.year));
-          setYearFilter(String(latestYear));
+        if (historicalPage > payload.totalPages) {
+          setHistoricalPage(payload.totalPages);
+          return;
         }
-      } catch {
-        if (!cancelled) {
-          setHistoricalError(t.loadFailed);
-        }
+
+        setHistoricalItems(payload.items);
+        setHistoricalTotal(payload.total);
+        setHistoricalTotalPages(payload.totalPages);
+        setHistoricalYears(payload.years);
+        setHistoricalCategories(payload.categories);
+        setHistoricalTypes(payload.types);
+      } catch (loadError) {
+        if (loadError instanceof DOMException && loadError.name === "AbortError") return;
+        setHistoricalError(t.loadFailed);
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setHistoricalLoading(false);
         }
       }
@@ -170,9 +221,59 @@ export default function PracticePageClient() {
     void loadHistoricalQuestions();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [historicalLoaded, source, t.loadFailed]);
+  }, [
+    categoryFilter,
+    historicalPage,
+    historicalTaskFilter,
+    questionTypeFilter,
+    source,
+    t.loadFailed,
+    yearFilter
+  ]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (source === "historical") {
+      params.set("source", "historical");
+      if (historicalTaskFilter === "all") params.delete("task");
+      else params.set("task", historicalTaskFilter);
+      if (yearFilter === "all") params.delete("year");
+      else params.set("year", yearFilter);
+      if (categoryFilter === "all") params.delete("category");
+      else params.set("category", categoryFilter);
+      if (questionTypeFilter === "all" || historicalTaskFilter === "task1") {
+        params.delete("type");
+      } else {
+        params.set("type", questionTypeFilter);
+      }
+      if (historicalPage === 1) params.delete("page");
+      else params.set("page", String(historicalPage));
+    } else {
+      params.delete("source");
+      params.delete("task");
+      params.delete("year");
+      params.delete("category");
+      params.delete("type");
+      params.delete("page");
+    }
+
+    const nextQuery = params.toString();
+    if (nextQuery !== searchParams.toString()) {
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    }
+  }, [
+    categoryFilter,
+    historicalPage,
+    historicalTaskFilter,
+    pathname,
+    questionTypeFilter,
+    router,
+    searchParams,
+    source,
+    yearFilter
+  ]);
 
   const books = useMemo(() => {
     return [...new Set(items.map((item) => item.bookNumber))].sort((left, right) => right - left);
@@ -196,40 +297,6 @@ export default function PracticePageClient() {
       return true;
     });
   }, [bookFilter, items, tagFilter, taskFilter]);
-
-  const historicalYears = useMemo(
-    () => [...new Set(historicalItems.map((item) => item.year))].sort((left, right) => right - left),
-    [historicalItems]
-  );
-
-  const historicalCategories = useMemo(
-    () => [...new Set(historicalItems.map((item) => item.category))].sort((left, right) =>
-      left.localeCompare(right)
-    ),
-    [historicalItems]
-  );
-
-  const historicalTypes = useMemo(
-    () => [...new Set(historicalItems.map((item) => item.type))],
-    [historicalItems]
-  );
-
-  const filteredHistoricalItems = useMemo(
-    () =>
-      historicalItems.filter((item) => {
-        if (yearFilter !== "all" && item.year !== Number(yearFilter)) {
-          return false;
-        }
-        if (categoryFilter !== "all" && item.category !== categoryFilter) {
-          return false;
-        }
-        if (questionTypeFilter !== "all" && item.type !== questionTypeFilter) {
-          return false;
-        }
-        return true;
-      }),
-    [categoryFilter, historicalItems, questionTypeFilter, yearFilter]
-  );
 
   return (
     <main className="pageShell practicePage">
@@ -255,7 +322,10 @@ export default function PracticePageClient() {
               role="tab"
               aria-selected={source === "cambridge"}
               className={source === "cambridge" ? "is-active" : ""}
-              onClick={() => setSource("cambridge")}
+              onClick={() => {
+                setSource("cambridge");
+                setHistoricalPage(1);
+              }}
             >
               {t.sourceCambridge}
             </button>
@@ -264,7 +334,10 @@ export default function PracticePageClient() {
               role="tab"
               aria-selected={source === "historical"}
               className={source === "historical" ? "is-active" : ""}
-              onClick={() => setSource("historical")}
+              onClick={() => {
+                setSource("historical");
+                setHistoricalPage(1);
+              }}
             >
               {t.sourceHistorical}
             </button>
@@ -363,8 +436,30 @@ export default function PracticePageClient() {
             <>
               <Surface className="practiceFilters">
                 <label>
+                  <span>{t.taskLabel}</span>
+                  <select
+                    value={historicalTaskFilter}
+                    onChange={(event) => {
+                      setHistoricalTaskFilter(event.target.value as "all" | TaskType);
+                      setCategoryFilter("all");
+                      setQuestionTypeFilter("all");
+                      setHistoricalPage(1);
+                    }}
+                  >
+                    <option value="all">{t.allTasks}</option>
+                    <option value="task1">{t.task1}</option>
+                    <option value="task2">{t.task2}</option>
+                  </select>
+                </label>
+                <label>
                   <span>{t.yearLabel}</span>
-                  <select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)}>
+                  <select
+                    value={yearFilter}
+                    onChange={(event) => {
+                      setYearFilter(event.target.value);
+                      setHistoricalPage(1);
+                    }}
+                  >
                     <option value="all">{t.allYears}</option>
                     {historicalYears.map((year) => (
                       <option key={year} value={year}>
@@ -375,7 +470,13 @@ export default function PracticePageClient() {
                 </label>
                 <label>
                   <span>{t.categoryLabel}</span>
-                  <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                  <select
+                    value={categoryFilter}
+                    onChange={(event) => {
+                      setCategoryFilter(event.target.value);
+                      setHistoricalPage(1);
+                    }}
+                  >
                     <option value="all">{t.allCategories}</option>
                     {historicalCategories.map((category) => (
                       <option key={category} value={category}>
@@ -388,7 +489,11 @@ export default function PracticePageClient() {
                   <span>{t.questionTypeLabel}</span>
                   <select
                     value={questionTypeFilter}
-                    onChange={(event) => setQuestionTypeFilter(event.target.value)}
+                    onChange={(event) => {
+                      setQuestionTypeFilter(event.target.value);
+                      setHistoricalPage(1);
+                    }}
+                    disabled={historicalTaskFilter === "task1"}
                   >
                     <option value="all">{t.allQuestionTypes}</option>
                     {historicalTypes.map((type) => (
@@ -400,29 +505,31 @@ export default function PracticePageClient() {
                 </label>
               </Surface>
 
-              {filteredHistoricalItems.length === 0 ? (
+              {historicalItems.length === 0 ? (
                 <Surface className="practiceStatePanel">
                   <h2>{t.emptyTitle}</h2>
                   <p>{t.emptyBody}</p>
                 </Surface>
               ) : (
                 <div className="practiceGrid">
-                  {filteredHistoricalItems.map((item) => {
-                    const checkerHref = `/${locale}/checker?task=task2&historicalId=${encodeURIComponent(item.id)}`;
+                  {historicalItems.map((item) => {
+                    const checkerHref = `/${locale}/checker?task=${item.taskType}&historicalId=${encodeURIComponent(item.id)}`;
                     return (
                       <Surface as="article" key={item.id} className="practiceCard">
                         <div className="practiceCardTop">
                           <h2>{formatHistoricalDate(item.date, locale)}</h2>
-                          <Pill>{t.task2}</Pill>
+                          <Pill>{normalizeTaskLabel(item.taskType, t)}</Pill>
                         </div>
 
                         <div className="practiceTagRow">
                           <span className="practiceTag">
                             {formatHistoricalCategory(item.category, locale)}
                           </span>
-                          <span className="practiceTag">
-                            {formatHistoricalType(item.type, locale)}
-                          </span>
+                          {item.type ? (
+                            <span className="practiceTag">
+                              {formatHistoricalType(item.type, locale)}
+                            </span>
+                          ) : null}
                         </div>
 
                         <p className="practicePromptPreview">{item.prompt}</p>
@@ -437,6 +544,46 @@ export default function PracticePageClient() {
                   })}
                 </div>
               )}
+
+              {historicalTotal > 0 ? (
+                <nav className="practicePagination" aria-label={t.paginationLabel}>
+                  <p>
+                    {locale === "zh-CN"
+                      ? `共 ${historicalTotal} 道题 · 第 ${historicalPage} / ${historicalTotalPages} 页`
+                      : `${historicalTotal} questions · Page ${historicalPage} of ${historicalTotalPages}`}
+                  </p>
+                  <div className="practicePaginationActions">
+                    <button
+                      type="button"
+                      disabled={historicalPage <= 1 || historicalLoading}
+                      onClick={() => setHistoricalPage((page) => Math.max(1, page - 1))}
+                    >
+                      {t.previousPage}
+                    </button>
+                    {getPaginationPages(historicalPage, historicalTotalPages).map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        aria-current={page === historicalPage ? "page" : undefined}
+                        className={page === historicalPage ? "is-active" : ""}
+                        disabled={historicalLoading}
+                        onClick={() => setHistoricalPage(page)}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={historicalPage >= historicalTotalPages || historicalLoading}
+                      onClick={() =>
+                        setHistoricalPage((page) => Math.min(historicalTotalPages, page + 1))
+                      }
+                    >
+                      {t.nextPage}
+                    </button>
+                  </div>
+                </nav>
+              ) : null}
             </>
           )}
         </section>

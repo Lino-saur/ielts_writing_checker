@@ -6,7 +6,7 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 4;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -608,6 +608,66 @@ export async function ensureDatabase() {
         await db.query(
           `INSERT INTO schema_migrations (version, applied_at)
            VALUES (2, NOW())`
+        );
+      }
+      if (appliedVersion < 4) {
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD COLUMN IF NOT EXISTS task_type TEXT NOT NULL DEFAULT 'task2';
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD COLUMN IF NOT EXISTS image_source_urls_json JSONB NOT NULL DEFAULT '[]'::jsonb;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD COLUMN IF NOT EXISTS image_object_key TEXT;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD COLUMN IF NOT EXISTS image_name TEXT;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD COLUMN IF NOT EXISTS image_mime_type TEXT;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD COLUMN IF NOT EXISTS image_size_bytes BIGINT;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ALTER COLUMN question_type DROP NOT NULL;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          DROP CONSTRAINT IF EXISTS historical_practice_questions_question_type_check;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD CONSTRAINT historical_practice_questions_question_type_check
+          CHECK (
+            (task_type = 'task1' AND question_type IS NULL)
+            OR
+            (task_type = 'task2' AND question_type IN ('观点类', '讨论类', '问题解决类', '混合类'))
+          );
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          DROP CONSTRAINT IF EXISTS historical_practice_questions_task_type_check;
+        `);
+        await db.query(`
+          ALTER TABLE historical_practice_questions
+          ADD CONSTRAINT historical_practice_questions_task_type_check
+          CHECK (task_type IN ('task1', 'task2'));
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS historical_practice_questions_task_date_idx
+          ON historical_practice_questions (task_type, exam_date DESC);
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (4, NOW())`
         );
       }
       await db.query("COMMIT");

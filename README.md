@@ -189,6 +189,26 @@ npm run db:import:historical -- /absolute/path/to/data.json
 The import validates and normalizes the source, then upserts by question id, so
 the command is safe to run again when the dataset changes.
 
+To reconcile the historical library against Koolearn without using its topic
+tags, run a dry comparison first:
+
+```bash
+npm run db:sync:historical:koolearn
+```
+
+The sync infers question type from the prompt and assigns topic categories by
+similarity to the existing historical library. Review
+`.data/koolearn-historical-sync-report.json`, then write only missing questions:
+
+```bash
+npm run db:sync:historical:koolearn -- --apply
+```
+
+Task 1 records use the existing seven chart categories inferred from the prompt.
+Their source images are copied into the configured R2/S3-compatible project
+storage, and only project object keys and image metadata are stored in Postgres.
+Use `--task=task1` or `--task=task2` to reconcile one task independently.
+
 You can also sync external metadata from Koolearn into the same records:
 
 ```bash

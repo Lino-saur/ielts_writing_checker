@@ -223,13 +223,11 @@
 }
 
 .prompt {
-  display: -webkit-box;
-  overflow: hidden;
   color: #64748b;
   font-size: 0.86rem;
   line-height: 1.55;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .formGrid {

@@ -1003,6 +1003,60 @@ html[data-theme="dark"] .aroundModeSwitch .form-check-input:checked ~ .form-chec
   justify-content: flex-end;
 }
 
+.practicePagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 4px 2px 0;
+}
+
+.practicePagination p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.practicePaginationActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.practicePaginationActions button {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted-strong);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.practicePaginationActions button:hover:not(:disabled),
+.practicePaginationActions button.is-active {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-deep);
+}
+
+.practicePaginationActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.practicePaginationActions button:focus-visible {
+  outline: 3px solid rgba(var(--accent-rgb), 0.24);
+  outline-offset: 2px;
+}
+
 .practiceStartButton {
   position: relative;
   display: inline-flex;
@@ -5473,6 +5527,15 @@ html[data-theme="dark"] .authSwitchButton {
 
   .practiceCardActions {
     justify-content: stretch;
+  }
+
+  .practicePagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .practicePaginationActions {
+    justify-content: space-between;
   }
 
   .practiceSourceSwitch {

@@ -20,6 +20,7 @@ type ListPayload = {
 
 type FormState = {
   date: string;
+  taskType: "task1" | "task2";
   category: string;
   type: HistoricalQuestionType;
   prompt: string;
@@ -27,6 +28,7 @@ type FormState = {
 
 const EMPTY_FORM: FormState = {
   date: "",
+  taskType: "task2",
   category: "",
   type: "观点类",
   prompt: ""
@@ -122,8 +124,9 @@ export function HistoricalPracticeAdminClient() {
     setEditingId(question.id);
     setForm({
       date: question.date,
+      taskType: question.taskType,
       category: question.category,
-      type: question.type,
+      type: question.type ?? "观点类",
       prompt: question.prompt
     });
     setError(null);
@@ -163,9 +166,10 @@ export function HistoricalPracticeAdminClient() {
 
       setEditingId(payload.question.id);
       setForm({
-        date: payload.question.date,
-        category: payload.question.category,
-        type: payload.question.type,
+          date: payload.question.date,
+          taskType: payload.question.taskType,
+          category: payload.question.category,
+          type: payload.question.type ?? "观点类",
         prompt: payload.question.prompt
       });
       setSuccess(editingId ? "Question updated." : "Question created.");
@@ -248,7 +252,7 @@ export function HistoricalPracticeAdminClient() {
                 >
                   <span className={styles.cardTopline}>
                     <strong>{question.date}</strong>
-                    <span>{question.type}</span>
+                    <span>{question.taskType === "task1" ? "Task 1" : question.type}</span>
                   </span>
                   <span className={styles.category}>{question.category}</span>
                   <span className={styles.prompt}>{question.prompt}</span>
@@ -288,6 +292,21 @@ export function HistoricalPracticeAdminClient() {
 
           <div className={styles.formGrid}>
             <label className={styles.field}>
+              <span>Task</span>
+              <select
+                value={form.taskType}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    taskType: event.target.value as "task1" | "task2"
+                  }))
+                }
+              >
+                <option value="task1">Task 1</option>
+                <option value="task2">Task 2</option>
+              </select>
+            </label>
+            <label className={styles.field}>
               <span>Exam date</span>
               <input
                 type="date"
@@ -296,7 +315,7 @@ export function HistoricalPracticeAdminClient() {
                 onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
               />
             </label>
-            <label className={styles.field}>
+            {form.taskType === "task2" ? <label className={styles.field}>
               <span>Question type</span>
               <select
                 required
@@ -312,7 +331,7 @@ export function HistoricalPracticeAdminClient() {
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
-            </label>
+            </label> : null}
           </div>
 
           <label className={styles.field}>
@@ -338,7 +357,7 @@ export function HistoricalPracticeAdminClient() {
               onChange={(event) =>
                 setForm((current) => ({ ...current, prompt: event.target.value }))
               }
-              placeholder="Enter the complete Task 2 prompt"
+              placeholder={`Enter the complete ${form.taskType === "task1" ? "Task 1" : "Task 2"} prompt`}
             />
             <small>{form.prompt.length} / 5000</small>
           </label>

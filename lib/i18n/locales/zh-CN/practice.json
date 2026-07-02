@@ -3,6 +3,7 @@
   "eyebrow": "剑桥 IELTS 5-21",
   "body": "按剑册、Test、Task 和题型标签筛选真题，选择后进入批改工作台开始练习。",
   "allBooks": "全部剑册",
+  "taskLabel": "Task",
   "allTasks": "全部 Task",
   "allTags": "全部题型",
   "task1": "Task 1",
@@ -26,11 +27,14 @@
   "tags": "标签",
   "sourceLabel": "真题来源",
   "sourceCambridge": "剑桥真题",
-  "sourceHistorical": "历年真题",
+  "sourceHistorical": "历年题库",
   "yearLabel": "年份",
   "allYears": "全部年份",
   "categoryLabel": "主题",
   "allCategories": "全部主题",
   "questionTypeLabel": "题型",
-  "allQuestionTypes": "全部题型"
+  "allQuestionTypes": "全部题型",
+  "paginationLabel": "题库分页",
+  "previousPage": "上一页",
+  "nextPage": "下一页"
 }

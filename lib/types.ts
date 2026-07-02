@@ -6,9 +6,14 @@ export type HistoricalPracticeQuestion = {
   id: string;
   year: number;
   date: string;
+  taskType: TaskType;
   category: string;
-  type: HistoricalQuestionType;
+  type: HistoricalQuestionType | null;
   prompt: string;
+  imageObjectKey: string | null;
+  imageName: string | null;
+  imageMimeType: string | null;
+  imageSizeBytes: number | null;
 };
 
 export type TaskImageInput = {

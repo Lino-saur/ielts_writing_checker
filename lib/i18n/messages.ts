@@ -94,6 +94,7 @@ export type PracticeMessages = Record<string, string> & {
   eyebrow: string;
   body: string;
   allBooks: string;
+  taskLabel: string;
   allTasks: string;
   allTags: string;
   task1: string;
@@ -122,6 +123,9 @@ export type PracticeMessages = Record<string, string> & {
   allCategories: string;
   questionTypeLabel: string;
   allQuestionTypes: string;
+  paginationLabel: string;
+  previousPage: string;
+  nextPage: string;
 };
 
 const navbarMessages: Record<Locale, NavbarMessages> = {
