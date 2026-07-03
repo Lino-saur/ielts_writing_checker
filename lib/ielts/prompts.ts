@@ -1,5 +1,6 @@
 import { CheckInput, countWords, getLocale, getTargetBand } from "./shared";
 import { GRAMMAR_REVISION_CATEGORIES, OPTIMIZATION_REVISION_CATEGORIES } from "./revision-categories";
+import { buildApplicableTeachingRulesPrompt } from "@/lib/teaching-rules";
 
 const PROMPTS = {
   base: `You are a precise IELTS writing evaluator.
@@ -49,7 +50,11 @@ detail: ...
 
 ===END===
 
-{{taskPrompt}}
+Task context:
+{{taskContext}}
+
+Published evaluation rules:
+{{teachingRules}}
 
 Target band:
 {{targetBand}}
@@ -93,7 +98,11 @@ reason: ...
 
 ===END===
 
-{{taskPrompt}}
+Task context:
+{{taskContext}}
+
+Published evaluation rules:
+{{teachingRules}}
 
 Revision stage:
 {{revisionStage}}
@@ -115,7 +124,6 @@ Constraints:
 - Before finalizing, verify that every correctionNotes item contains id, category, original, corrected, and reason, and that no reason is blank.
 - If you cannot fully annotate many tiny edits reliably, merge nearby edits into fewer larger revisions so that every revision still has one clear note.
 - {{revisionStageConstraints}}
-- Keep the student's core stance, major supporting points, and overall paragraph plan whenever possible.
 - {{revisionStageExpansionRule}}
 - Consider the minimum word expectation of {{minimumWords}}.
 - Use the exact section headers above and keep them in the same order.
@@ -131,33 +139,6 @@ Essay:
 
 Detected word count: {{wordCount}}
 `,
-  task1: `Evaluate the user's response for IELTS Academic Writing Task 1.
-
-Focus on:
-- whether the response identifies the key features of the chart, graph, table, map, or process
-- whether there is a clear overview
-- whether important comparisons and trends are selected instead of listing every detail
-- whether the data description is accurate and relevant
-
-Task 1 image consistency checks:
-- Compare the essay's reported figures, categories, dates, rankings, directions, stages, and trends against the uploaded image.
-- If the essay description conflicts with the image data, explicitly point out the mismatch and treat it as a Task Achievement accuracy problem.
-- If the uploaded image appears unrelated to the written prompt or does not match the expected Task 1 visual, explicitly warn about that problem instead of pretending the image is valid.
-- Do not invent unreadable values. If part of the image is unclear, say that it is unclear and judge only what can be supported confidently.
-- For revision, do not preserve clearly wrong data claims from the student's essay. Correct or generalize them so the revised response stays consistent with the visible image.
-`,
-  task2: `Evaluate the user's response for IELTS Writing Task 2.
-
-Focus on:
-- whether the response answers the question directly
-- whether the position is clear and maintained
-- whether body paragraphs are sufficiently developed
-- whether supporting ideas are relevant and logically connected
-
-When judging idea development for body paragraphs, explicitly evaluate whether the argument can be logically developed as a clear causal chain in the form "A inevitably leads to B, B inevitably leads to C, and C inevitably leads to D".
-Use the IELTS writing criteria to judge whether that causal chain is clear, relevant, sufficiently explained, and well connected to the question.
-If the essay does not follow that logic chain well, reflect the weakness in task achievement/task response and coherence/cohesion comments, and suggest how the chain could be made tighter.
-`
 } as const;
 
 export async function loadBasePrompt() {
@@ -178,10 +159,15 @@ export async function buildScorePrompt(input: CheckInput, minimumWords: number) 
       ? "Write rationale, strengths, highlighted sentence reasons, and priority fixes in Simplified Chinese."
       : "Write rationale, strengths, highlighted sentence reasons, and priority fixes in English.";
   const scoreTemplate = PROMPTS.score;
-  const taskPrompt = input.taskType === "task1" ? PROMPTS.task1 : PROMPTS.task2;
+  const taskContext =
+    input.taskType === "task1"
+      ? "Evaluate the response as IELTS Academic Writing Task 1."
+      : "Evaluate the response as IELTS Writing Task 2.";
+  const teachingRules = await buildApplicableTeachingRulesPrompt(input.taskType, "score");
 
   return applyTemplate(scoreTemplate, {
-    taskPrompt,
+    taskContext,
+    teachingRules,
     targetBand,
     minimumWords,
     outputLanguageInstruction,
@@ -203,22 +189,23 @@ export async function buildRevisionPrompt(
       ? "Write correctionNotes.reason in Simplified Chinese. annotatedEssay, original, and corrected text must remain in natural English."
       : "Write correctionNotes.reason in English. annotatedEssay, original, and corrected text must remain in natural English.";
   const revisionTemplate = PROMPTS.revision;
-  const taskPrompt = input.taskType === "task1" ? PROMPTS.task1 : PROMPTS.task2;
+  const taskContext =
+    input.taskType === "task1"
+      ? "Revise the response as IELTS Academic Writing Task 1."
+      : "Revise the response as IELTS Writing Task 2.";
+  const teachingRules = await buildApplicableTeachingRulesPrompt(input.taskType, stage);
   const revisionStage =
     stage === "grammar"
       ? "Stage 1: Grammar Check"
       : "Stage 2: Article Optimization";
   const revisionStageConstraints =
-    stage === "grammar"
-      ? "This stage is grammar check only. Focus on tense, subject-verb agreement, articles, prepositions, word form, sentence structure, clause structure, verb pattern, voice, pronoun reference, parallelism, punctuation, capitalization, collocation, naturalness, and other clear grammar or mechanics issues. Do not significantly expand ideas in this stage."
-      : "This stage is article optimization. Improve idea development, cohesion, clarity, concision, lexical choice, paragraph flow, and overall task response quality. Keep grammar correct while optimizing.";
+    "Follow the published rules that apply to this revision stage.";
   const revisionStageExpansionRule =
-    stage === "grammar"
-      ? "Do not expand underdeveloped ideas in this stage. Only make the essay grammatically clean and readable."
-      : "If the essay is underdeveloped, expand ideas inside annotatedEssay so that the revised result better matches the requested band level, but still stays recognizably based on the input essay for this stage.";
+    "Do not exceed the scope defined by the published rules for this revision stage.";
 
   return applyTemplate(revisionTemplate, {
-    taskPrompt,
+    taskContext,
+    teachingRules,
     revisionStage,
     revisionStageConstraints,
     revisionStageExpansionRule,

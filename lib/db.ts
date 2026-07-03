@@ -6,7 +6,7 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 8;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -691,6 +691,217 @@ export async function ensureDatabase() {
         await db.query(
           `INSERT INTO schema_migrations (version, applied_at)
            VALUES (5, NOW())`
+        );
+      }
+      if (appliedVersion < 6) {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS teaching_rules (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            task_type TEXT NOT NULL CHECK (task_type IN ('all', 'task1', 'task2')),
+            question_types_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            rule_category TEXT NOT NULL CHECK (
+              rule_category IN ('scoring', 'grammar', 'structure', 'argumentation', 'expression', 'framework')
+            ),
+            principle TEXT NOT NULL,
+            positive_example TEXT,
+            negative_example TEXT,
+            severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high')),
+            priority INTEGER NOT NULL DEFAULT 50 CHECK (priority BETWEEN 0 AND 100),
+            source_title TEXT,
+            source_section TEXT,
+            knowledge_point_code TEXT,
+            source_page TEXT,
+            status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+            version INTEGER NOT NULL DEFAULT 0 CHECK (version >= 0),
+            published_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS teaching_rules_status_priority_idx
+          ON teaching_rules (status, priority DESC, updated_at DESC);
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS teaching_rules_scope_idx
+          ON teaching_rules (task_type, rule_category, status);
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (6, NOW())`
+        );
+      }
+      if (appliedVersion < 7) {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS teaching_rule_versions (
+            rule_id TEXT NOT NULL REFERENCES teaching_rules(id),
+            version INTEGER NOT NULL CHECK (version > 0),
+            snapshot_json JSONB NOT NULL,
+            published_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (rule_id, version)
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS teaching_rule_versions_published_idx
+          ON teaching_rule_versions (published_at DESC);
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (7, NOW())`
+        );
+      }
+      if (appliedVersion < 8) {
+        await db.query(`
+          ALTER TABLE teaching_rules
+          ADD COLUMN IF NOT EXISTS rule_origin TEXT NOT NULL DEFAULT 'system';
+        `);
+        await db.query(`
+          ALTER TABLE teaching_rules
+          DROP CONSTRAINT IF EXISTS teaching_rules_rule_origin_check;
+        `);
+        await db.query(`
+          ALTER TABLE teaching_rules
+          ADD CONSTRAINT teaching_rules_rule_origin_check
+          CHECK (rule_origin IN ('ielts_official', 'courseware', 'system'));
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS teaching_rules_origin_status_idx
+          ON teaching_rules (rule_origin, status, priority DESC);
+        `);
+        await db.query(`
+          INSERT INTO teaching_rules (
+            id, name, task_type, question_types_json, tags_json, rule_origin,
+            rule_category, principle, positive_example, negative_example,
+            severity, priority, source_title, source_section, knowledge_point_code,
+            source_page, status, version, published_at, created_at, updated_at
+          )
+          VALUES
+            (
+              'seed_ielts_task1_key_features', 'Select key features', 'task1', '[]'::jsonb,
+              '["task-achievement","selection"]'::jsonb, 'ielts_official', 'scoring',
+              'Identify and report the key features of the chart, graph, table, map, or process instead of describing every available detail.',
+              NULL, NULL, 'high', 95, 'IELTS Academic Writing Assessment Criteria',
+              'Task 1 · Task Achievement', 'TA-1', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_ielts_task1_overview', 'Provide a clear overview', 'task1', '[]'::jsonb,
+              '["task-achievement","overview"]'::jsonb, 'ielts_official', 'structure',
+              'Provide a clear overview that summarizes the most important trends, stages, changes, or differences.',
+              NULL, NULL, 'high', 100, 'IELTS Academic Writing Assessment Criteria',
+              'Task 1 · Task Achievement', 'TA-2', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_ielts_task1_comparisons', 'Make relevant comparisons', 'task1', '[]'::jsonb,
+              '["task-achievement","comparison"]'::jsonb, 'ielts_official', 'argumentation',
+              'Select important comparisons and trends and organize them meaningfully rather than presenting an unstructured list of details.',
+              NULL, NULL, 'high', 90, 'IELTS Academic Writing Assessment Criteria',
+              'Task 1 · Task Achievement', 'TA-3', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_ielts_task1_accuracy', 'Report data accurately', 'task1', '[]'::jsonb,
+              '["task-achievement","accuracy"]'::jsonb, 'ielts_official', 'scoring',
+              'Describe data, categories, dates, rankings, directions, stages, and trends accurately and only include information relevant to the task.',
+              NULL, NULL, 'high', 100, 'IELTS Academic Writing Assessment Criteria',
+              'Task 1 · Task Achievement', 'TA-4', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_ielts_task2_answer_question', 'Answer the question directly', 'task2', '[]'::jsonb,
+              '["task-response","relevance"]'::jsonb, 'ielts_official', 'scoring',
+              'Address every part of the task directly and keep the response relevant to the question.',
+              NULL, NULL, 'high', 100, 'IELTS Writing Assessment Criteria',
+              'Task 2 · Task Response', 'TR-1', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_ielts_task2_position', 'Maintain a clear position', 'task2', '[]'::jsonb,
+              '["task-response","position"]'::jsonb, 'ielts_official', 'structure',
+              'Present a clear position and maintain it consistently throughout the response.',
+              NULL, NULL, 'high', 100, 'IELTS Writing Assessment Criteria',
+              'Task 2 · Task Response', 'TR-2', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_ielts_task2_development', 'Develop supporting ideas', 'task2', '[]'::jsonb,
+              '["task-response","development"]'::jsonb, 'ielts_official', 'argumentation',
+              'Develop the main ideas sufficiently with relevant explanations, reasoning, and support.',
+              NULL, NULL, 'high', 95, 'IELTS Writing Assessment Criteria',
+              'Task 2 · Task Response', 'TR-3', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_ielts_task2_cohesion', 'Connect ideas logically', 'task2', '[]'::jsonb,
+              '["coherence","cohesion","paragraph"]'::jsonb, 'ielts_official', 'structure',
+              'Organize information and ideas logically so that body paragraphs are focused, relevant, and clearly connected.',
+              NULL, NULL, 'high', 90, 'IELTS Writing Assessment Criteria',
+              'Coherence and Cohesion', 'CC-1', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_system_task1_image_consistency', 'Check Task 1 image consistency', 'task1', '[]'::jsonb,
+              '["image","accuracy","multimodal"]'::jsonb, 'system', 'scoring',
+              'Compare claims about figures, categories, dates, rankings, directions, stages, and trends against the uploaded image. Treat conflicts as Task Achievement accuracy problems.',
+              NULL, NULL, 'high', 100, 'System Review Rules',
+              'Task 1 image consistency', 'SYS-T1-1', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_system_task1_image_relevance', 'Detect unrelated Task 1 images', 'task1', '[]'::jsonb,
+              '["image","relevance","multimodal"]'::jsonb, 'system', 'scoring',
+              'If the uploaded image is unrelated to the written prompt or does not match the expected Task 1 visual, explicitly report the mismatch.',
+              NULL, NULL, 'high', 100, 'System Review Rules',
+              'Task 1 image consistency', 'SYS-T1-2', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_system_task1_unreadable_values', 'Do not invent unreadable values', 'task1', '[]'::jsonb,
+              '["image","uncertainty","multimodal"]'::jsonb, 'system', 'scoring',
+              'Do not invent values that cannot be read confidently from the image. State the uncertainty and judge only what the visual supports.',
+              NULL, NULL, 'high', 100, 'System Review Rules',
+              'Task 1 image consistency', 'SYS-T1-3', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_system_task1_revision_accuracy', 'Correct inaccurate Task 1 claims', 'task1', '[]'::jsonb,
+              '["image","revision"]'::jsonb, 'system', 'expression',
+              'During revision, do not preserve clearly incorrect data claims. Correct or generalize them so the revised response remains consistent with the visible image.',
+              NULL, NULL, 'high', 100, 'System Review Rules',
+              'Task 1 revision', 'SYS-T1-4', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_system_task2_causal_chain', 'Develop a clear causal chain', 'task2', '[]'::jsonb,
+              '["argumentation","causal-chain","development"]'::jsonb, 'system', 'argumentation',
+              'When an argument depends on cause and effect, make each link explicit: A leads to B, B leads to C, and C leads to D. The chain must remain relevant, sufficiently explained, and connected to the question.',
+              NULL, NULL, 'medium', 75, 'System Review Rules',
+              'Task 2 idea development', 'SYS-T2-1', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_system_preserve_core_stance', 'Preserve the student’s core stance', 'all', '[]'::jsonb,
+              '["revision"]'::jsonb, 'system', 'expression',
+              'During revision, preserve the student’s core stance, major supporting points, and overall paragraph plan unless a change is required to correct a clear task-response or factual problem.',
+              NULL, NULL, 'high', 95, 'System Review Rules',
+              'Revision stages', 'SYS-REV-0', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_system_grammar_scope', 'Grammar revision scope', 'all', '[]'::jsonb,
+              '["stage:grammar","revision"]'::jsonb, 'system', 'grammar',
+              'For grammar revision, focus on tense, agreement, articles, prepositions, word form, sentence and clause structure, verb patterns, voice, pronoun reference, parallelism, punctuation, capitalization, collocation, naturalness, and other clear mechanics issues. Do not significantly expand ideas.',
+              NULL, NULL, 'high', 100, 'System Review Rules',
+              'Revision stages', 'SYS-REV-1', NULL, 'published', 1, NOW(), NOW(), NOW()
+            ),
+            (
+              'seed_system_optimization_scope', 'Article optimization scope', 'all', '[]'::jsonb,
+              '["stage:optimization","revision"]'::jsonb, 'system', 'expression',
+              'For article optimization, improve idea development, cohesion, clarity, concision, lexical choice, paragraph flow, and task response quality while preserving the student’s core stance and keeping grammar correct.',
+              NULL, NULL, 'high', 100, 'System Review Rules',
+              'Revision stages', 'SYS-REV-2', NULL, 'published', 1, NOW(), NOW(), NOW()
+            )
+          ON CONFLICT (id) DO NOTHING;
+        `);
+        await db.query(`
+          INSERT INTO teaching_rule_versions (rule_id, version, snapshot_json, published_at)
+          SELECT id, version, to_jsonb(teaching_rules), COALESCE(published_at, NOW())
+          FROM teaching_rules
+          WHERE id LIKE 'seed_%' AND version > 0
+          ON CONFLICT (rule_id, version) DO NOTHING;
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (8, NOW())`
         );
       }
       await db.query("COMMIT");

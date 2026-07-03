@@ -13,6 +13,7 @@
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
     "db:migrate": "tsx scripts/migrate-db.ts",
     "db:import:historical": "tsx scripts/import-historical-practice-data.ts",
+    "db:import:courseware-rules": "tsx scripts/import-courseware-teaching-rules.ts",
     "db:seed:practice": "node scripts/seed-practice-library.mjs",
     "db:sync:historical:koolearn": "node scripts/sync-koolearn-historical-practice.mjs",
     "db:sync:practice:koolearn": "node scripts/sync-koolearn-practice-library.mjs"

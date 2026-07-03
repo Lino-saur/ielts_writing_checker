@@ -11,6 +11,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isEnergyPage = pathname.startsWith("/admin/energy");
   const isMediaUsagePage = pathname.startsWith("/admin/media-usage");
   const isHistoricalPracticePage = pathname.startsWith("/admin/historical-practice");
+  const isTeachingRulesPage = pathname.startsWith("/admin/teaching-rules");
 
   if (pathname === "/admin/login" || pathname === "/admin/unauthorized") {
     return <div className={styles.shell}>{children}</div>;
@@ -58,6 +59,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             >
               Historical Questions
             </Link>
+            <Link
+              href="/admin/teaching-rules"
+              className={`${styles.navLink} ${isTeachingRulesPage ? styles.navLinkActive : ""}`}
+            >
+              Teaching Rules
+            </Link>
             <span className={styles.navSection}>App</span>
             <Link href="/" className={styles.navLink}>
               Public Site
@@ -68,7 +75,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className={styles.sidebarFooter}>
-            <p className={styles.caption}>Changes to historical questions are published to the practice library immediately.</p>
+            <p className={styles.caption}>
+              Teaching rules require an explicit publish step before they can be used by review workflows.
+            </p>
           </div>
         </aside>
 
