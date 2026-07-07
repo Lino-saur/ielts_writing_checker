@@ -1,4 +1,8 @@
 import { buildRevisionPrompt, buildScorePrompt, loadBasePrompt } from "./prompts";
+import {
+  enforceRevisionRuleReferences,
+  hydrateTeachingRuleReferences
+} from "@/lib/teaching-rules";
 import { normalizeRevisionResult, normalizeScoreResult, parseRevisionStructuredResponse, parseScoreStructuredResponse, previewText, cleanModelText } from "./parsing";
 import {
   ChatCompletionsPayload,
@@ -688,35 +692,37 @@ export async function buildAiScoreFeedback(input: CheckInput): Promise<WritingSc
   const minimumWords = input.taskType === "task1" ? 150 : 250;
   const systemPrompt = await loadBasePrompt();
   const visionProvider = getVisionProvider();
-  const prompt = await buildScorePrompt(input, minimumWords);
+  const promptContext = await buildScorePrompt(input, minimumWords);
 
+  let result: WritingScoreResult;
   if (shouldUseVisionModel(input)) {
     if (visionProvider === "gemini") {
-      return runAlternateVisionCompletion(input, getGeminiConfig(), {
+      result = await runAlternateVisionCompletion(input, getGeminiConfig(), {
         kind: "score",
         systemPrompt,
-        prompt,
+        prompt: promptContext.prompt,
+        parse: parseScoreStructuredResponse,
+        normalize: normalizeScoreResult
+      });
+    } else {
+      result = await runQianwenVisionCompletion(input, getQianwenConfig(), {
+        kind: "score",
+        systemPrompt,
+        prompt: promptContext.prompt,
         parse: parseScoreStructuredResponse,
         normalize: normalizeScoreResult
       });
     }
-
-    return runQianwenVisionCompletion(input, getQianwenConfig(), {
+  } else {
+    result = await runTaggedCompletion(input, getDeepSeekConfig(), {
       kind: "score",
       systemPrompt,
-      prompt,
+      prompt: promptContext.prompt,
       parse: parseScoreStructuredResponse,
       normalize: normalizeScoreResult
     });
   }
-
-  return runTaggedCompletion(input, getDeepSeekConfig(), {
-    kind: "score",
-    systemPrompt,
-    prompt,
-    parse: parseScoreStructuredResponse,
-    normalize: normalizeScoreResult
-  });
+  return hydrateTeachingRuleReferences(result, promptContext.rules);
 }
 
 export async function buildAiRevisionFeedback(input: CheckInput): Promise<WritingRevisionResult> {
@@ -755,14 +761,20 @@ export async function buildAiRevisionFeedback(input: CheckInput): Promise<Writin
     });
   }
 
-  const grammarRevision = await runRevisionPass(input, grammarPrompt);
+  const grammarRevision = enforceRevisionRuleReferences(
+    await runRevisionPass(input, grammarPrompt.prompt),
+    grammarPrompt.rules
+  );
   const grammarCleanEssay = materializeAnnotatedEssay(grammarRevision.annotatedEssay);
   const optimizationInput: CheckInput = {
     ...input,
     essay: grammarCleanEssay
   };
   const optimizationPrompt = await buildRevisionPrompt(optimizationInput, minimumWords, "optimization");
-  const optimizationRevision = await runRevisionPass(optimizationInput, optimizationPrompt);
+  const optimizationRevision = enforceRevisionRuleReferences(
+    await runRevisionPass(optimizationInput, optimizationPrompt.prompt),
+    optimizationPrompt.rules
+  );
 
   return {
     ...optimizationRevision,

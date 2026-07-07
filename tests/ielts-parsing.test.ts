@@ -28,9 +28,9 @@ rationale: Several agreement errors remain.
 - Clear position
 - Relevant examples
 ===HIGHLIGHTED_SENTENCES===
-1. sentence: This is the strongest sentence. reason: It states the position clearly.
+1. sentence: This is the strongest sentence. reason: It states the position clearly. rule_ids: [course_l08_opinion_choose_stance@v1]
 ===PRIORITY_FIXES===
-1. title: Agreement detail: Check singular subjects and verbs.
+1. title: Agreement detail: Check singular subjects and verbs. rules: [seed_system_grammar_scope@v1]
 ===END===
 `;
 
@@ -59,16 +59,23 @@ describe("IELTS structured response parsing", () => {
     expect(normalized.targetBand).toBe(7);
     expect(normalized.providerUsed).toBe("qianwen");
     expect(normalized.priorityFixes[0].title).toBe("Agreement");
+    expect(normalized.highlightedSentences[0].ruleReferences).toEqual([
+      { id: "course_l08_opinion_choose_stance", version: 1 }
+    ]);
+    expect(normalized.priorityFixes[0].ruleReferences).toEqual([
+      { id: "seed_system_grammar_scope", version: 1 }
+    ]);
   });
 
   it("adds revision ids and repairs weak reasons", () => {
     const parsed = parseRevisionStructuredResponse(`
-===TASK_TYPE===
+===TASK TYPE===
 task2
-===ANNOTATED_ESSAY===
+===ANNOTATED ESSAY===
 Students [del]is[/del][add]are[/add] responsible.
-===CORRECTION_NOTES===
-1. id: sv1 category: subject_verb_agreement original: is corrected: are reason: grammar mistake
+===CORRECTION NOTES===
+1. id: sv1 category: subject_verb_agreement original: is corrected: are reason: grammar mistake rules: [seed_system_grammar_scope@v1]
+2. id: incomplete category: other original:
 ===END===
 `);
     const normalized = normalizeRevisionResult(
@@ -85,6 +92,10 @@ Students [del]is[/del][add]are[/add] responsible.
 
     expect(normalized.annotatedEssay).toContain("[del#sv1]is[/del#sv1][add#sv1]are[/add#sv1]");
     expect(normalized.correctionNotes[0].reason.length).toBeGreaterThan(24);
+    expect(normalized.correctionNotes[0].ruleReferences).toEqual([
+      { id: "seed_system_grammar_scope", version: 1 }
+    ]);
+    expect(normalized.correctionNotes).toHaveLength(1);
   });
 
   it("rejects responses without required tagged sections", () => {

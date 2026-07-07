@@ -40,6 +40,15 @@ export type BandBreakdown = {
 export type ImprovementItem = {
   title: string;
   detail: string;
+  ruleReferences?: TeachingRuleReference[];
+};
+
+export type TeachingRuleReference = {
+  id: string;
+  version?: number;
+  sourceTitle?: string;
+  sourceSection?: string;
+  knowledgePointCode?: string;
 };
 
 export type CorrectionNote = {
@@ -48,6 +57,7 @@ export type CorrectionNote = {
   original: string;
   corrected: string;
   reason: string;
+  ruleReferences?: TeachingRuleReference[];
 };
 
 export type RevisionStage = {
@@ -58,6 +68,7 @@ export type RevisionStage = {
 export type HighlightedSentence = {
   sentence: string;
   reason: string;
+  ruleReferences?: TeachingRuleReference[];
 };
 
 export type WritingScoreResult = {

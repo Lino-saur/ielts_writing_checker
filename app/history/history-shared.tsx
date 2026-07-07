@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Pill } from "@/components/ui-kit";
+import { TeachingRuleReferences } from "@/components/teaching-rule-references";
 import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
 import { getMessages } from "@/lib/i18n/messages";
 import type { CorrectionNote, Locale, WritingReviewDetail } from "@/lib/types";
@@ -425,6 +426,10 @@ export function ReviewDetailContent({
                   <p>
                     <strong>{t.highlightedReason}:</strong> {item.reason}
                   </p>
+                  <TeachingRuleReferences
+                    references={item.ruleReferences}
+                    label={t.ruleBasis}
+                  />
                 </article>
               ))}
             </div>
@@ -436,6 +441,10 @@ export function ReviewDetailContent({
               {detail.result.priorityFixes.map((item) => (
                 <li key={item.title}>
                   <strong>{item.title}:</strong> {item.detail}
+                  <TeachingRuleReferences
+                    references={item.ruleReferences}
+                    label={t.ruleBasis}
+                  />
                 </li>
               ))}
             </ul>
@@ -529,6 +538,10 @@ export function ReviewDetailContent({
                                     <div className="reviseReason">
                                       <span>{t.correctionReason}</span>
                                       <p>{edit.note?.reason ?? ""}</p>
+                                      <TeachingRuleReferences
+                                        references={edit.note?.ruleReferences}
+                                        label={t.ruleBasis}
+                                      />
                                     </div>
                                   </div>
                                 ) : null}

@@ -7,6 +7,7 @@ import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
+import { TeachingRuleReferences } from "@/components/teaching-rule-references";
 import type { AiProvider, FeedbackPayload, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
 import {
   groupRevisionEditsByCategory,
@@ -191,6 +192,7 @@ function CheckerPageContent() {
     taskImage: null
   });
   const loadedDraftContextRef = useRef<LoadedDraftContext | null>(null);
+  const examSessionStartedRef = useRef(false);
   const [locale, setLocale] = useRouteLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -237,6 +239,14 @@ function CheckerPageContent() {
     optimization: {}
   });
   const [revisionCopyState, setRevisionCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const [computerExamMode, setComputerExamMode] = useState(false);
+  const [examSecondsRemaining, setExamSecondsRemaining] = useState(60 * 60);
+  const [examHelpOpen, setExamHelpOpen] = useState(false);
+  const [examScreenHidden, setExamScreenHidden] = useState(false);
+  const [examReviewed, setExamReviewed] = useState<Record<TaskType, boolean>>({
+    task1: false,
+    task2: false
+  });
 
   const { checker: t, navbar } = getMessages(locale);
   const sessionReady = sessionResolved;
@@ -247,6 +257,7 @@ function CheckerPageContent() {
   const wordCountProgress = Math.min(100, Math.round((wordCount / minimumWordCount) * 100));
   const wordCountTone = remainingWordCount > 0 ? "low" : "ready";
   const promptEditLabel = promptEditing ? t.doneEditing : t.editPrompt;
+  const examMinutesLeft = Math.max(0, Math.ceil(examSecondsRemaining / 60));
   const currentRevisionStage = useMemo(
     () =>
       result == null
@@ -459,6 +470,28 @@ function CheckerPageContent() {
     setError(message);
     setErrorSource(source);
   }
+
+  function toggleComputerExamMode() {
+    if (!computerExamMode && !examSessionStartedRef.current) {
+      examSessionStartedRef.current = true;
+      setExamSecondsRemaining(60 * 60);
+    }
+    setExamHelpOpen(false);
+    setExamScreenHidden(false);
+    setComputerExamMode((current) => !current);
+  }
+
+  useEffect(() => {
+    if (!computerExamMode) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setExamSecondsRemaining((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [computerExamMode]);
 
   useEffect(() => {
     const nextTask = searchParams.get("task") === "task1" ? "task1" : "task2";
@@ -1272,7 +1305,7 @@ function CheckerPageContent() {
   }, [isTask1, pendingReviewAfterAuth, t.task1ImageRequired, taskImage]);
 
   return (
-    <main className="pageShell">
+    <main className={`pageShell${computerExamMode ? " computerExamMode" : ""}`}>
       <div className="pageBackdrop" aria-hidden="true">
         <span className="backdropOrb orbOne" />
         <span className="backdropOrb orbTwo" />
@@ -1426,52 +1459,98 @@ function CheckerPageContent() {
         </div>
       ) : null}
 
-      <AppNavbar
-        locale={locale}
-        onLocaleChange={setLocale}
-        copy={navbar}
-        taskMenuMode="all"
-        energyBalance={energy?.balance ?? null}
-        energyLabel={t.energy}
-        authRequest={authRequest}
-        authHint={t.authDialogHint}
-        onSessionUpdated={handleSessionUpdated}
-        onTaskNavigate={handleTaskNavigate}
-      />
+      {!computerExamMode ? (
+        <AppNavbar
+          locale={locale}
+          onLocaleChange={setLocale}
+          copy={navbar}
+          taskMenuMode="all"
+          energyBalance={energy?.balance ?? null}
+          energyLabel={t.energy}
+          authRequest={authRequest}
+          authHint={t.authDialogHint}
+          onSessionUpdated={handleSessionUpdated}
+          onTaskNavigate={handleTaskNavigate}
+        />
+      ) : null}
 
       <section className="checkerStudio" id="workspace">
         <Surface as="form" className="checkerWorkbench" onSubmit={handleSubmit}>
-          <div className="checkerTaskContext" aria-label={t.taskContextLabel}>
-            <Pill>{isTask1 ? navbar.task1 : navbar.task2}</Pill>
-            <div>
-              <strong>{t.taskContextLabel}</strong>
-              <span>{isTask1 ? t.task1ContextBody : t.task2ContextBody}</span>
-            </div>
-          </div>
-
-          <div className="checkerField checkerPromptBlock">
-            <div className="checkerPromptHeader">
-              <span>{t.prompt}</span>
-              <div className="checkerPromptControls">
-                {!isLibraryQuestion ? (
-                  <>
-                  <button type="button" className="checkerPromptEditButton" onClick={requestExampleDraft}>
-                    {t.loadExample}
+          {computerExamMode ? (
+            <div className="computerExamChrome">
+              <div className="computerExamToolbar">
+                <span className="computerExamCandidate">
+                  <span className="computerExamCandidateIcon" aria-hidden="true" />
+                  XXXX XXXXXXX - 123456
+                </span>
+                <span className={`computerExamClock${examSecondsRemaining <= 5 * 60 ? " is-urgent" : ""}`}>
+                  <span className="computerExamClockIcon" aria-hidden="true" />
+                  <strong>{examMinutesLeft}</strong> minutes left
+                </span>
+                <span className="computerExamToolbarActions">
+                  <button type="button" className="computerExamTopButton" onClick={() => setExamHelpOpen(true)}>
+                    Help <span className="computerExamHelpIcon" aria-hidden="true">?</span>
                   </button>
-                    <button
-                      type="button"
-                      className="checkerPromptEditButton"
-                      onClick={() => setPromptEditing((value) => !value)}
-                      disabled={promptEditing && !prompt.trim()}
-                    >
-                      {promptEditLabel}
-                    </button>
-                  </>
-                ) : null}
+                  <button type="button" className="computerExamTopButton" onClick={() => setExamScreenHidden(true)}>
+                    Hide
+                  </button>
+                </span>
               </div>
             </div>
+          ) : (
+            <div className="checkerTaskContext" aria-label={t.taskContextLabel}>
+              <Pill>{isTask1 ? navbar.task1 : navbar.task2}</Pill>
+              <div>
+                <strong>{t.taskContextLabel}</strong>
+                <span>{isTask1 ? t.task1ContextBody : t.task2ContextBody}</span>
+              </div>
+              <button
+                type="button"
+                className="checkerModeToggle"
+                onClick={toggleComputerExamMode}
+              >
+                {t.computerExamMode}
+              </button>
+            </div>
+          )}
+
+          {computerExamMode ? (
+            <div className="computerExamTitle">
+              <h1>Academic Writing Part {isTask1 ? "1" : "2"}</h1>
+              <p>
+                You should spend about {isTask1 ? "20" : "40"} minutes on this task. Write at least{" "}
+                {isTask1 ? "150" : "250"} words.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="checkerInputWorkspace">
+            <div className="checkerQuestionColumn">
+          <div className="checkerField checkerPromptBlock">
+            {!computerExamMode ? (
+              <div className="checkerPromptHeader">
+                <span>{t.prompt}</span>
+                <div className="checkerPromptControls">
+                  {!isLibraryQuestion ? (
+                    <>
+                      <button type="button" className="checkerPromptEditButton" onClick={requestExampleDraft}>
+                        {t.loadExample}
+                      </button>
+                      <button
+                        type="button"
+                        className="checkerPromptEditButton"
+                        onClick={() => setPromptEditing((value) => !value)}
+                        disabled={promptEditing && !prompt.trim()}
+                      >
+                        {promptEditLabel}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             <div className="checkerPromptBody">
-              {promptEditing && !isLibraryQuestion ? (
+              {promptEditing && !isLibraryQuestion && !computerExamMode ? (
                 <textarea
                   value={prompt}
                   onChange={(event) => {
@@ -1482,19 +1561,29 @@ function CheckerPageContent() {
                   placeholder={t.promptPlaceholder}
                 />
               ) : (
-                <p className="checkerPromptText">{prompt}</p>
+                <>
+                  {computerExamMode && !isTask1 ? <p className="computerExamPromptIntro">Write about the following topic:</p> : null}
+                  <p className="checkerPromptText">{prompt}</p>
+                  {computerExamMode && !isTask1 ? (
+                    <p className="computerExamPromptOutro">
+                      Give reasons for your answer and include any relevant examples from your own knowledge or experience.
+                    </p>
+                  ) : null}
+                </>
               )}
             </div>
           </div>
 
           {isTask1 ? (
             <div className="checkerField checkerUploadBlock">
-              <div className="checkerPromptHeader">
-                <span>{t.task1ImageLabel}</span>
-              </div>
+              {!computerExamMode ? (
+                <div className="checkerPromptHeader">
+                  <span>{t.task1ImageLabel}</span>
+                </div>
+              ) : null}
               <div className="checkerPromptBody checkerUploadBody">
-                {!isLibraryQuestion ? <p className="checkerUploadHint">{t.task1ImageHint}</p> : null}
-                {isLibraryQuestion ? (
+                {!isLibraryQuestion && !computerExamMode ? <p className="checkerUploadHint">{t.task1ImageHint}</p> : null}
+                {isLibraryQuestion || computerExamMode ? (
                   <div className={`checkerUploadDropzone is-readonly${taskImage ? " has-preview" : ""}`}>
                     {taskImage ? (
                       <>
@@ -1503,7 +1592,9 @@ function CheckerPageContent() {
                         <img src={taskImage.previewUrl} alt={t.task1ImageLabel} className="checkerUploadPreviewImage" />
                       </>
                     ) : (
-                      <span className="checkerUploadReadonlyEmpty">{t.practiceImageUnavailable}</span>
+                      <span className="checkerUploadReadonlyEmpty">
+                        {computerExamMode ? t.task1ImageHint : t.practiceImageUnavailable}
+                      </span>
                     )}
                   </div>
                 ) : (
@@ -1549,17 +1640,19 @@ function CheckerPageContent() {
             </div>
           ) : null}
 
+            </div>
           <div className="checkerDraftPanel">
-            <div className="checkerDraftHeader">
-              <div>
-                <h2>{t.essay}</h2>
-                {draftReady ? (
-                  <span className={`checkerDraftStatus${draftDirty ? " is-saving" : ""}`} aria-live="polite">
-                    {draftDirty ? t.draftSaving : t.draftSaved}
-                  </span>
-                ) : null}
-              </div>
-              <div className="checkerTargetBandControl">
+            {!computerExamMode ? (
+              <div className="checkerDraftHeader">
+                <div>
+                  <h2>{t.essay}</h2>
+                  {draftReady ? (
+                    <span className={`checkerDraftStatus${draftDirty ? " is-saving" : ""}`} aria-live="polite">
+                      {draftDirty ? t.draftSaving : t.draftSaved}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="checkerTargetBandControl">
                 <label className="checkerInlineSelect">
                   <span>{t.targetBand}</span>
                   <select
@@ -1582,8 +1675,9 @@ function CheckerPageContent() {
                 <span id="target-band-hint" className="checkerTargetBandHint">
                   {t.targetBandHint}
                 </span>
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {error && errorSource !== "auth" ? <p className="errorBox">{error}</p> : null}
 
@@ -1597,13 +1691,13 @@ function CheckerPageContent() {
                   markDraftDirty();
                 }}
                 rows={24}
-                placeholder={t.essayPlaceholder}
+                placeholder={computerExamMode ? "" : t.essayPlaceholder}
               />
             </label>
 
             <div className={`checkerDraftFooter${result ? "" : " is-mobile-sticky"}`}>
               <div className="checkerDraftMeta">
-                {draftReady ? (
+                {draftReady && !computerExamMode ? (
                   <span className={`checkerMobileDraftStatus${draftDirty ? " is-saving" : ""}`}>
                     {draftDirty ? t.draftSaving : t.draftSaved}
                   </span>
@@ -1634,11 +1728,130 @@ function CheckerPageContent() {
                   </span>
                 </div>
               </div>
-              <ActionButton type="submit" variant="primary" disabled={loading || !sessionReady || !draftReady}>
-                {loading ? t.checking : isAuthenticated ? t.checkWriting : t.checkWritingLocked}
-              </ActionButton>
+              {!computerExamMode ? (
+                <ActionButton type="submit" variant="primary" disabled={loading || !sessionReady || !draftReady}>
+                  {loading ? t.checking : isAuthenticated ? t.checkWriting : t.checkWritingLocked}
+                </ActionButton>
+              ) : null}
             </div>
           </div>
+          </div>
+
+          {computerExamMode ? (
+            <div className="computerExamFooter">
+              <label className="computerExamReview">
+                <input
+                  type="checkbox"
+                  checked={examReviewed[taskType]}
+                  onChange={(event) =>
+                    setExamReviewed((current) => ({
+                      ...current,
+                      [taskType]: event.target.checked
+                    }))
+                  }
+                />
+                Review
+              </label>
+              <div className="computerExamQuestionNav" aria-label="Question navigation">
+                <button
+                  type="button"
+                  className={isTask1 ? "is-current" : ""}
+                  onClick={() => handleTaskNavigate("task1", `/${locale}/checker?task=task1`)}
+                  aria-label="Question 1"
+                >
+                  1
+                </button>
+                <button
+                  type="button"
+                  className={!isTask1 ? "is-current" : ""}
+                  onClick={() => handleTaskNavigate("task2", `/${locale}/checker?task=task2`)}
+                  aria-label="Question 2"
+                >
+                  2
+                </button>
+              </div>
+              <div className="computerExamFooterActions">
+                <span className="computerExamToolButton" aria-hidden="true">
+                  <span aria-hidden="true" />
+                </span>
+                {!isTask1 ? (
+                  <button
+                    type="button"
+                    className="computerExamRoundButton is-previous"
+                    aria-label="Previous question"
+                    onClick={() => handleTaskNavigate("task1", `/${locale}/checker?task=task1`)}
+                  />
+                ) : null}
+                {isTask1 ? (
+                  <button
+                    type="button"
+                    className="computerExamRoundButton is-next"
+                    aria-label="Next question"
+                    onClick={() => handleTaskNavigate("task2", `/${locale}/checker?task=task2`)}
+                  />
+                ) : (
+                  <button
+                    type="submit"
+                    className={`computerExamRoundButton is-next${loading ? " is-loading" : ""}`}
+                    aria-label={loading ? t.checking : t.computerExamSubmit}
+                    disabled={loading || !sessionReady || !draftReady}
+                  />
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {computerExamMode && examHelpOpen ? (
+            <div className="computerExamOverlay" role="presentation">
+              <section className="computerExamDialog computerExamHelpDialog" role="dialog" aria-modal="true" aria-label="Help">
+                <header>
+                  <span className="computerExamDialogIcon is-help" aria-hidden="true">i</span>
+                  <strong>Help</strong>
+                  <button type="button" aria-label="Close help" onClick={() => setExamHelpOpen(false)}>×</button>
+                </header>
+                <div className="computerExamHelpTabs" aria-hidden="true">
+                  <span>Information</span>
+                  <span>Test help</span>
+                  <span className="is-active">Task help</span>
+                </div>
+                <div className="computerExamDialogBody">
+                  <p>To choose a question click on the question number at the bottom of the screen.</p>
+                  <strong>Part 1 and Part 2</strong>
+                  <p>Write your answer in the space on the right side of the screen.</p>
+                  <button type="button" className="computerExamDialogPrimary" onClick={() => setExamHelpOpen(false)}>
+                    OK
+                  </button>
+                  <button type="button" className="computerExamLeaveMode" onClick={toggleComputerExamMode}>
+                    Exit simulation
+                  </button>
+                </div>
+              </section>
+            </div>
+          ) : null}
+
+          {computerExamMode && examScreenHidden ? (
+            <div className="computerExamOverlay" role="presentation">
+              <section className="computerExamDialog computerExamHiddenDialog" role="dialog" aria-modal="true" aria-label="Screen hidden">
+                <header>
+                  <span className="computerExamDialogIcon is-screen" aria-hidden="true" />
+                  <strong>Screen hidden</strong>
+                  <button type="button" aria-label="Resume test" onClick={() => setExamScreenHidden(false)}>×</button>
+                </header>
+                <div className="computerExamDialogBody">
+                  <p>Your answers have been stored.</p>
+                  <p>Please note that the clock is still running. The time has not been paused.</p>
+                  <p>If you wish to leave the room, please tell your invigilator.</p>
+                  <p>Click the button below to go back to your test.</p>
+                  <button type="button" className="computerExamDialogPrimary" onClick={() => setExamScreenHidden(false)}>
+                    Resume test
+                  </button>
+                  <button type="button" className="computerExamLeaveMode" onClick={toggleComputerExamMode}>
+                    Exit simulation
+                  </button>
+                </div>
+              </section>
+            </div>
+          ) : null}
         </Surface>
 
         {result ? (
@@ -1727,6 +1940,10 @@ function CheckerPageContent() {
                           <p>
                             <strong>{t.highlightedReason}:</strong> {item.reason}
                           </p>
+                          <TeachingRuleReferences
+                            references={item.ruleReferences}
+                            label={t.ruleBasis}
+                          />
                         </article>
                       ))}
                     </div>
@@ -1738,6 +1955,10 @@ function CheckerPageContent() {
                       {result.priorityFixes.map((item) => (
                         <li key={item.title}>
                           <strong>{item.title}:</strong> {item.detail}
+                          <TeachingRuleReferences
+                            references={item.ruleReferences}
+                            label={t.ruleBasis}
+                          />
                         </li>
                       ))}
                     </ul>
@@ -1998,6 +2219,10 @@ function CheckerPageContent() {
                                             <div className="reviseReason">
                                               <span>{t.correctionReason}</span>
                                               <p>{edit.note?.reason ?? ""}</p>
+                                              <TeachingRuleReferences
+                                                references={edit.note?.ruleReferences}
+                                                label={t.ruleBasis}
+                                              />
                                             </div>
                                             <div className="reviseDecisionActions">
                                               <button

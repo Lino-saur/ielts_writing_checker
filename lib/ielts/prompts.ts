@@ -1,6 +1,6 @@
 import { CheckInput, countWords, getLocale, getTargetBand } from "./shared";
 import { GRAMMAR_REVISION_CATEGORIES, OPTIMIZATION_REVISION_CATEGORIES } from "./revision-categories";
-import { buildApplicableTeachingRulesPrompt } from "@/lib/teaching-rules";
+import { buildApplicableTeachingRulesContext } from "@/lib/teaching-rules";
 
 const PROMPTS = {
   base: `You are a precise IELTS writing evaluator.
@@ -38,14 +38,18 @@ rationale: ...
 
 ===HIGHLIGHTED_SENTENCES===
 1. sentence: ...
+rules: rule_id@v1
 reason: ...
 
 ===PRIORITY_FIXES===
 1. title: ...
+rules: rule_id@v1
 detail: ...
 2. title: ...
+rules: rule_id@v1
 detail: ...
 3. title: ...
+rules: rule_id@v1
 detail: ...
 
 ===END===
@@ -66,6 +70,8 @@ Constraints:
 - Include 1 to 3 highlightedSentences taken from the student's original essay.
 - For each highlighted sentence, explain briefly why it is effective.
 - Include exactly 3 priority fixes.
+- Every highlighted sentence and priority fix must include a rules line containing one to three exact rule_id@version references from Published evaluation rules. Use "rules: none" only when no published rule supports the observation.
+- Never invent a rule id, version, source, or knowledge-point code.
 - Consider the minimum word expectation of {{minimumWords}}.
 - Use the exact section headers above and keep them in the same order.
 - Put each section header on its own line, and put the section content on the following lines.
@@ -92,6 +98,7 @@ task1 or task2
 ===CORRECTION_NOTES===
 1. id: 1
 category: ...
+rules: rule_id@v1
 original: ...
 corrected: ...
 reason: ...
@@ -114,6 +121,10 @@ Constraints:
 - annotatedEssay must preserve the essay order and mark edits inline using [del#1]original text[/del#1][add#1]improved text[/add#1], [del#2]...[/del#2][add#2]...[/add#2], etc.
 - Every inline edit id in annotatedEssay must have exactly one matching correctionNotes item with the same id, and every correctionNotes id must appear exactly once in annotatedEssay.
 - Every correctionNotes item must include a short category label.
+- Every correctionNotes item must include a rules line containing one to three exact rule_id@version references from Published evaluation rules.
+- Do not create a correction or optimization unless at least one published rule directly supports it. If no listed rule applies, preserve the original text instead of returning an unsupported edit.
+- For article optimization, rule support is mandatory even when the proposed wording sounds stylistically better.
+- Never invent a rule id, version, source, or knowledge-point code.
 - Every correctionNotes item must include a non-empty reason. The reason is required for every id with no exceptions.
 - Every reason must be specific and complete, not generic. Explain what is wrong in the original, what the corrected version changes, and why the correction is better in this context.
 - Every reason must be at least 2 full sentences in the required output language.
@@ -163,18 +174,25 @@ export async function buildScorePrompt(input: CheckInput, minimumWords: number) 
     input.taskType === "task1"
       ? "Evaluate the response as IELTS Academic Writing Task 1."
       : "Evaluate the response as IELTS Writing Task 2.";
-  const teachingRules = await buildApplicableTeachingRulesPrompt(input.taskType, "score");
+  const teachingRules = await buildApplicableTeachingRulesContext(
+    input.taskType,
+    "score",
+    input.prompt
+  );
 
-  return applyTemplate(scoreTemplate, {
+  return {
+    prompt: applyTemplate(scoreTemplate, {
     taskContext,
-    teachingRules,
+    teachingRules: teachingRules.prompt,
     targetBand,
     minimumWords,
     outputLanguageInstruction,
     userPrompt: input.prompt,
     essay: input.essay,
-    wordCount: countWords(input.essay)
-  }).trim();
+      wordCount: countWords(input.essay)
+    }).trim(),
+    rules: teachingRules.rules
+  };
 }
 
 export async function buildRevisionPrompt(
@@ -193,7 +211,11 @@ export async function buildRevisionPrompt(
     input.taskType === "task1"
       ? "Revise the response as IELTS Academic Writing Task 1."
       : "Revise the response as IELTS Writing Task 2.";
-  const teachingRules = await buildApplicableTeachingRulesPrompt(input.taskType, stage);
+  const teachingRules = await buildApplicableTeachingRulesContext(
+    input.taskType,
+    stage,
+    input.prompt
+  );
   const revisionStage =
     stage === "grammar"
       ? "Stage 1: Grammar Check"
@@ -203,9 +225,10 @@ export async function buildRevisionPrompt(
   const revisionStageExpansionRule =
     "Do not exceed the scope defined by the published rules for this revision stage.";
 
-  return applyTemplate(revisionTemplate, {
+  return {
+    prompt: applyTemplate(revisionTemplate, {
     taskContext,
-    teachingRules,
+    teachingRules: teachingRules.prompt,
     revisionStage,
     revisionStageConstraints,
     revisionStageExpansionRule,
@@ -216,6 +239,8 @@ export async function buildRevisionPrompt(
     outputLanguageInstruction,
     userPrompt: input.prompt,
     essay: input.essay,
-    wordCount: countWords(input.essay)
-  }).trim();
+      wordCount: countWords(input.essay)
+    }).trim(),
+    rules: teachingRules.rules
+  };
 }

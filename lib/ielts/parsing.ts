@@ -14,6 +14,7 @@ import {
   getTargetBand
 } from "./shared";
 import { getRevisionCategoryLabel, normalizeRevisionCategory } from "./revision-categories";
+import { parseTeachingRuleReferences } from "@/lib/teaching-rules";
 
 export function cleanModelText(text: string) {
   return text
@@ -71,12 +72,12 @@ function extractJsonObject(text: string) {
 function extractTaggedSections(text: string) {
   const cleanedText = cleanModelText(text);
   const sections = new Map<string, string>();
-  const pattern = /===([A-Z_]+)===/g;
+  const pattern = /===\s*([A-Z][A-Z _-]*?)\s*===/gi;
   const matches = [...cleanedText.matchAll(pattern)];
 
   for (let index = 0; index < matches.length; index += 1) {
     const current = matches[index];
-    const name = current[1];
+    const name = current[1].trim().replace(/[\s-]+/g, "_").toUpperCase();
 
     if (name === "END") {
       continue;
@@ -131,61 +132,82 @@ function splitNumberedEntries(block: string, entryLeadPattern: string) {
     .filter(Boolean);
 }
 
+const STRUCTURED_FIELD_PATTERN =
+  "sentence|reason|rules?|rule[_ ]?ids?|ruleReferences|title|detail|id|category|original|corrected";
+
+function extractStructuredField(entry: string, fieldPattern: string) {
+  return entry.match(
+    new RegExp(
+      `(?:^|\\s)(?:${fieldPattern}):\\s*([\\s\\S]*?)(?=\\s+(?:${STRUCTURED_FIELD_PATTERN}):|$)`,
+      "i"
+    )
+  )?.[1]?.trim();
+}
+
+function extractRuleReferences(entry: string) {
+  return parseTeachingRuleReferences(
+    extractStructuredField(entry, "rules?|rule[_ ]?ids?|ruleReferences")
+  );
+}
+
 function parseHighlightedSentencesBlock(block: string): HighlightedSentence[] {
   return splitNumberedEntries(block, "sentence:")
     .map((entry) => {
-      const sentenceMatch = entry.match(/sentence:\s*([\s\S]*?)(?=\s+reason:|$)/i);
-      const reasonMatch = entry.match(/reason:\s*([\s\S]*)/i);
+      const sentence = extractStructuredField(entry, "sentence");
+      const reason = extractStructuredField(entry, "reason");
 
-      if (!sentenceMatch || !reasonMatch) {
+      if (!sentence || !reason) {
         return null;
       }
 
       return {
-        sentence: sentenceMatch[1].trim(),
-        reason: reasonMatch[1].trim()
+        sentence,
+        reason,
+        ruleReferences: extractRuleReferences(entry)
       };
     })
-    .filter((item): item is HighlightedSentence => Boolean(item));
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 }
 
 function parsePriorityFixesBlock(block: string) {
   return splitNumberedEntries(block, "title:")
     .map((entry) => {
-      const titleMatch = entry.match(/title:\s*([\s\S]*?)(?=\s+detail:|$)/i);
-      const detailMatch = entry.match(/detail:\s*([\s\S]*)/i);
+      const title = extractStructuredField(entry, "title");
+      const detail = extractStructuredField(entry, "detail");
 
-      if (!titleMatch || !detailMatch) {
+      if (!title || !detail) {
         return null;
       }
 
       return {
-        title: titleMatch[1].trim(),
-        detail: detailMatch[1].trim()
+        title,
+        detail,
+        ruleReferences: extractRuleReferences(entry)
       };
     })
-    .filter((item): item is WritingCheckResult["priorityFixes"][number] => Boolean(item));
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 }
 
 function parseCorrectionNotesBlock(block: string): CorrectionNote[] {
   return splitNumberedEntries(block, "id:")
     .map<CorrectionNote | null>((entry) => {
-      const idMatch = entry.match(/id:\s*([A-Za-z0-9_-]+)/i);
-      const categoryMatch = entry.match(/category:\s*([\s\S]*?)(?=\s+original:|$)/i);
-      const originalMatch = entry.match(/original:\s*([\s\S]*?)(?=\s+corrected:|$)/i);
-      const correctedMatch = entry.match(/corrected:\s*([\s\S]*?)(?=\s+reason:|$)/i);
-      const reasonMatch = entry.match(/reason:\s*([\s\S]*)/i);
+      const id = extractStructuredField(entry, "id");
+      const category = extractStructuredField(entry, "category");
+      const original = extractStructuredField(entry, "original");
+      const corrected = extractStructuredField(entry, "corrected");
+      const reason = extractStructuredField(entry, "reason");
 
-      if (!idMatch || !originalMatch || !correctedMatch || !reasonMatch) {
+      if (!id || !original || !corrected || !reason) {
         return null;
       }
 
       return {
-        id: idMatch[1].trim(),
-        category: normalizeRevisionCategory(categoryMatch?.[1]?.trim()),
-        original: originalMatch[1].trim(),
-        corrected: correctedMatch[1].trim(),
-        reason: reasonMatch[1].trim()
+        id,
+        category: normalizeRevisionCategory(category),
+        original,
+        corrected,
+        reason,
+        ruleReferences: extractRuleReferences(entry)
       };
     })
     .filter((item): item is CorrectionNote => item !== null);
@@ -448,7 +470,8 @@ function repairRevisionNotes(
         category: normalizeRevisionCategory(note.category?.trim()),
         original: note.original.trim(),
         corrected: note.corrected.trim(),
-        reason: note.reason.trim()
+        reason: note.reason.trim(),
+        ruleReferences: note.ruleReferences ?? []
       }
     ])
   );
@@ -467,7 +490,8 @@ function repairRevisionNotes(
         category,
         original: existing.original || edit.original,
         corrected: existing.corrected || edit.corrected,
-        reason
+        reason,
+        ruleReferences: existing.ruleReferences
       };
     }
 
