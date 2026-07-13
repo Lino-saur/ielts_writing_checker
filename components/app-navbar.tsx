@@ -125,6 +125,7 @@ export function AppNavbar({
   const checkerTask2Href = useMemo(() => `/${locale}/checker?task=task2`, [locale]);
   const historyHref = useMemo(() => `/${locale}/history`, [locale]);
   const practiceHref = useMemo(() => `/${locale}/practice`, [locale]);
+  const assignmentsHref = useMemo(() => `/${locale}/assignments`, [locale]);
   const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : copy.writingTasks;
   const actionMenuLabel = copy.actionGroup;
   const actionMenuOpenLabel = copy.openActionMenu;
@@ -640,6 +641,9 @@ export function AppNavbar({
             <Link href={historyHref} role="menuitem" onClick={() => setActionMenuOpen(false)}>
               {copy.historyEntry}
             </Link>
+            <Link href={assignmentsHref} role="menuitem" onClick={() => setActionMenuOpen(false)}>
+              {copy.assignmentsEntry}
+            </Link>
           </div>
         </div>
 
@@ -706,6 +710,9 @@ export function AppNavbar({
               </Link>
               <Link href={historyHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
                 {copy.historyEntry}
+              </Link>
+              <Link href={assignmentsHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
+                {copy.assignmentsEntry}
               </Link>
             </div>
             {currentUser ? (

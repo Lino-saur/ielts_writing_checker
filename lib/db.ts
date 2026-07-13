@@ -6,7 +6,7 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 11;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -902,6 +902,155 @@ export async function ensureDatabase() {
         await db.query(
           `INSERT INTO schema_migrations (version, applied_at)
            VALUES (8, NOW())`
+        );
+      }
+      if (appliedVersion < 9) {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS writing_assignments (
+            id TEXT PRIMARY KEY,
+            teacher_admin_user_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            task_type TEXT NOT NULL CHECK (task_type IN ('task1', 'task2')),
+            prompt_text TEXT NOT NULL,
+            instructions TEXT NOT NULL DEFAULT '',
+            due_at TIMESTAMPTZ,
+            status TEXT NOT NULL DEFAULT 'assigned' CHECK (status IN ('assigned', 'closed')),
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS writing_assignments_teacher_created_idx
+          ON writing_assignments (teacher_admin_user_id, created_at DESC);
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS writing_assignments_status_due_idx
+          ON writing_assignments (status, due_at ASC NULLS LAST);
+        `);
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS assignment_recipients (
+            assignment_id TEXT NOT NULL REFERENCES writing_assignments(id) ON DELETE CASCADE,
+            student_user_id TEXT NOT NULL,
+            assigned_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (assignment_id, student_user_id)
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS assignment_recipients_student_idx
+          ON assignment_recipients (student_user_id, assigned_at DESC);
+        `);
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS assignment_submissions (
+            id TEXT PRIMARY KEY,
+            assignment_id TEXT NOT NULL REFERENCES writing_assignments(id) ON DELETE CASCADE,
+            student_user_id TEXT NOT NULL,
+            essay_text TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'reviewed')),
+            teacher_feedback TEXT,
+            teacher_score NUMERIC(3, 1),
+            reviewed_by_admin_user_id TEXT,
+            submitted_at TIMESTAMPTZ NOT NULL,
+            reviewed_at TIMESTAMPTZ,
+            updated_at TIMESTAMPTZ NOT NULL,
+            UNIQUE (assignment_id, student_user_id)
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS assignment_submissions_assignment_updated_idx
+          ON assignment_submissions (assignment_id, updated_at DESC);
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS assignment_submissions_student_updated_idx
+          ON assignment_submissions (student_user_id, updated_at DESC);
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (9, NOW())`
+        );
+      }
+      if (appliedVersion < 10) {
+        await db.query(`
+          ALTER TABLE writing_assignments
+          ADD COLUMN IF NOT EXISTS image_object_key TEXT;
+        `);
+        await db.query(`
+          ALTER TABLE writing_assignments
+          ADD COLUMN IF NOT EXISTS image_name TEXT;
+        `);
+        await db.query(`
+          ALTER TABLE writing_assignments
+          ADD COLUMN IF NOT EXISTS image_mime_type TEXT;
+        `);
+        await db.query(`
+          ALTER TABLE writing_assignments
+          ADD COLUMN IF NOT EXISTS image_size_bytes BIGINT;
+        `);
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS writing_classes (
+            id TEXT PRIMARY KEY,
+            teacher_admin_user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS writing_classes_teacher_updated_idx
+          ON writing_classes (teacher_admin_user_id, updated_at DESC);
+        `);
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS writing_class_students (
+            class_id TEXT NOT NULL REFERENCES writing_classes(id) ON DELETE CASCADE,
+            student_user_id TEXT NOT NULL,
+            added_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (class_id, student_user_id)
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS writing_class_students_student_idx
+          ON writing_class_students (student_user_id, added_at DESC);
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (10, NOW())`
+        );
+      }
+      if (appliedVersion < 11) {
+        await db.query(`
+          ALTER TABLE writing_assignments
+          ADD COLUMN IF NOT EXISTS allow_late_submission BOOLEAN NOT NULL DEFAULT FALSE;
+        `);
+        await db.query(`
+          ALTER TABLE writing_assignments
+          ADD COLUMN IF NOT EXISTS allow_resubmission BOOLEAN NOT NULL DEFAULT TRUE;
+        `);
+        await db.query(`
+          ALTER TABLE writing_assignments
+          ADD COLUMN IF NOT EXISTS late_due_at TIMESTAMPTZ;
+        `);
+        await db.query(`
+          ALTER TABLE assignment_submissions
+          ADD COLUMN IF NOT EXISTS teacher_feedback_items JSONB NOT NULL DEFAULT '[]'::jsonb;
+        `);
+        await db.query(`
+          ALTER TABLE assignment_submissions
+          ADD COLUMN IF NOT EXISTS teacher_score_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb;
+        `);
+        await db.query(`
+          ALTER TABLE assignment_submissions
+          ADD COLUMN IF NOT EXISTS rewrite_required BOOLEAN NOT NULL DEFAULT FALSE;
+        `);
+        await db.query(`
+          ALTER TABLE assignment_submissions
+          ADD COLUMN IF NOT EXISTS is_late BOOLEAN NOT NULL DEFAULT FALSE;
+        `);
+        await db.query(`
+          ALTER TABLE assignment_submissions
+          ADD COLUMN IF NOT EXISTS late_submitted_at TIMESTAMPTZ;
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (11, NOW())`
         );
       }
       await db.query("COMMIT");

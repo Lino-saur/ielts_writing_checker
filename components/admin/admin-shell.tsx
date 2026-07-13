@@ -12,6 +12,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isMediaUsagePage = pathname.startsWith("/admin/media-usage");
   const isHistoricalPracticePage = pathname.startsWith("/admin/historical-practice");
   const isTeachingRulesPage = pathname.startsWith("/admin/teaching-rules");
+  const isAssignmentsPage = pathname.startsWith("/admin/assignments");
 
   if (pathname === "/admin/login" || pathname === "/admin/unauthorized") {
     return <div className={styles.shell}>{children}</div>;
@@ -64,6 +65,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               className={`${styles.navLink} ${isTeachingRulesPage ? styles.navLinkActive : ""}`}
             >
               Teaching Rules
+            </Link>
+            <Link
+              href="/admin/assignments"
+              className={`${styles.navLink} ${isAssignmentsPage ? styles.navLinkActive : ""}`}
+            >
+              Assignments
             </Link>
             <span className={styles.navSection}>App</span>
             <Link href="/" className={styles.navLink}>

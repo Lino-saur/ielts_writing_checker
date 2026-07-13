@@ -75,6 +75,7 @@ export type NavbarMessages = Record<string, string> & {
   rechargeEntry: string;
   historyEntry: string;
   practiceEntry: string;
+  assignmentsEntry: string;
   rechargeTitle: string;
   rechargeHint: string;
   rechargeMessage: string;

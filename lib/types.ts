@@ -193,6 +193,8 @@ export type PracticeQuestionSource = "cambridge_ielts";
 export type PracticeQuestionModule = "academic" | "general_training";
 export type PracticeQuestionContentStatus = "placeholder" | "complete";
 export type PracticeQuestionStatus = "draft" | "published" | "archived";
+export type WritingAssignmentStatus = "assigned" | "closed";
+export type WritingAssignmentSubmissionStatus = "not_submitted" | "submitted" | "reviewed";
 
 export type FeedbackPayload = {
   kind: FeedbackKind;
@@ -287,6 +289,113 @@ export type RechargeOrder = {
   totalEnergyAmount: number;
   providerOrderId: string | null;
   paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WritingAssignmentStudent = {
+  id: string;
+  email: string | null;
+  name: string | null;
+};
+
+export type WritingClass = {
+  id: string;
+  name: string;
+  students: WritingAssignmentStudent[];
+  studentCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AssignmentFeedbackDimension = {
+  score: number | null;
+  comment: string;
+};
+
+export type AssignmentScoreBreakdown = {
+  taskAchievement: AssignmentFeedbackDimension;
+  coherenceAndCohesion: AssignmentFeedbackDimension;
+  lexicalResource: AssignmentFeedbackDimension;
+  grammaticalRangeAndAccuracy: AssignmentFeedbackDimension;
+};
+
+export type AssignmentFeedbackItem = {
+  id: string;
+  quote: string;
+  category: "task_response" | "coherence" | "lexical" | "grammar" | "other";
+  comment: string;
+  suggestion: string;
+  ruleReference?: TeachingRuleReference | null;
+};
+
+export type AdminWritingAssignmentSubmission = {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  studentEmail: string | null;
+  studentName: string | null;
+  essay: string;
+  status: "submitted" | "reviewed";
+  teacherFeedback: string | null;
+  teacherScore: number | null;
+  teacherFeedbackItems: AssignmentFeedbackItem[];
+  teacherScoreBreakdown: AssignmentScoreBreakdown;
+  rewriteRequired: boolean;
+  isLate: boolean;
+  submittedAt: string;
+  lateSubmittedAt: string | null;
+  reviewedAt: string | null;
+  updatedAt: string;
+};
+
+export type AdminWritingAssignment = {
+  id: string;
+  teacherAdminUserId: string;
+  title: string;
+  taskType: TaskType;
+  prompt: string;
+  instructions: string;
+  image: WritingReviewImage | null;
+  dueAt: string | null;
+  lateDueAt: string | null;
+  allowLateSubmission: boolean;
+  allowResubmission: boolean;
+  status: WritingAssignmentStatus;
+  recipients: WritingAssignmentStudent[];
+  submissions: AdminWritingAssignmentSubmission[];
+  recipientCount: number;
+  submittedCount: number;
+  reviewedCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StudentWritingAssignment = {
+  id: string;
+  title: string;
+  taskType: TaskType;
+  prompt: string;
+  instructions: string;
+  image: WritingReviewImage | null;
+  dueAt: string | null;
+  lateDueAt: string | null;
+  allowLateSubmission: boolean;
+  allowResubmission: boolean;
+  status: WritingAssignmentStatus;
+  submissionStatus: WritingAssignmentSubmissionStatus;
+  essay: string | null;
+  teacherFeedback: string | null;
+  teacherScore: number | null;
+  teacherFeedbackItems: AssignmentFeedbackItem[];
+  teacherScoreBreakdown: AssignmentScoreBreakdown;
+  rewriteRequired: boolean;
+  isLate: boolean;
+  canSubmit: boolean;
+  submitBlockReason: "closed" | "deadline_passed" | "resubmission_not_allowed" | null;
+  submittedAt: string | null;
+  lateSubmittedAt: string | null;
+  reviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
