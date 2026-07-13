@@ -557,9 +557,7 @@ export function AppNavbar({
       <Surface as="header" className="aroundNavbar">
         <Link className="aroundNavBrand" href={homeHref}>
           <span className="aroundBrandIcon" aria-hidden="true">
-            {/* The 8 KB local icon is cheaper than loading the Next Image client runtime on every route. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/app-icons/icon.png" alt="" width="34" height="34" className="aroundBrandIconImage" />
+            W
           </span>
           <span className="aroundBrandFull">{copy.brand}</span>
           <span className="aroundBrandCompact">IELTS</span>
@@ -701,22 +699,35 @@ export function AppNavbar({
             }}
           >
             <i className="ai-settings-filled" aria-hidden="true" />
+            <span className="aroundSettingsLabel">{locale === "zh-CN" ? "设置" : "Settings"}</span>
           </button>
 
           <div id="app-navbar-menu" className={`aroundUtilityDropdown aroundMoreDropdown${moreMenuOpen ? " is-open" : ""}`} role="menu">
-            <div className="aroundMenuSection aroundMobileMenuSection">
+            <div className="aroundSettingsHeader">
+              <span className="aroundSettingsHeaderIcon" aria-hidden="true"><i className="ai-settings-filled" /></span>
+              <div>
+                <strong>{copy.settingsTitle}</strong>
+                <p>{copy.settingsSubtitle}</p>
+              </div>
+            </div>
+            <div className="aroundMenuSection aroundMobileMenuSection aroundSettingsNavigation">
+              <div className="aroundMenuSectionLabel">{copy.navigationLabel}</div>
               <Link href={practiceHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
-                {copy.practiceEntry}
+                <i className="ai-open-book" aria-hidden="true" />
+                <span>{copy.practiceEntry}</span>
               </Link>
               <Link href={historyHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
-                {copy.historyEntry}
+                <i className="ai-time" aria-hidden="true" />
+                <span>{copy.historyEntry}</span>
               </Link>
               <Link href={assignmentsHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
-                {copy.assignmentsEntry}
+                <i className="ai-clipboard" aria-hidden="true" />
+                <span>{copy.assignmentsEntry}</span>
               </Link>
             </div>
             {currentUser ? (
-              <div className="aroundMenuSection aroundMobileAccountSection">
+              <div className="aroundMenuSection aroundMobileAccountSection aroundSettingsAccount">
+                <div className="aroundMenuSectionLabel">{copy.accountLabel}</div>
                 <div className="aroundMobileAccountSummary">
                   <span>{formatUser(currentUser, copy)}</span>
                   {energyLabel ? (
@@ -733,11 +744,12 @@ export function AppNavbar({
                     await handleSignOut();
                   }}
                 >
-                  {copy.authSignOut}
+                  <i className="ai-logout" aria-hidden="true" />
+                  <span>{copy.authSignOut}</span>
                 </button>
               </div>
             ) : null}
-            <div className="aroundMenuSection">
+            <div className="aroundMenuSection aroundLanguageSection">
               <div className="aroundMenuSectionLabel">{copy.languageLabel}</div>
               <div className="aroundSegmentedControl">
                 <button
@@ -762,7 +774,8 @@ export function AppNavbar({
                 </button>
               </div>
             </div>
-            <div className="aroundMenuSection">
+            <div className="aroundMenuSection aroundSupportSection">
+              <div className="aroundMenuSectionLabel">{copy.supportLabel}</div>
               <button
                 type="button"
                 className="aroundMenuActionButton"
@@ -771,12 +784,14 @@ export function AppNavbar({
                   openFeedbackDialog();
                 }}
               >
-                {copy.feedbackEntry}
+                <i className="ai-message" aria-hidden="true" />
+                <span>{copy.feedbackEntry}</span>
               </button>
             </div>
 
             {currentUser ? (
-              <div className="aroundMenuSection">
+              <div className="aroundMenuSection aroundDangerSection">
+                <div className="aroundMenuSectionLabel">{copy.dangerLabel}</div>
                 <button
                   type="button"
                   className="aroundMenuActionButton aroundMenuActionDanger"
@@ -785,12 +800,13 @@ export function AppNavbar({
                     openDeleteDialog();
                   }}
                 >
-                  {copy.authDeleteAccount}
+                  <i className="ai-trash" aria-hidden="true" />
+                  <span>{copy.authDeleteAccount}</span>
                 </button>
               </div>
             ) : null}
 
-            <div className="aroundMenuSection">
+            <div className="aroundMenuSection aroundAppearanceSection">
               <div className="aroundMenuRow">
                 <div>
                   <div className="aroundMenuSectionLabel">{appearanceLabel}</div>
@@ -1137,7 +1153,7 @@ export function AppNavbar({
 
             <section className="authCardInner">
               <form className="authForm" onSubmit={handleRechargeSubmit}>
-                <div className="rechargeRewardAlert" role="note">
+                <div className="rechargeRewardAlert uiAlert" data-tone="success" role="note">
                   <strong>+10</strong>
                   <span>{copy.rechargeRewardAlert}</span>
                 </div>
@@ -1176,7 +1192,7 @@ export function AppNavbar({
       ) : null}
 
       {rechargeToast ? (
-        <div className="rewardToast" role="status" aria-live="polite">
+        <div className="rewardToast uiToast" data-tone="success" role="status" aria-live="polite">
           <span>{rechargeToast}</span>
           <button type="button" className="rewardToastClose" onClick={() => setRechargeToast(null)} aria-label={copy.authClose}>
             <i className="ai-cross" aria-hidden="true" />

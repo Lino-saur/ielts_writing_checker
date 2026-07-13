@@ -1313,7 +1313,7 @@ function CheckerPageContent() {
       </div>
 
       {error && errorSource === "auth" ? (
-        <div className="topErrorBanner" role="alert" aria-live="polite">
+        <div className="topErrorBanner uiToast" data-tone="error" role="alert" aria-live="polite">
           <span>{error}</span>
           <div className="topErrorActions">
             <button
