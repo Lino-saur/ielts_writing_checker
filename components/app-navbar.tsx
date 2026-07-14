@@ -66,6 +66,10 @@ function isEmailVerificationError(error: unknown) {
   return errorCode === "EMAIL_NOT_VERIFIED" || normalizedMessage.includes("not verified");
 }
 
+function normalizeEmailIdentity(email: string) {
+  return email.trim().toLowerCase();
+}
+
 export function AppNavbar({
   locale,
   onLocaleChange,
@@ -138,12 +142,16 @@ export function AppNavbar({
   const effectiveEnergyBalance = energyBalance ?? sessionContext.energy?.balance ?? null;
   const themeLabel = copy.themeLabel;
   const appearanceLabel = copy.appearanceLabel;
-  const resendVerificationEmail = (signInEmail.trim() || verificationEmail).trim();
+  const normalizedSignInEmail = normalizeEmailIdentity(signInEmail);
+  const normalizedVerificationEmail = normalizeEmailIdentity(verificationEmail);
+  const verificationMatchesCurrentEmail =
+    Boolean(normalizedSignInEmail) && normalizedSignInEmail === normalizedVerificationEmail;
+  const resendVerificationEmail = verificationMatchesCurrentEmail ? verificationEmail.trim() : "";
   const canResendVerification =
     authMode === "signIn" &&
+    verificationMatchesCurrentEmail &&
     Boolean(
-      verificationEmail ||
-        (authError === copy.authVerificationRequired && signInEmail.trim()) ||
+      authError === copy.authVerificationRequired ||
         authNotice === copy.authVerificationPending ||
         authNotice === copy.authVerificationSent
     );
@@ -240,7 +248,24 @@ export function AppNavbar({
     setAuthMode(mode);
     setAuthError(null);
     setAuthNotice(null);
+    setVerificationEmail("");
     setAuthDialogOpen(true);
+  }
+
+  function updateSignInEmail(email: string) {
+    setSignInEmail(email);
+
+    if (normalizeEmailIdentity(email) !== normalizeEmailIdentity(verificationEmail)) {
+      setVerificationEmail("");
+
+      if (authError === copy.authVerificationRequired) {
+        setAuthError(null);
+      }
+
+      if (authNotice === copy.authVerificationPending || authNotice === copy.authVerificationSent) {
+        setAuthNotice(null);
+      }
+    }
   }
 
   function openFeedbackDialog() {
@@ -312,14 +337,17 @@ export function AppNavbar({
     setAuthError(null);
     setAuthNotice(null);
 
+    if (mode === "signIn") {
+      setVerificationEmail("");
+    }
+
     try {
       const authClient = await getAuthClient();
       if (mode === "signIn") {
         const result = await authClient.signIn.email({
           email: signInEmail.trim(),
           password: signInPassword,
-          rememberMe: true,
-          callbackURL: getVerificationCallbackUrl()
+          rememberMe: true
         });
 
         if (result.error) {
@@ -849,9 +877,9 @@ export function AppNavbar({
       ) : null}
 
       {authDialogOpen ? (
-        <div className="authDialogBackdrop" onClick={() => !authSubmitting && setAuthDialogOpen(false)}>
+        <div className="authDialogBackdrop authAccountDialogBackdrop" onClick={() => !authSubmitting && setAuthDialogOpen(false)}>
           <Surface
-            className={`authDialog ${locale === "zh-CN" ? "authDialogCn" : "authDialogEn"}`}
+            className={`authDialog authAccountDialog ${locale === "zh-CN" ? "authDialogCn" : "authDialogEn"}`}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="authDialogHeader">
@@ -875,7 +903,7 @@ export function AppNavbar({
                       <input
                         type="email"
                         value={signInEmail}
-                        onChange={(event) => setSignInEmail(event.target.value)}
+                        onChange={(event) => updateSignInEmail(event.target.value)}
                         required
                         autoComplete="email"
                       />
@@ -993,6 +1021,7 @@ export function AppNavbar({
                   onClick={() => {
                     setAuthError(null);
                     setAuthNotice(null);
+                    setVerificationEmail("");
                     setAuthMode(authMode === "signIn" ? "signUp" : "signIn");
                   }}
                   disabled={authSubmitting}

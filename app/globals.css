@@ -8113,6 +8113,263 @@ html[data-theme="dark"] .aroundOutlineButton {
   }
 }
 
+/* Login and registration dialog. Keep one field surface instead of layering a
+   second input background inside the bordered input wrapper. */
+.authAccountDialog {
+  width: min(100%, 520px);
+  padding: 32px;
+  border: 1px solid #deded9;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 32px 90px rgba(17, 17, 17, 0.22);
+}
+
+.authAccountDialog.authDialogCn {
+  width: min(100%, 540px);
+}
+
+.authAccountDialog .authDialogHeader {
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.authAccountDialog .authCardIntro h2 {
+  margin: 0;
+  color: #111;
+  font-size: clamp(28px, 4vw, 34px);
+  line-height: 1.08;
+}
+
+.authAccountDialog .authCardIntro .authHint {
+  max-width: 42ch;
+  margin: 11px 0 0;
+  color: #6c6c67;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.authAccountDialog .authDialogClose {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border: 1px solid #deded9;
+  background: #f5f5f2;
+  color: #222;
+}
+
+.authAccountDialog .authDialogClose:hover:not(:disabled) {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+}
+
+.authAccountDialog .authCardInner {
+  padding: 0;
+}
+
+.authAccountDialog .authForm {
+  gap: 20px;
+  margin-top: 0;
+}
+
+.authAccountDialog .authField {
+  gap: 9px;
+}
+
+.authAccountDialog .authField > span {
+  color: #41413d;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.authAccountDialog .authInputWrap {
+  min-height: 58px;
+  padding: 0 14px;
+  border: 1px solid #dcdcd7;
+  border-radius: 17px;
+  background: #f5f5f2;
+  box-shadow: none;
+}
+
+.authAccountDialog .authInputWrap:focus-within {
+  border-color: #111;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(17, 17, 17, 0.08);
+}
+
+.authAccountDialog .authInputWrap > i {
+  width: 34px;
+  height: 34px;
+  margin-right: 12px;
+  border-radius: 10px;
+  background: #fff;
+  color: #555550;
+}
+
+.authAccountDialog .authInputWrap input,
+.authAccountDialog .authInputWrap input:focus {
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #111;
+}
+
+.authAccountDialog .authInputWrap input::placeholder {
+  color: #8a8a84;
+}
+
+.authAccountDialog .authPasswordWrap {
+  padding-right: 10px;
+}
+
+.authAccountDialog .authPasswordToggle {
+  width: 38px;
+  height: 38px;
+  background: #fff;
+  color: #555550;
+}
+
+.authAccountDialog .authPasswordToggle:hover:not(:disabled) {
+  background: #e8e8e4;
+  color: #111;
+}
+
+.authAccountDialog .authInfoBox,
+.authAccountDialog .errorBox {
+  margin: 0;
+  padding: 13px 15px;
+  border-radius: 14px;
+  line-height: 1.55;
+}
+
+.authAccountDialog .authInlineAction {
+  width: fit-content;
+  margin-top: -5px;
+  color: #333;
+}
+
+.authAccountDialog .authForm .uiButtonBlock {
+  min-height: 52px;
+  margin-top: 4px;
+  border-radius: 16px;
+  font-size: 14px;
+}
+
+.authAccountDialog .authSwitchLine {
+  gap: 9px;
+  margin: 28px 0 0;
+  padding-top: 22px;
+  border-top: 1px solid #e3e3de;
+  color: #6c6c67;
+}
+
+.authAccountDialog .authSwitchButton {
+  color: #111;
+  text-decoration-color: #8a8a84;
+}
+
+html[data-theme="dark"] .authAccountDialog {
+  border-color: var(--line-strong);
+  background: var(--paper-strong);
+  box-shadow: 0 36px 100px rgba(0, 0, 0, 0.58);
+}
+
+html[data-theme="dark"] .authAccountDialog .authCardIntro h2,
+html[data-theme="dark"] .authAccountDialog .authField > span,
+html[data-theme="dark"] .authAccountDialog .authInputWrap input,
+html[data-theme="dark"] .authAccountDialog .authSwitchButton {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .authAccountDialog .authCardIntro .authHint,
+html[data-theme="dark"] .authAccountDialog .authSwitchLine {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .authAccountDialog .authDialogClose,
+html[data-theme="dark"] .authAccountDialog .authInputWrap > i,
+html[data-theme="dark"] .authAccountDialog .authPasswordToggle {
+  border-color: var(--line);
+  background: var(--surface-pill);
+  color: var(--muted-strong);
+}
+
+html[data-theme="dark"] .authAccountDialog .authInputWrap {
+  border-color: var(--line);
+  background: #151514;
+}
+
+html[data-theme="dark"] .authAccountDialog .authInputWrap:focus-within {
+  border-color: #f4f4f1;
+  background: #111110;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .authAccountDialog .authInputWrap input,
+html[data-theme="dark"] .authAccountDialog .authInputWrap input:focus {
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .authAccountDialog .authDialogClose:hover:not(:disabled),
+html[data-theme="dark"] .authAccountDialog .authPasswordToggle:hover:not(:disabled) {
+  border-color: #f4f4f1;
+  background: #f4f4f1;
+  color: #111;
+}
+
+html[data-theme="dark"] .authAccountDialog .authSwitchLine {
+  border-color: var(--line);
+}
+
+@media (max-width: 560px) {
+  .authAccountDialogBackdrop {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .authAccountDialog,
+  .authAccountDialog.authDialogCn {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 24px 20px 22px;
+    border-radius: 24px;
+  }
+
+  .authAccountDialog .authDialogHeader {
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .authAccountDialog .authCardIntro h2 {
+    font-size: 27px;
+  }
+
+  .authAccountDialog .authForm {
+    gap: 17px;
+  }
+
+  .authAccountDialog .authInputWrap {
+    min-height: 54px;
+  }
+
+  .authAccountDialog .authInputWrap input,
+  .authAccountDialog .authInputWrap input:focus {
+    height: 52px;
+  }
+
+  .authAccountDialog .authSwitchLine {
+    margin-top: 24px;
+    padding-top: 18px;
+  }
+}
+
 @media (max-width: 560px) {
   .computerExamCandidate {
     display: none;
@@ -10498,6 +10755,20 @@ html[data-theme="dark"] .framerLandingNav .aroundNavbar {
   color: #fff;
 }
 
+.aroundSettingsHeaderIcon i {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.aroundSettingsHeaderIcon i::before {
+  display: block;
+  line-height: 1;
+}
+
 .aroundSettingsHeader strong {
   display: block;
   color: #111;
@@ -11106,4 +11377,15 @@ html[data-theme="dark"] .computerExamMode .checkerWordHint strong {
     height: auto;
     min-height: 100dvh;
   }
+}
+
+/* Final account-dialog surface contract. */
+.authDialog.authAccountDialog {
+  border: 1px solid #deded9;
+  background: #fff;
+}
+
+html[data-theme="dark"] .authDialog.authAccountDialog {
+  border-color: var(--line-strong);
+  background: var(--paper-strong);
 }
