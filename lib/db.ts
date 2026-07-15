@@ -3,10 +3,11 @@ import { Pool } from "pg";
 type GlobalWithDb = typeof globalThis & {
   __ieltsPool?: Pool;
   __ieltsDbInitPromise?: Promise<void>;
+  __ieltsDbInitTargetVersion?: number;
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 11;
+const CURRENT_SCHEMA_VERSION = 13;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -45,8 +46,11 @@ if (process.env.NODE_ENV !== "production") {
 
 export async function ensureDatabase() {
   const existing = globalForDb.__ieltsDbInitPromise;
-  if (existing) {
+  if (existing && (globalForDb.__ieltsDbInitTargetVersion ?? 0) >= CURRENT_SCHEMA_VERSION) {
     return existing;
+  }
+  if (existing) {
+    await existing;
   }
 
   const initPromise = (async () => {
@@ -303,6 +307,11 @@ export async function ensureDatabase() {
     await db.query(`
       ALTER TABLE ai_review_requests
       ADD COLUMN IF NOT EXISTS request_hash TEXT;
+    `);
+
+    await db.query(`
+      ALTER TABLE ai_review_requests
+      ADD COLUMN IF NOT EXISTS lease_token TEXT;
     `);
 
     await db.query(`
@@ -1053,6 +1062,34 @@ export async function ensureDatabase() {
            VALUES (11, NOW())`
         );
       }
+      if (appliedVersion < 12) {
+        await db.query(`
+          ALTER TABLE ai_review_requests
+          ADD COLUMN IF NOT EXISTS lease_token TEXT;
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (12, NOW())`
+        );
+      }
+      if (appliedVersion < 13) {
+        await db.query(`
+          ALTER TABLE writing_reviews
+          ADD COLUMN IF NOT EXISTS parent_review_id TEXT;
+        `);
+        await db.query(`
+          ALTER TABLE writing_reviews
+          ADD COLUMN IF NOT EXISTS accepted_revision_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS writing_reviews_parent_idx
+          ON writing_reviews (parent_review_id);
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (13, NOW())`
+        );
+      }
       await db.query("COMMIT");
     } catch (error) {
       await migrationClient.query("ROLLBACK");
@@ -1063,11 +1100,13 @@ export async function ensureDatabase() {
   })();
 
   globalForDb.__ieltsDbInitPromise = initPromise;
+  globalForDb.__ieltsDbInitTargetVersion = CURRENT_SCHEMA_VERSION;
 
   try {
     await initPromise;
   } catch (error) {
     globalForDb.__ieltsDbInitPromise = undefined;
+    globalForDb.__ieltsDbInitTargetVersion = undefined;
     throw error;
   }
 }

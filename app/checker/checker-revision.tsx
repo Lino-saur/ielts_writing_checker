@@ -1,8 +1,135 @@
 import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
 import type { CheckerMessages } from "@/lib/i18n/messages";
-import type { CorrectionNote, Locale } from "@/lib/types";
+import type { CorrectionNote, Locale, RevisionStage } from "@/lib/types";
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
 export type RevisionDecision = "accepted" | "ignored";
+
+type EditTooltipPosition = {
+  left: number;
+  top: number;
+  width: number;
+  arrowLeft: number;
+  placement: "above" | "below";
+};
+
+function RevisionEditChip({
+  edit,
+  decision,
+  isActive,
+  onToggle,
+  t
+}: {
+  edit: ReturnType<typeof parseAnnotatedEssay>["edits"][number];
+  decision?: RevisionDecision;
+  isActive: boolean;
+  onToggle: () => void;
+  t: CheckerMessages;
+}) {
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
+  const [position, setPosition] = useState<EditTooltipPosition | null>(null);
+
+  const updateTooltipPosition = useCallback(() => {
+    const anchor = anchorRef.current;
+    const tooltip = tooltipRef.current;
+    if (!anchor || !tooltip) {
+      return;
+    }
+
+    const viewportPadding = 16;
+    const gap = 10;
+    const anchorRect = anchor.getBoundingClientRect();
+    const width = Math.min(360, window.innerWidth - viewportPadding * 2);
+    const height = tooltip.offsetHeight;
+    const anchorCenter = anchorRect.left + anchorRect.width / 2;
+    const left = Math.min(
+      Math.max(viewportPadding, anchorCenter - width / 2),
+      window.innerWidth - width - viewportPadding
+    );
+    const roomBelow = window.innerHeight - anchorRect.bottom - viewportPadding;
+    const roomAbove = anchorRect.top - viewportPadding;
+    const placement = roomBelow >= height + gap || roomBelow >= roomAbove ? "below" : "above";
+    const preferredTop = placement === "below"
+      ? anchorRect.bottom + gap
+      : anchorRect.top - height - gap;
+    const top = Math.min(
+      Math.max(viewportPadding, preferredTop),
+      window.innerHeight - height - viewportPadding
+    );
+    const arrowLeft = Math.min(Math.max(18, anchorCenter - left), width - 18);
+
+    setPosition({ left, top, width, arrowLeft, placement });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isActive || !edit.note) {
+      setPosition(null);
+      return;
+    }
+
+    updateTooltipPosition();
+    window.addEventListener("resize", updateTooltipPosition);
+    window.addEventListener("scroll", updateTooltipPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateTooltipPosition);
+      window.removeEventListener("scroll", updateTooltipPosition, true);
+    };
+  }, [edit.note, isActive, updateTooltipPosition]);
+
+  const tooltipStyle = position
+    ? ({
+        left: position.left,
+        top: position.top,
+        width: position.width,
+        "--edit-tooltip-arrow-left": `${position.arrowLeft}px`
+      } as CSSProperties)
+    : undefined;
+
+  return (
+    <span
+      ref={anchorRef}
+      className={`editChip${isActive ? " active" : ""}${decision ? ` is-${decision}` : ""}`}
+      role="button"
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
+    >
+      {decision === "accepted" ? (
+        <ins className="essayAdd essayAccepted">{edit.corrected}</ins>
+      ) : decision === "ignored" ? (
+        <span className="essayIgnored">{edit.original}</span>
+      ) : (
+        <>
+          <del className="essayDel">{edit.original}</del>
+          <ins className="essayAdd">{edit.corrected}</ins>
+        </>
+      )}
+      {isActive && edit.note && typeof document !== "undefined"
+        ? createPortal(
+            <span
+              ref={tooltipRef}
+              className="editTooltip editTooltipPortal visible"
+              data-placement={position?.placement ?? "below"}
+              style={tooltipStyle}
+              role="tooltip"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <strong>{t.correctionReason}:</strong> {edit.note.reason}
+            </span>,
+            document.body
+          )
+        : null}
+    </span>
+  );
+}
 
 export function ScoreCard({
   label,
@@ -121,6 +248,66 @@ export function materializeRevisionEssay(
     .join("");
 }
 
+export function materializeVerifiedOptimizationEssay(
+  optimizationStage: RevisionStage,
+  decisions: Record<string, RevisionDecision>,
+  finalGrammarStage?: RevisionStage
+) {
+  const optimization = parseAnnotatedEssay(
+    optimizationStage.annotatedEssay,
+    optimizationStage.correctionNotes
+  );
+  const optimizationEssay = materializeRevisionEssay(
+    optimizationStage.annotatedEssay,
+    optimizationStage.correctionNotes,
+    decisions
+  );
+  const acceptedOptimizationIds = optimization.edits
+    .filter((edit) => decisions[edit.id] === "accepted")
+    .map((edit) => edit.id);
+
+  if (!finalGrammarStage || acceptedOptimizationIds.length === 0) {
+    return { essay: optimizationEssay, appliedFinalGrammarIds: [] as string[] };
+  }
+
+  const finalGrammar = parseAnnotatedEssay(
+    finalGrammarStage.annotatedEssay,
+    finalGrammarStage.correctionNotes
+  );
+  const allOptimizationAccepted = optimization.edits.every(
+    (edit) => decisions[edit.id] === "accepted"
+  );
+
+  if (allOptimizationAccepted) {
+    const acceptedFinalGrammar = Object.fromEntries(
+      finalGrammar.edits.map((edit) => [edit.id, "accepted" as const])
+    );
+    return {
+      essay: materializeRevisionEssay(
+        finalGrammarStage.annotatedEssay,
+        finalGrammarStage.correctionNotes,
+        acceptedFinalGrammar
+      ),
+      appliedFinalGrammarIds: finalGrammar.edits.map((edit) => edit.id)
+    };
+  }
+
+  let essay = optimizationEssay;
+  const appliedFinalGrammarIds: string[] = [];
+
+  finalGrammar.edits.forEach((edit) => {
+    const firstIndex = essay.indexOf(edit.original);
+    if (firstIndex === -1 || firstIndex !== essay.lastIndexOf(edit.original)) {
+      return;
+    }
+
+    essay = `${essay.slice(0, firstIndex)}${edit.corrected}${essay.slice(firstIndex + edit.original.length)}`;
+    appliedFinalGrammarIds.push(edit.id);
+  });
+
+  return { essay, appliedFinalGrammarIds };
+}
+
 export function renderAnnotatedEssay(
   text: string,
   highlightedSentences: string[],
@@ -188,35 +375,14 @@ export function renderAnnotatedEssay(
       const decision = decisions[part.id];
 
       return (
-        <span
+        <RevisionEditChip
           key={`edit-${part.index}-${index}`}
-          className={`editChip${isActive ? " active" : ""}${decision ? ` is-${decision}` : ""}`}
-          role="button"
-          tabIndex={0}
-          onClick={() => onToggleEdit(part.index)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onToggleEdit(part.index);
-            }
-          }}
-        >
-          {decision === "accepted" ? (
-            <ins className="essayAdd essayAccepted">{part.corrected}</ins>
-          ) : decision === "ignored" ? (
-            <span className="essayIgnored">{part.original}</span>
-          ) : (
-            <>
-              <del className="essayDel">{part.original}</del>
-              <ins className="essayAdd">{part.corrected}</ins>
-            </>
-          )}
-          {part.note ? (
-            <span className={`editTooltip${isActive ? " visible" : ""}`}>
-              <strong>{t.correctionReason}:</strong> {part.note.reason}
-            </span>
-          ) : null}
-        </span>
+          edit={part}
+          decision={decision}
+          isActive={isActive}
+          onToggle={() => onToggleEdit(part.index)}
+          t={t}
+        />
       );
     }
 

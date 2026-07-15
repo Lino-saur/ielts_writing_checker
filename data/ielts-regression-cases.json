@@ -1,0 +1,136 @@
+{
+  "version": "ielts-regression.v1",
+  "cases": [
+    {
+      "id": "t2-opinion-clear",
+      "taskType": "task2",
+      "prompt": "Some people believe public transport should be free in large cities. To what extent do you agree or disagree?",
+      "essay": "I largely agree that cities should subsidise public transport because lower fares can reduce private-car use. However, a small charge may still be needed to maintain reliable services.",
+      "expectedQuestionType": "opinion",
+      "expectedObligationIds": ["state_position"]
+    },
+    {
+      "id": "t2-discussion-opinion",
+      "taskType": "task2",
+      "prompt": "Some people think children should begin formal education very early, while others prefer a later start. Discuss both views and give your own opinion.",
+      "essay": "An early start can provide structure, whereas a later start leaves more time for play. In my view, formal lessons should begin later because young children learn effectively through guided play.",
+      "expectedQuestionType": "discussion",
+      "expectedObligationIds": ["discuss_view_one", "discuss_view_two", "give_own_opinion"]
+    },
+    {
+      "id": "t2-outweigh",
+      "taskType": "task2",
+      "prompt": "Do the advantages of remote work outweigh the disadvantages?",
+      "essay": "Remote work saves commuting time but can weaken informal collaboration. The time and flexibility gained generally outweigh this drawback when teams have deliberate communication routines.",
+      "expectedQuestionType": "advantages_disadvantages",
+      "expectedObligationIds": ["explain_advantages", "explain_disadvantages", "make_outweigh_judgment", "state_position"]
+    },
+    {
+      "id": "t2-problem-solution",
+      "taskType": "task2",
+      "prompt": "What problems are caused by excessive packaging, and what measures can businesses take to address them?",
+      "essay": "Excessive packaging increases landfill waste and transport emissions. Businesses can reduce these effects by standardising reusable containers and removing unnecessary layers.",
+      "expectedQuestionType": "problem_solution",
+      "expectedObligationIds": ["identify_problems_or_effects", "propose_solutions"]
+    },
+    {
+      "id": "t2-mixed-two-question",
+      "taskType": "task2",
+      "prompt": "Why are fewer young people learning to cook? Is this a positive or negative development?",
+      "essay": "Many young adults rely on convenient prepared food because they work long hours. This is mostly negative, since a lack of cooking skills can increase costs and reduce control over nutrition.",
+      "expectedQuestionType": "mixed",
+      "expectedObligationIds": ["state_position", "explain_causes"]
+    },
+    {
+      "id": "t2-underdeveloped",
+      "taskType": "task2",
+      "prompt": "Some people think museums should be free. Do you agree or disagree?",
+      "essay": "I agree. Museums are good and people can learn many things there. Therefore they should be free.",
+      "expectedQuestionType": "opinion",
+      "expectedObligationIds": ["state_position"]
+    },
+    {
+      "id": "t1-line-grounding",
+      "taskType": "task1",
+      "prompt": "The line graph shows average daily water consumption in two cities between 2000 and 2020.",
+      "essay": "Overall, consumption rose in both cities, and City A remained the larger user throughout. City A increased from 120 to 160 litres, while City B rose from 80 to 130 litres.",
+      "visualFacts": {
+        "schemaVersion": "visual-facts.v1",
+        "imageRelevant": true,
+        "visualType": "line_graph",
+        "title": "Average daily water consumption",
+        "units": ["litres per person"],
+        "timePeriods": ["2000", "2020"],
+        "categories": ["City A", "City B"],
+        "keyFeatures": ["Both cities increased", "City A remained higher throughout"],
+        "facts": [
+          { "statement": "City A increased from 120 to 160 litres per person.", "confidence": "high" },
+          { "statement": "City B increased from 80 to 130 litres per person.", "confidence": "high" }
+        ],
+        "unreadableAreas": []
+      }
+    },
+    {
+      "id": "t1-inaccurate-data",
+      "taskType": "task1",
+      "prompt": "The bar chart compares recycling rates for paper, glass and plastic in 2010 and 2020.",
+      "essay": "Plastic had the highest recycling rate in both years, reaching 90 percent in 2020. Paper changed very little over the period.",
+      "visualFacts": {
+        "schemaVersion": "visual-facts.v1",
+        "imageRelevant": true,
+        "visualType": "bar_chart",
+        "title": "Recycling rates by material",
+        "units": ["percent"],
+        "timePeriods": ["2010", "2020"],
+        "categories": ["paper", "glass", "plastic"],
+        "keyFeatures": ["Paper was highest in both years", "All three materials increased"],
+        "facts": [
+          { "statement": "Paper rose from 70 percent to 80 percent.", "confidence": "high" },
+          { "statement": "Plastic rose from 20 percent to 35 percent.", "confidence": "high" }
+        ],
+        "unreadableAreas": []
+      }
+    },
+    {
+      "id": "t1-process",
+      "taskType": "task1",
+      "prompt": "The diagram illustrates how used glass bottles are recycled.",
+      "essay": "Overall, bottle recycling is a circular process with collection, cleaning and remanufacturing stages. Used bottles are collected, sorted by colour, washed, crushed and melted before new bottles are formed.",
+      "visualFacts": {
+        "schemaVersion": "visual-facts.v1",
+        "imageRelevant": true,
+        "visualType": "process",
+        "title": "Glass bottle recycling",
+        "units": [],
+        "timePeriods": [],
+        "categories": ["collection", "sorting", "washing", "crushing", "melting", "forming"],
+        "keyFeatures": ["The process is cyclical", "New bottles return to use after remanufacturing"],
+        "facts": [
+          { "statement": "Bottles are sorted by colour before washing.", "confidence": "high" },
+          { "statement": "Crushed glass is melted before new bottles are formed.", "confidence": "high" }
+        ],
+        "unreadableAreas": []
+      }
+    },
+    {
+      "id": "t1-unreadable",
+      "taskType": "task1",
+      "prompt": "The table shows household spending in five categories.",
+      "essay": "Housing accounted for exactly 47.3 percent of spending, while transport represented 18.6 percent.",
+      "visualFacts": {
+        "schemaVersion": "visual-facts.v1",
+        "imageRelevant": true,
+        "visualType": "table",
+        "title": "Household spending",
+        "units": ["percent"],
+        "timePeriods": [],
+        "categories": ["housing", "transport", "food", "health", "leisure"],
+        "keyFeatures": ["Housing appears to be the largest category"],
+        "facts": [
+          { "statement": "Housing is the largest visible category.", "confidence": "medium" }
+        ],
+        "unreadableAreas": ["Exact percentages are too blurred to verify"]
+      }
+    }
+  ]
+}

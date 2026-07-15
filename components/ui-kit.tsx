@@ -26,6 +26,21 @@ export function Pill({ as = "span", className, ...props }: PillProps) {
   return <Component className={joinClasses("uiPill", className)} {...props} />;
 }
 
+type AlertProps = HTMLAttributes<HTMLDivElement> & {
+  tone?: "info" | "success" | "warning" | "error";
+};
+
+export function Alert({ tone = "info", className, role, ...props }: AlertProps) {
+  return (
+    <div
+      className={joinClasses("uiAlert", className)}
+      data-tone={tone}
+      role={role ?? (tone === "error" ? "alert" : "status")}
+      {...props}
+    />
+  );
+}
+
 type SectionIntroProps = {
   eyebrow: string;
   title: string;

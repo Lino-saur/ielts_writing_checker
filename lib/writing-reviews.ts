@@ -32,6 +32,8 @@ type WritingReviewRow = {
   image_object_key: string | null;
   image_name: string | null;
   image_mime_type: string | null;
+  parent_review_id: string | null;
+  accepted_revision_ids: string[] | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -93,6 +95,8 @@ function mapReviewDetail(row: WritingReviewRow): WritingReviewDetail {
     wordCount: row.word_count,
     providerUsed: row.provider_used,
     result: row.result_json,
+    parentReviewId: row.parent_review_id ?? null,
+    acceptedRevisionIds: Array.isArray(row.accepted_revision_ids) ? row.accepted_revision_ids : [],
     image:
       row.image_object_key && row.image_name && row.image_mime_type
         ? {
@@ -152,6 +156,9 @@ export async function createWritingReview(input: {
   taskImageMimeType?: string | null;
   taskImageSizeBytes?: number | null;
   reviewRequestId?: string | null;
+  reviewRequestLeaseToken?: string | null;
+  parentReviewId?: string | null;
+  acceptedRevisionIds?: string[];
   result: WritingCheckResult;
 }) {
   await ensureDatabase();
@@ -179,15 +186,19 @@ export async function createWritingReview(input: {
       : await consumeEnergyInTransaction(client, input.userId, getReviewEnergyCost());
 
     if (input.reviewRequestId) {
-      const reservation = await client.query<{ status: string }>(
-        `SELECT status
+      const reservation = await client.query<{ status: string; lease_token: string | null }>(
+        `SELECT status, lease_token
          FROM ai_review_requests
          WHERE id = $1 AND user_id = $2
          FOR UPDATE`,
         [input.reviewRequestId, input.userId]
       );
 
-      if (reservation.rows[0]?.status !== "pending") {
+      if (
+        reservation.rows[0]?.status !== "pending" ||
+        !input.reviewRequestLeaseToken ||
+        reservation.rows[0].lease_token !== input.reviewRequestLeaseToken
+      ) {
         throw new Error("INVALID_REVIEW_RESERVATION");
       }
     }
@@ -208,13 +219,15 @@ export async function createWritingReview(input: {
         image_name,
         image_mime_type,
         image_size_bytes,
+        parent_review_id,
+        accepted_revision_ids,
         status,
         error_code,
         created_at,
         updated_at
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, 'completed', NULL, $15, $16
+        $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, 'completed', NULL, $17, $18
       )`,
       [
         reviewId,
@@ -231,6 +244,8 @@ export async function createWritingReview(input: {
         image?.name ?? null,
         image?.mimeType ?? null,
         imageSizeBytes,
+        input.parentReviewId ?? null,
+        JSON.stringify(input.acceptedRevisionIds ?? []),
         createdAt,
         createdAt
       ]
@@ -240,8 +255,8 @@ export async function createWritingReview(input: {
       await client.query(
         `UPDATE ai_review_requests
          SET status = 'completed', review_id = $3, error_code = NULL, updated_at = NOW()
-         WHERE id = $1 AND user_id = $2 AND status = 'pending'`,
-        [input.reviewRequestId, input.userId, reviewId]
+         WHERE id = $1 AND user_id = $2 AND status = 'pending' AND lease_token = $4`,
+        [input.reviewRequestId, input.userId, reviewId, input.reviewRequestLeaseToken]
       );
     }
 
@@ -288,6 +303,8 @@ export async function listWritingReviews(
       image_object_key,
       image_name,
       image_mime_type,
+      parent_review_id,
+      accepted_revision_ids,
       created_at,
       updated_at
      FROM writing_reviews
@@ -390,6 +407,8 @@ export async function getWritingReview(userId: string, reviewId: string) {
       image_object_key,
       image_name,
       image_mime_type,
+      parent_review_id,
+      accepted_revision_ids,
       created_at,
       updated_at
      FROM writing_reviews

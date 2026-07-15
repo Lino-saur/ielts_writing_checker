@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
     "test:watch": "vitest",
+    "evaluate:ielts-loop": "node --env-file=.env.local --import tsx scripts/evaluate-ielts-regression.ts --live",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
     "db:migrate": "tsx scripts/migrate-db.ts",
     "db:import:historical": "tsx scripts/import-historical-practice-data.ts",
@@ -19,6 +20,7 @@
     "db:sync:practice:koolearn": "node scripts/sync-koolearn-practice-library.mjs"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.19.9",
     "better-auth": "^1.6.11",
     "docx": "^9.7.1",
     "next": "15.5.19",

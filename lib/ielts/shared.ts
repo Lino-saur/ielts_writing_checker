@@ -12,6 +12,13 @@ import {
   WritingScoreResult
 } from "../types";
 
+export type PriorReviewContext = {
+  parentReviewId: string;
+  previousEssay: string;
+  previousResult: WritingCheckResult;
+  acceptedRevisionIds: string[];
+};
+
 export type CheckInput = {
   taskType: TaskType;
   prompt: string;
@@ -20,6 +27,7 @@ export type CheckInput = {
   provider?: AiProvider;
   locale?: Locale;
   targetBand?: TargetBand;
+  priorReview?: PriorReviewContext;
 };
 
 export type ChatCompletionsPayload = {

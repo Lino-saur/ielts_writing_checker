@@ -1,5 +1,6 @@
-import { buildAiRevisionFeedback, buildAiScoreFeedback } from "./ielts/ai";
+import { buildAiRevisionFeedback, buildAiScoreFeedback, buildEvaluationTaskContext } from "./ielts/ai";
 import { CheckInput, WritingCheckResult, WritingRevisionResult, WritingScoreResult, countWords, getLocale, getTargetBand } from "./ielts/shared";
+import { buildReviewProgress } from "./ielts/review-progress";
 
 function validateInput(input: CheckInput) {
   const cleanInput = {
@@ -9,7 +10,8 @@ function validateInput(input: CheckInput) {
     taskImage: input.taskImage ?? null,
     provider: input.provider,
     locale: getLocale(input.locale),
-    targetBand: getTargetBand(input.targetBand)
+    targetBand: getTargetBand(input.targetBand),
+    priorReview: input.priorReview
   };
 
   if (!cleanInput.prompt) {
@@ -25,25 +27,32 @@ function validateInput(input: CheckInput) {
 
 export async function evaluateWritingScore(input: CheckInput): Promise<WritingScoreResult> {
   const cleanInput = validateInput(input);
-  return buildAiScoreFeedback(cleanInput);
+  const taskContext = await buildEvaluationTaskContext(cleanInput);
+  return buildAiScoreFeedback(cleanInput, taskContext);
 }
 
 export async function evaluateWritingRevision(input: CheckInput): Promise<WritingRevisionResult> {
   const cleanInput = validateInput(input);
-  return buildAiRevisionFeedback(cleanInput);
+  const taskContext = await buildEvaluationTaskContext(cleanInput);
+  return buildAiRevisionFeedback(cleanInput, taskContext);
 }
 
 export async function evaluateWriting(input: CheckInput): Promise<WritingCheckResult> {
   try {
     const cleanInput = validateInput(input);
-    const [score, revision] = await Promise.all([buildAiScoreFeedback(cleanInput), buildAiRevisionFeedback(cleanInput)]);
+    const taskContext = await buildEvaluationTaskContext(cleanInput);
+    const [score, revision] = await Promise.all([
+      buildAiScoreFeedback(cleanInput, taskContext),
+      buildAiRevisionFeedback(cleanInput, taskContext)
+    ]);
 
-    return {
+    const result: WritingCheckResult = {
       taskType: score.taskType,
       wordCount: score.wordCount,
       estimatedBand: score.estimatedBand,
       targetBand: score.targetBand,
       bandBreakdown: score.bandBreakdown,
+      taskChecks: score.taskChecks,
       strengths: score.strengths,
       highlightedSentences: score.highlightedSentences,
       priorityFixes: score.priorityFixes,
@@ -51,9 +60,15 @@ export async function evaluateWriting(input: CheckInput): Promise<WritingCheckRe
       correctionNotes: revision.correctionNotes,
       grammarRevision: revision.grammarRevision,
       optimizationRevision: revision.optimizationRevision,
+      finalGrammarRevision: revision.finalGrammarRevision,
+      grammarQuality: revision.grammarQuality,
       feedbackMode: "ai",
       providerUsed: score.providerUsed
     };
+    if (cleanInput.priorReview) {
+      result.reviewProgress = buildReviewProgress(cleanInput.essay, result, cleanInput.priorReview);
+    }
+    return result;
   } catch (error) {
     const isTimeout =
       error instanceof Error &&

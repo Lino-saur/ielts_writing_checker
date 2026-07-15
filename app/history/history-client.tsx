@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
+import { LoadingLottie } from "@/components/loading-lottie";
 import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
@@ -153,7 +154,7 @@ export default function HistoryPageClient() {
 
       {!sessionReady ? (
         <Surface className="historyEmptyState">
-          <p>{t.historyLoading}</p>
+          <LoadingLottie label={t.historyLoading} showLabel={false} />
         </Surface>
       ) : !isAuthenticated ? (
         <Surface className="historyEmptyState">
@@ -222,7 +223,7 @@ export default function HistoryPageClient() {
                 <span>{describeTaskFilter(taskFilter, navbar, t.historyTaskFilterAll)}</span>
               </div>
 
-              {loadingList ? <p className="historyLoadingText">{t.historyLoading}</p> : null}
+              {loadingList ? <LoadingLottie label={t.historyLoading} showLabel={false} /> : null}
               {error && !loadingList ? <p className="errorBox">{error}</p> : null}
               {!loadingList && !items.length ? (
                 <div className="historyEmptyPanel">
@@ -292,7 +293,7 @@ export default function HistoryPageClient() {
                   </div>
                 </div>
 
-                {loadingStats ? <p>{t.historyLoading}</p> : null}
+                {loadingStats ? <LoadingLottie label={t.historyLoading} showLabel={false} size="small" /> : null}
                 {statsError && !loadingStats ? <p className="errorBox">{statsError}</p> : null}
 
                 {!loadingStats && !statsError ? (

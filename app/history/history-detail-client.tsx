@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
+import { LoadingLottie } from "@/components/loading-lottie";
 import { ActionButton, ActionLink, Surface } from "@/components/ui-kit";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
@@ -124,7 +125,7 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
 
       {!sessionReady ? (
         <Surface className="historyEmptyState">
-          <p>{t.historyLoadingDetail}</p>
+          <LoadingLottie label={t.historyLoadingDetail} showLabel={false} />
         </Surface>
       ) : !isAuthenticated ? (
         <Surface className="historyEmptyState">
@@ -141,7 +142,7 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
         <section className="historyDetailPage">
           <Surface as="section" className="checkerReportShell is-revealed">
             <Surface className="reportPaper checkerReportPaper historyDetailStandalone">
-              {loadingDetail ? <p>{t.historyLoadingDetail}</p> : null}
+              {loadingDetail ? <LoadingLottie label={t.historyLoadingDetail} showLabel={false} /> : null}
               {error && !loadingDetail ? <p className="errorBox">{error}</p> : null}
               {!loadingDetail && detail ? <ReviewDetailContent detail={detail} locale={locale} navbar={navbar} t={t} /> : null}
             </Surface>

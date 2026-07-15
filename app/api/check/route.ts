@@ -10,7 +10,7 @@ import {
 } from "@/lib/api-security";
 import { evaluateWriting } from "@/lib/ielts";
 import { getEnergyState, getReviewEnergyCost } from "@/lib/energy";
-import { beginReviewRequest, failReviewRequest } from "@/lib/review-requests";
+import { beginReviewRequest, failReviewRequest, touchReviewRequest } from "@/lib/review-requests";
 import { getPracticeQuestion } from "@/lib/practice-library";
 import { getHistoricalPracticeQuestion } from "@/lib/historical-practice";
 import type { AiProvider, Locale, TargetBand, TaskType } from "@/lib/types";
@@ -39,10 +39,13 @@ type RequestBody = {
   provider?: AiProvider;
   locale?: Locale;
   targetBand?: TargetBand;
+  parentReviewId?: string | null;
+  acceptedRevisionIds?: string[];
 };
 
 export async function POST(request: Request) {
-  let reservedRequest: { userId: string; requestId: string } | null = null;
+  let reservedRequest: { userId: string; requestId: string; leaseToken: string } | null = null;
+  let reservationHeartbeat: ReturnType<typeof setInterval> | null = null;
   let sessionUserId: string | null = null;
 
   try {
@@ -101,6 +104,18 @@ export async function POST(request: Request) {
     if (practiceId && historicalId) {
       return NextResponse.json({ error: "MULTIPLE_PRACTICE_SOURCES" }, { status: 400 });
     }
+    const parentReviewId = body.parentReviewId ?? undefined;
+    if (parentReviewId !== undefined && (typeof parentReviewId !== "string" || parentReviewId.length > 180)) {
+      return NextResponse.json({ error: "INVALID_PARENT_REVIEW" }, { status: 400 });
+    }
+    const acceptedRevisionIds = body.acceptedRevisionIds ?? [];
+    if (
+      !Array.isArray(acceptedRevisionIds) ||
+      acceptedRevisionIds.length > 48 ||
+      acceptedRevisionIds.some((id) => typeof id !== "string" || id.length < 1 || id.length > 120)
+    ) {
+      return NextResponse.json({ error: "INVALID_ACCEPTED_REVISION_IDS" }, { status: 400 });
+    }
 
     let taskType = body.taskType;
     let canonicalPrompt = prompt;
@@ -130,6 +145,16 @@ export async function POST(request: Request) {
       taskImageName = historicalQuestion.imageName ?? undefined;
     }
 
+    const parentReview = parentReviewId
+      ? await getWritingReview(session.user.id, parentReviewId)
+      : null;
+    if (
+      parentReviewId &&
+      (!parentReview || parentReview.taskType !== taskType || parentReview.prompt.trim() !== canonicalPrompt.trim())
+    ) {
+      return NextResponse.json({ error: "INVALID_PARENT_REVIEW" }, { status: 400 });
+    }
+
     const requestHash = createHash("sha256")
       .update(
         JSON.stringify({
@@ -142,7 +167,9 @@ export async function POST(request: Request) {
           taskImageName: taskImageName || null,
           provider: body.provider || null,
           locale: body.locale || null,
-          targetBand: body.targetBand || null
+          targetBand: body.targetBand || null,
+          parentReviewId: parentReviewId || null,
+          acceptedRevisionIds
         })
       )
       .digest("hex");
@@ -150,12 +177,24 @@ export async function POST(request: Request) {
     const cost = getReviewEnergyCost();
 
     if (reservation.status === "conflict") {
+      console.warn("[IELTS_CHECK][REQUEST_CONFLICT]", {
+        reservationStatus: reservation.status,
+        responseError: "IDEMPOTENCY_KEY_REUSED"
+      });
       return NextResponse.json({ error: "IDEMPOTENCY_KEY_REUSED" }, { status: 409 });
     }
     if (reservation.status === "pending") {
+      console.warn("[IELTS_CHECK][REQUEST_CONFLICT]", {
+        reservationStatus: reservation.status,
+        responseError: "REVIEW_IN_PROGRESS"
+      });
       return NextResponse.json({ error: "REVIEW_IN_PROGRESS" }, { status: 409 });
     }
     if (reservation.status === "failed") {
+      console.warn("[IELTS_CHECK][REQUEST_CONFLICT]", {
+        reservationStatus: reservation.status,
+        responseError: "REVIEW_REQUEST_FAILED"
+      });
       return NextResponse.json({ error: "REVIEW_REQUEST_FAILED" }, { status: 409 });
     }
     if (reservation.status === "completed") {
@@ -170,11 +209,19 @@ export async function POST(request: Request) {
         result: review.result,
         energy,
         cost,
+        reviewId: reservation.reviewId,
         idempotentReplay: true
       });
     }
 
-    reservedRequest = { userId: session.user.id, requestId };
+    reservedRequest = { userId: session.user.id, requestId, leaseToken: reservation.leaseToken };
+    reservationHeartbeat = setInterval(() => {
+      void touchReviewRequest(session.user.id, requestId, reservation.leaseToken).catch((heartbeatError) => {
+        console.error("[IELTS_CHECK][RESERVATION_HEARTBEAT_FAILED]", {
+          error: heartbeatError instanceof Error ? heartbeatError.message : "UNKNOWN_ERROR"
+        });
+      });
+    }, 10_000);
     const loadedImage =
       taskImageObjectKey && taskImageName
         ? await loadTaskImageInputFromObject({
@@ -191,7 +238,15 @@ export async function POST(request: Request) {
       taskImage: loadedImage?.taskImage ?? null,
       provider: body.provider,
       locale: body.locale,
-      targetBand: body.targetBand
+      targetBand: body.targetBand,
+      priorReview: parentReview
+        ? {
+            parentReviewId: parentReview.id,
+            previousEssay: parentReview.essay,
+            previousResult: parentReview.result,
+            acceptedRevisionIds
+          }
+        : undefined
     });
 
     const savedReview = await createWritingReview({
@@ -203,6 +258,9 @@ export async function POST(request: Request) {
       taskImageMimeType: loadedImage?.mimeType ?? null,
       taskImageSizeBytes: loadedImage?.sizeBytes ?? null,
       reviewRequestId: requestId,
+      reviewRequestLeaseToken: reservation.leaseToken,
+      parentReviewId: parentReview?.id ?? null,
+      acceptedRevisionIds,
       result
     });
     reservedRequest = null;
@@ -216,11 +274,17 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const normalized = apiErrorResponse(error);
+    console.error("[IELTS_CHECK][REQUEST_FAILED]", {
+      errorType: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      responseStatus: normalized.status
+    });
     if (reservedRequest) {
       try {
         await failReviewRequest(
           reservedRequest.userId,
           reservedRequest.requestId,
+          reservedRequest.leaseToken,
           normalized.message
         );
       } catch (refundError) {
@@ -248,5 +312,9 @@ export async function POST(request: Request) {
           : undefined
       }
     );
+  } finally {
+    if (reservationHeartbeat) {
+      clearInterval(reservationHeartbeat);
+    }
   }
 }

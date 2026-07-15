@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
+import { LoadingLottie } from "@/components/loading-lottie";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
@@ -193,7 +194,7 @@ export default function AssignmentDetailClient({ assignmentId }: { assignmentId:
 
       {!sessionResolved || loading ? (
         <Surface className="assignmentsState">
-          <p>{t.loading}</p>
+          <LoadingLottie label={t.loading} showLabel={false} />
         </Surface>
       ) : !isAuthenticated ? (
         <Surface className="assignmentsState">

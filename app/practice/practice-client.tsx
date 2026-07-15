@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
+import { LoadingLottie } from "@/components/loading-lottie";
 import { Pill, Surface } from "@/components/ui-kit";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
@@ -452,7 +453,7 @@ export default function PracticePageClient() {
 
               {loading ? (
                 <Surface className="practiceStatePanel">
-                  <p>{t.loading}</p>
+                  <LoadingLottie label={t.loading} showLabel={false} />
                 </Surface>
               ) : error ? (
                 <Surface className="practiceStatePanel">
@@ -541,7 +542,7 @@ export default function PracticePageClient() {
             </>
           ) : historicalLoading ? (
             <Surface className="practiceStatePanel">
-              <p>{t.loading}</p>
+              <LoadingLottie label={t.loading} showLabel={false} />
             </Surface>
           ) : historicalError ? (
             <Surface className="practiceStatePanel">

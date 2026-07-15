@@ -4580,6 +4580,30 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   display: block;
 }
 
+.editTooltipPortal {
+  position: fixed;
+  z-index: 90;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  visibility: hidden;
+}
+
+.editTooltipPortal[style] {
+  visibility: visible;
+}
+
+.editTooltipPortal::before {
+  left: var(--edit-tooltip-arrow-left, 18px);
+}
+
+.editTooltipPortal[data-placement="above"]::before {
+  top: auto;
+  bottom: -7px;
+  border: 0;
+  border-right: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+}
+
 .essayDel {
   background: #fde2e1;
   color: #b42318;
@@ -4621,7 +4645,7 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
 .authDialogBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5665,7 +5689,7 @@ html[data-theme="dark"] .authSwitchButton {
     padding: 18px 16px;
   }
 
-  .editTooltip {
+  .editTooltip:not(.editTooltipPortal) {
     position: fixed;
     left: 16px;
     right: 16px;
@@ -5678,7 +5702,7 @@ html[data-theme="dark"] .authSwitchButton {
     box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
   }
 
-  .editTooltip::before {
+  .editTooltip:not(.editTooltipPortal)::before {
     display: none;
   }
 }
@@ -11388,4 +11412,91 @@ html[data-theme="dark"] .computerExamMode .checkerWordHint strong {
 html[data-theme="dark"] .authDialog.authAccountDialog {
   border-color: var(--line-strong);
   background: var(--paper-strong);
+}
+
+/* Global loader using the supplied DotLottie artwork. */
+.globalLoading {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  color: var(--ink);
+}
+
+.globalLoadingFullscreen {
+  position: relative;
+  width: 100%;
+  min-height: 100dvh;
+  align-content: center;
+  padding: 32px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.globalLoadingFullscreen::before {
+  position: absolute;
+  width: min(520px, 90vw);
+  height: min(520px, 90vw);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(17, 17, 17, 0.055), transparent 68%);
+  content: "";
+  pointer-events: none;
+}
+
+.globalLoadingAnimation {
+  position: relative;
+  display: grid;
+  width: 112px;
+  height: 112px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #deded9;
+  border-radius: 30px;
+  background: #fff;
+  box-shadow: 0 22px 58px rgba(17, 17, 17, 0.1);
+}
+
+.globalLoadingAnimation canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.globalLoading-small .globalLoadingAnimation {
+  width: 56px;
+  height: 56px;
+  border-radius: 17px;
+}
+
+.globalLoading-large .globalLoadingAnimation {
+  width: 132px;
+  height: 132px;
+  border-radius: 34px;
+}
+
+.globalLoadingLabel {
+  position: relative;
+  color: var(--muted-strong);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+html[data-theme="dark"] .globalLoadingFullscreen {
+  background: var(--bg);
+}
+
+html[data-theme="dark"] .globalLoadingFullscreen::before {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.07), transparent 68%);
+}
+
+html[data-theme="dark"] .globalLoadingAnimation {
+  border-color: var(--line-strong);
+  background: var(--paper-strong);
+  box-shadow: 0 26px 68px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .globalLoadingAnimation {
+    box-shadow: none;
+  }
 }

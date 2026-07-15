@@ -6,12 +6,13 @@ import { AppNavbar } from "@/components/app-navbar";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
-import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
+import { ActionButton, ActionLink, Alert, Pill, Surface } from "@/components/ui-kit";
 import { TeachingRuleReferences } from "@/components/teaching-rule-references";
 import type { AiProvider, FeedbackPayload, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
 import {
   groupRevisionEditsByCategory,
   materializeRevisionEssay,
+  materializeVerifiedOptimizationEssay,
   parseAnnotatedEssay,
   renderAnnotatedEssay,
   type RevisionDecision,
@@ -184,6 +185,9 @@ function CheckerPageContent() {
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
   const taskImageInputRef = useRef<HTMLInputElement | null>(null);
   const checkRequestIdRef = useRef<string | null>(null);
+  const checkInFlightRef = useRef(false);
+  const currentReviewIdRef = useRef<string | null>(null);
+  const pendingReviewLineageRef = useRef<{ parentReviewId: string; acceptedRevisionIds: string[] } | null>(null);
   const sessionDraftsRef = useRef(new Map<string, SessionCheckerDraft>());
   const draftSnapshotRef = useRef<Omit<SessionCheckerDraft, "updatedAt">>({
     prompt: "",
@@ -200,8 +204,8 @@ function CheckerPageContent() {
   const historicalId = searchParams.get("historicalId");
   const libraryQuestionId = practiceId || historicalId;
   const isLibraryQuestion = Boolean(libraryQuestionId);
-  const provider: AiProvider = "deepseek";
   const [taskType, setTaskType] = useState<TaskType>(searchParams.get("task") === "task1" ? "task1" : "task2");
+  const provider: AiProvider = taskType === "task2" ? "qianwen" : "deepseek";
   const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
   const [prompt, setPrompt] = useState("");
   const [essay, setEssay] = useState("");
@@ -305,17 +309,29 @@ function CheckerPageContent() {
     activeEditIndex === null
       ? -1
       : filteredRevisionEdits.findIndex((edit) => edit.index === activeEditIndex);
-  const resolvedRevisionEssay = useMemo(
-    () =>
-      currentRevisionStage
-        ? materializeRevisionEssay(
-            currentRevisionStage.annotatedEssay,
-            currentRevisionStage.correctionNotes,
-            currentRevisionDecisions
-          )
-        : essay,
-    [currentRevisionDecisions, currentRevisionStage, essay]
-  );
+  const resolvedRevision = useMemo(() => {
+    if (!currentRevisionStage) {
+      return { essay, appliedFinalGrammarIds: [] as string[] };
+    }
+
+    if (activeRevisionStage === "optimization") {
+      return materializeVerifiedOptimizationEssay(
+        currentRevisionStage,
+        currentRevisionDecisions,
+        result?.finalGrammarRevision
+      );
+    }
+
+    return {
+      essay: materializeRevisionEssay(
+        currentRevisionStage.annotatedEssay,
+        currentRevisionStage.correctionNotes,
+        currentRevisionDecisions
+      ),
+      appliedFinalGrammarIds: [] as string[]
+    };
+  }, [activeRevisionStage, currentRevisionDecisions, currentRevisionStage, essay, result?.finalGrammarRevision]);
+  const resolvedRevisionEssay = resolvedRevision.essay;
   const isTask1 = taskType === "task1";
   const draftOwnerId = sessionContext.user?.id ?? "guest";
   const currentDraftScope = useMemo(
@@ -885,39 +901,65 @@ function CheckerPageContent() {
   }
 
   async function runCheck() {
+    if (checkInFlightRef.current) {
+      return;
+    }
+    checkInFlightRef.current = true;
     setLoading(true);
     clearError();
     const requestId = checkRequestIdRef.current || window.crypto.randomUUID();
     checkRequestIdRef.current = requestId;
 
     try {
-      const response = await fetch("/api/check", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": requestId
-        },
-        body: JSON.stringify({
-          ...(practiceId ? { practiceId } : {}),
-          ...(historicalId ? { historicalId } : {}),
-          taskType,
-          provider,
-          locale,
-          targetBand,
-          prompt,
-          essay,
-          taskImageObjectKey: taskImage?.objectKey,
-          taskImageName: taskImage?.name
-        })
-      });
-
-      const data = (await response.json()) as
+      type CheckResponse =
         | {
             result: WritingCheckResult;
             energy: EnergyState;
             cost: number;
+            reviewId: string;
           }
         | { error?: string; energy?: EnergyState; cost?: number };
+
+      const requestBody = JSON.stringify({
+        ...(practiceId ? { practiceId } : {}),
+        ...(historicalId ? { historicalId } : {}),
+        taskType,
+        provider,
+        locale,
+        targetBand,
+        prompt,
+        essay,
+        taskImageObjectKey: taskImage?.objectKey,
+        taskImageName: taskImage?.name,
+        ...(pendingReviewLineageRef.current ?? {})
+      });
+      let response: Response;
+      let data: CheckResponse;
+      let pendingRetries = 0;
+
+      do {
+        response = await fetch("/api/check", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": requestId
+          },
+          body: requestBody
+        });
+        data = (await response.json()) as CheckResponse;
+
+        if (
+          response.status !== 409 ||
+          !isErrorPayload(data) ||
+          data.error !== "REVIEW_IN_PROGRESS" ||
+          pendingRetries >= 5
+        ) {
+          break;
+        }
+
+        pendingRetries += 1;
+        await new Promise((resolve) => window.setTimeout(resolve, 10_000));
+      } while (true);
 
       if (response.ok || !isErrorPayload(data) || data.error !== "REVIEW_IN_PROGRESS") {
         checkRequestIdRef.current = null;
@@ -942,7 +984,7 @@ function CheckerPageContent() {
           isErrorPayload(data) &&
           (data.error === "AI_REVIEW_FAILED" || data.error === "AI_REVIEW_TIMEOUT")
         ) {
-          window.alert(t.aiReviewFailedAlert);
+          showError(t.aiReviewFailedAlert);
           return;
         }
 
@@ -959,6 +1001,8 @@ function CheckerPageContent() {
       }
 
       setResult(data.result);
+      currentReviewIdRef.current = data.reviewId;
+      pendingReviewLineageRef.current = null;
       setEnergy(data.energy);
       setReviewCost(data.cost);
       setActiveEditIndex(null);
@@ -966,6 +1010,7 @@ function CheckerPageContent() {
       setResult(null);
       showError(submissionError instanceof Error ? submissionError.message : t.genericError);
     } finally {
+      checkInFlightRef.current = false;
       setLoading(false);
     }
   }
@@ -1222,8 +1267,8 @@ function CheckerPageContent() {
     }
   }
 
-  function acceptAllGrammarRevisions() {
-    if (activeRevisionStage !== "grammar" || !parsedRevision) {
+  function acceptAllCurrentRevisions() {
+    if (!parsedRevision) {
       return;
     }
 
@@ -1232,7 +1277,7 @@ function CheckerPageContent() {
     );
     setRevisionDecisions((current) => ({
       ...current,
-      grammar: accepted
+      [activeRevisionStage]: accepted
     }));
     setRevisionCopyState("idle");
   }
@@ -1253,6 +1298,19 @@ function CheckerPageContent() {
     }
 
     setEssay(resolvedRevisionEssay);
+    if (currentReviewIdRef.current) {
+      pendingReviewLineageRef.current = {
+        parentReviewId: currentReviewIdRef.current,
+        acceptedRevisionIds: [
+          ...(Object.keys(revisionDecisions) as RevisionStageKey[]).flatMap((stage) =>
+            Object.entries(revisionDecisions[stage])
+              .filter(([, decision]) => decision === "accepted")
+              .map(([id]) => `${stage}:${id}`)
+          ),
+          ...resolvedRevision.appliedFinalGrammarIds.map((id) => `finalGrammar:${id}`)
+        ]
+      };
+    }
     setResult(null);
     setReportView("overview");
     setActiveEditIndex(null);
@@ -1679,7 +1737,11 @@ function CheckerPageContent() {
               </div>
             ) : null}
 
-            {error && errorSource !== "auth" ? <p className="errorBox">{error}</p> : null}
+            {error && errorSource !== "auth" ? (
+              <Alert tone="error" aria-live="polite">
+                {error}
+              </Alert>
+            ) : null}
 
             <label className="checkerEssayField">
               <span className="srOnly">{t.essay}</span>
@@ -1872,6 +1934,13 @@ function CheckerPageContent() {
                       {result.wordCount} {t.wordsUnit}
                     </Pill>
                     <Pill>{t.aiMode}</Pill>
+                    {result.grammarQuality ? (
+                      <Pill>
+                        {result.grammarQuality.status === "verified"
+                          ? t.grammarQualityVerified
+                          : t.grammarQualityCorrected}
+                      </Pill>
+                    ) : null}
                   </div>
                   <ActionLink href={`/${locale}/history`} variant="secondary">
                     {t.viewHistory}
@@ -1986,16 +2055,16 @@ function CheckerPageContent() {
                       <p>{t.revisionPendingKeepsOriginal}</p>
                     </div>
                     <div className="reviseWorkbenchActions">
-                      {activeRevisionStage === "grammar" ? (
-                        <ActionButton
-                          type="button"
-                          variant="secondary"
-                          onClick={acceptAllGrammarRevisions}
-                          disabled={!revisionTotalCount || revisionDecisionCount === revisionTotalCount}
-                        >
-                          {t.revisionAcceptAllGrammar}
-                        </ActionButton>
-                      ) : null}
+                      <ActionButton
+                        type="button"
+                        variant="secondary"
+                        onClick={acceptAllCurrentRevisions}
+                        disabled={!revisionTotalCount || revisionDecisionCount === revisionTotalCount}
+                      >
+                        {activeRevisionStage === "grammar"
+                          ? t.revisionAcceptAllGrammar
+                          : t.revisionAcceptAllOptimization}
+                      </ActionButton>
                       <ActionButton
                         type="button"
                         variant="secondary"
@@ -2052,6 +2121,9 @@ function CheckerPageContent() {
                       </div>
                     </div>
                     <p className="revisionHint">{t.reviseBody}</p>
+                    {activeRevisionStage === "optimization" ? (
+                      <p className="revisionHint">{t.revisionVerifiedOptimizationHint}</p>
+                    ) : null}
                     <div className="reviseLayoutSwitch revisionStageSwitch" role="group" aria-label="Revision stage">
                       <button
                         type="button"
@@ -2095,7 +2167,9 @@ function CheckerPageContent() {
 
                   <aside className="feedbackSection reviseSidebar">
                     <p className="sectionLabel">
-                      {activeRevisionStage === "grammar" ? t.revisionStageGrammar : t.revisionStageOptimization}
+                      {activeRevisionStage === "grammar"
+                        ? t.revisionStageGrammar
+                        : t.revisionStageOptimization}
                     </p>
                     <div className="reviseCategoryFilter" role="group" aria-label={t.revisionCategoryFilter}>
                       <button

@@ -65,10 +65,39 @@ export type RevisionStage = {
   correctionNotes: CorrectionNote[];
 };
 
+export type GrammarQuality = {
+  status: "verified" | "corrected" | "unverified";
+  detectedIssueCount: number;
+};
+
 export type HighlightedSentence = {
   sentence: string;
   reason: string;
   ruleReferences?: TeachingRuleReference[];
+};
+
+export type TaskCheck = {
+  id: string;
+  status: "met" | "partial" | "missing" | "not_applicable";
+  detail: string;
+};
+
+export type ReviewIssueProgressItem = {
+  id: string;
+  category: string;
+  original: string;
+  corrected: string;
+  detail: string;
+  ruleReferences?: TeachingRuleReference[];
+};
+
+export type ReviewProgress = {
+  parentReviewId: string;
+  previousBand: number;
+  bandDelta: number;
+  resolvedIssues: ReviewIssueProgressItem[];
+  remainingIssues: ReviewIssueProgressItem[];
+  newIssues: ReviewIssueProgressItem[];
 };
 
 export type WritingScoreResult = {
@@ -82,6 +111,7 @@ export type WritingScoreResult = {
     lexicalResource: BandBreakdown;
     grammaticalRangeAndAccuracy: BandBreakdown;
   };
+  taskChecks?: TaskCheck[];
   strengths: string[];
   highlightedSentences: HighlightedSentence[];
   priorityFixes: ImprovementItem[];
@@ -97,6 +127,8 @@ export type WritingRevisionResult = {
   correctionNotes: CorrectionNote[];
   grammarRevision?: RevisionStage;
   optimizationRevision?: RevisionStage;
+  finalGrammarRevision?: RevisionStage;
+  grammarQuality?: GrammarQuality;
   feedbackMode: "ai";
   providerUsed: ActiveProvider;
 };
@@ -112,6 +144,7 @@ export type WritingCheckResult = {
     lexicalResource: BandBreakdown;
     grammaticalRangeAndAccuracy: BandBreakdown;
   };
+  taskChecks?: TaskCheck[];
   strengths: string[];
   highlightedSentences: HighlightedSentence[];
   priorityFixes: ImprovementItem[];
@@ -119,6 +152,9 @@ export type WritingCheckResult = {
   correctionNotes: CorrectionNote[];
   grammarRevision?: RevisionStage;
   optimizationRevision?: RevisionStage;
+  finalGrammarRevision?: RevisionStage;
+  grammarQuality?: GrammarQuality;
+  reviewProgress?: ReviewProgress;
   feedbackMode: "ai";
   providerUsed: ActiveProvider;
 };
@@ -177,6 +213,8 @@ export type WritingReviewDetail = {
   wordCount: number;
   providerUsed: ActiveProvider;
   result: WritingCheckResult;
+  parentReviewId: string | null;
+  acceptedRevisionIds: string[];
   image: WritingReviewImage | null;
   createdAt: string;
   updatedAt: string;
