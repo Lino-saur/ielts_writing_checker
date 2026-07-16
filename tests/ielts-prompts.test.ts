@@ -17,7 +17,7 @@ describe("IELTS localized prompts", () => {
 
   it("keeps English as the default prompt locale", async () => {
     expect(await loadBasePrompt()).toContain("precise IELTS writing evaluator");
-    expect(getPromptBundle("en").revision).toContain("Every reason must be one or two concise");
+    expect(getPromptBundle("en").revision).toContain("Every reason must be exactly one concise sentence");
   });
 
   it("keeps the same template variables in both locales", () => {

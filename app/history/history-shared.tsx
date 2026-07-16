@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pill } from "@/components/ui-kit";
 import { TeachingRuleReferences } from "@/components/teaching-rule-references";
 import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
@@ -251,8 +251,8 @@ export function ReviewDetailContent({
   const [activeRevisionStage, setActiveRevisionStage] = useState<"grammar" | "optimization">("optimization");
   const [expandedRevisionCategories, setExpandedRevisionCategories] = useState<Record<string, boolean>>({});
   const activeEditRef = useRef<HTMLDivElement | null>(null);
-  const currentRevisionStage =
-    activeRevisionStage === "grammar"
+  const currentRevisionStage = useMemo(
+    () => activeRevisionStage === "grammar"
       ? (detail.result.grammarRevision ?? {
           annotatedEssay: detail.result.annotatedEssay,
           correctionNotes: detail.result.correctionNotes
@@ -260,9 +260,17 @@ export function ReviewDetailContent({
       : (detail.result.optimizationRevision ?? {
           annotatedEssay: detail.result.annotatedEssay,
           correctionNotes: detail.result.correctionNotes
-        });
-  const parsedRevision = parseAnnotatedEssay(currentRevisionStage.annotatedEssay, currentRevisionStage.correctionNotes);
-  const groupedRevisionEdits = groupRevisionEditsByCategory(parsedRevision.edits, locale);
+        }),
+    [activeRevisionStage, detail.result]
+  );
+  const parsedRevision = useMemo(
+    () => parseAnnotatedEssay(currentRevisionStage.annotatedEssay, currentRevisionStage.correctionNotes),
+    [currentRevisionStage]
+  );
+  const groupedRevisionEdits = useMemo(
+    () => groupRevisionEditsByCategory(parsedRevision.edits, locale),
+    [locale, parsedRevision.edits]
+  );
 
   useEffect(() => {
     setActiveEditIndex(null);
@@ -295,7 +303,9 @@ export function ReviewDetailContent({
 
   useEffect(() => {
     if (!groupedRevisionEdits.length) {
-      setExpandedRevisionCategories({});
+      setExpandedRevisionCategories((current) =>
+        Object.keys(current).length ? {} : current
+      );
       return;
     }
 

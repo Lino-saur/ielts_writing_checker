@@ -4619,10 +4619,75 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
 }
 
 .essayHighlight {
-  background: var(--highlight-soft);
-  color: var(--highlight-ink);
-  padding: 0 3px;
+  background: #eaf3ff;
+  color: #175cd3;
+  padding: 1px 4px;
   border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.essayHighlightIcon {
+  margin-right: 4px;
+  color: #1570ef;
+  font-size: 0.78em;
+}
+
+.revisionLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 10px 0 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.revisionLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.revisionLegendHighlight,
+.revisionLegendOriginal,
+.revisionLegendSuggested {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.revisionLegendHighlight {
+  background: #eaf3ff;
+  color: #175cd3;
+}
+
+.revisionLegendOriginal {
+  background: #fde2e1;
+  color: #b42318;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+.revisionLegendSuggested {
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+
+html[data-theme="dark"] .essayHighlight,
+html[data-theme="dark"] .revisionLegendHighlight {
+  background: rgba(21, 112, 239, 0.24);
+  color: #b2ccff;
+}
+
+html[data-theme="dark"] .essayHighlightIcon {
+  color: #84adff;
 }
 
 .emptyState {

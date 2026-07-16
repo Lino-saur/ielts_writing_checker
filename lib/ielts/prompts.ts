@@ -83,7 +83,7 @@ Required JSON shape:
       "occurrence": 1,
       "replacement": "replacement text",
       "category": "one allowed category",
-      "reason": "One or two concise sentences explaining the exact issue and improvement.",
+      "reason": "One concise sentence explaining the exact issue and why the replacement resolves it.",
       "ruleIds": ["rule_id@v1"]
     }
   ]
@@ -132,8 +132,8 @@ Constraints:
 - When previous-review context is present, do not repeat an accepted issue whose original wording is absent from the current essay.
 - If an accepted correction is itself defective, treat the concrete defect in the current wording as a new issue rather than pretending the old issue was never fixed.
 - Never invent a rule id, version, source, or knowledge-point code.
-- Every reason must be specific and complete, not generic. Explain what is wrong in the original, what the corrected version changes, and why the correction is better in this context.
-- Every reason must be one or two concise, specific sentences in the required output language.
+- Every reason must be specific and complete, not generic. State the exact issue and why the replacement resolves it in this context.
+- Every reason must be exactly one concise sentence in the required output language. Do not quote or restate the full original and replacement because they already have dedicated fields.
 - Do not write vague reasons such as "grammar mistake", "better wording", "more natural", "improves clarity", or "fixed error" unless you also explain the exact error and the exact improvement.
 - The active-stage category contract above overrides any category wording found in source material.
 - If no supported edit is needed, return an empty edits array.
@@ -284,8 +284,8 @@ const ZH_CN_PROMPTS = {
 - 存在上一次批改信息时，已经采纳且原表达已消失的问题不得重复提出。
 - 已采纳的修改本身存在明确缺陷时，应基于当前文本将其作为新问题处理。
 - 禁止编造规则 ID、版本、来源或知识点编码。
-- 每个 reason 必须具体完整：说明原表达的明确问题、replacement 改变了什么，以及为何更适合当前语境。
-- 每个 reason 必须使用一到两句简体中文；即使引用英文 original 或 replacement，解释部分仍必须是中文。
+- 每个 reason 必须具体完整：指出原表达的明确问题，以及 replacement 为何能在当前语境中解决该问题。
+- 每个 reason 必须只用一句简洁的简体中文；original 与 replacement 已有独立字段，不得在 reason 中完整复述或重复引用。即使包含必要的英文术语，解释主体仍必须是中文。
 - 禁止只写“语法错误”“表达更好”“更自然”“提升清晰度”等笼统原因，必须指出具体问题和具体改进。
 - 当前阶段分类契约优先于原始材料中的任何分类措辞。
 - 没有支持充分的修改时返回空 edits 数组。

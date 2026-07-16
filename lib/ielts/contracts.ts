@@ -2,7 +2,8 @@ import type { CorrectionNote, TaskCheck, TeachingRuleReference, WritingRevisionR
 import { parseTeachingRuleReferences } from "@/lib/teaching-rules";
 import {
   GRAMMAR_REVISION_CATEGORIES,
-  OPTIMIZATION_REVISION_CATEGORIES
+  OPTIMIZATION_REVISION_CATEGORIES,
+  getRevisionCategoryLabel
 } from "./revision-categories";
 import { countWords, getLocale, getTargetBand, type CheckInput, type ProviderConfig } from "./shared";
 import type { EvaluationTaskContext } from "./task-context";
@@ -208,7 +209,12 @@ function requireDetailedReason(value: unknown, path: string) {
   return requireString(value, path);
 }
 
-function requireLocalizedRevisionReason(value: unknown, path: string, input: CheckInput) {
+function requireLocalizedRevisionReason(
+  value: unknown,
+  path: string,
+  input: CheckInput,
+  edit: { original: string; replacement: string; category: string; stage: "grammar" | "optimization" }
+) {
   const reason = requireDetailedReason(value, path);
   if (getLocale(input.locale) !== "zh-CN") {
     return reason;
@@ -216,7 +222,15 @@ function requireLocalizedRevisionReason(value: unknown, path: string, input: Che
 
   const chineseCharacterCount = reason.match(/[\u3400-\u4dbf\u4e00-\u9fff]/g)?.length ?? 0;
   if (chineseCharacterCount < 4) {
-    throw new Error(`${path} must contain a substantive Simplified Chinese explanation for locale zh-CN; English-only reasons are not allowed.`);
+    const categoryLabel = getRevisionCategoryLabel(edit.category, "zh-CN");
+    console.warn("[IELTS_CHECK][REVISION_REASON_LOCALIZED_FALLBACK]", {
+      path,
+      stage: edit.stage,
+      category: edit.category
+    });
+    return edit.replacement
+      ? `将“${edit.original}”修改为“${edit.replacement}”，用于处理此处的${categoryLabel}问题，使表达更准确并符合相关规则。`
+      : `删除“${edit.original}”，用于处理此处的${categoryLabel}问题，使表达更准确并符合相关规则。`;
   }
 
   return reason;
@@ -429,7 +443,12 @@ export function parseRevisionJsonResponse(
       original,
       replacement,
       category,
-      reason: requireLocalizedRevisionReason(item.reason, `edits[${index}].reason`, input),
+      reason: requireLocalizedRevisionReason(item.reason, `edits[${index}].reason`, input, {
+        original,
+        replacement,
+        category,
+        stage
+      }),
       ruleReferences: validateRuleIds(item.ruleIds, `edits[${index}].ruleIds`, allowedRules, 1)
     }];
   }).sort((left, right) => left.start - right.start || left.end - right.end);

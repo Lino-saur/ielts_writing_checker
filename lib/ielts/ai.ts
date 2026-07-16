@@ -26,7 +26,8 @@ import {
   ProviderConfig,
   WritingRevisionResult,
   WritingScoreResult,
-  countWords
+  countWords,
+  getLocale
 } from "./shared";
 
 type VisionGenerateContentPayload = {
@@ -165,11 +166,16 @@ function materializeAnnotatedEssay(annotatedEssay: string) {
     .replace(/\[del\][\s\S]*?\[\/del\]\[add\]([\s\S]*?)\[\/add\]/g, "$1");
 }
 
+function essayFingerprint(essay: string) {
+  return createHash("sha256").update(essay).digest("hex").slice(0, 12);
+}
+
 async function runJsonCompletion<T>(
   input: CheckInput,
   config: ProviderConfig,
   options: {
     kind: "score" | "revision" | "visual";
+    requestLabel?: string;
     systemPrompt: string;
     prompt: string;
     parse: (text: string, providerName: ProviderConfig["name"]) => T;
@@ -205,12 +211,14 @@ async function runJsonCompletion<T>(
     taskType: input.taskType,
     locale: input.locale,
     wordCount,
+    stage: options.requestLabel ?? options.kind,
     promptLength: options.prompt.length,
     essayLength: input.essay.length
   });
 
   async function requestCompletion(messages: ChatMessage[], phase: "first" | "retry" | "repair") {
     let response: Response;
+    const requestStartedAt = Date.now();
 
     try {
       response = await fetch(config.endpoint, {
@@ -225,7 +233,7 @@ async function runJsonCompletion<T>(
           messages,
           ...config.extraBody,
           temperature: 0,
-          max_tokens: options.kind === "revision" ? 6000 : 3200
+          max_tokens: 3200
         })
       });
     } catch (error) {
@@ -268,6 +276,21 @@ async function runJsonCompletion<T>(
       });
       throw new Error(`${config.name} response was empty.`);
     }
+
+    console.log(`[IELTS_CHECK][${options.kind.toUpperCase()}][RESPONSE]`, {
+      provider: config.name,
+      model: config.model,
+      stage: options.requestLabel ?? options.kind,
+      phase,
+      durationMs: Date.now() - requestStartedAt,
+      finishReason: payload.choices?.[0]?.finish_reason ?? null,
+      outputLength: text.length,
+      promptTokens: payload.usage?.prompt_tokens ?? null,
+      completionTokens: payload.usage?.completion_tokens ?? null,
+      totalTokens: payload.usage?.total_tokens ?? null,
+      cachedTokens: payload.usage?.prompt_tokens_details?.cached_tokens ?? null,
+      cacheCreationTokens: payload.usage?.prompt_tokens_details?.cache_creation_input_tokens ?? null
+    });
 
     logAiDebug(`[IELTS_CHECK][${options.kind.toUpperCase()}][RAW_RESPONSE]`, {
       provider: config.name,
@@ -870,6 +893,7 @@ export async function buildAiScoreFeedback(
 
   const result = await runJsonCompletion(input, getTextProviderConfig(input), {
     kind: "score",
+    requestLabel: "score",
     systemPrompt,
     prompt: promptContext.prompt,
     parse: (text, providerName) => parseScoreJsonResponse(
@@ -897,10 +921,12 @@ export async function buildAiRevisionFeedback(
     revisionInput: CheckInput,
     prompt: string,
     rules: typeof grammarPrompt.rules,
-    stage: "grammar" | "optimization"
+    stage: "grammar" | "optimization",
+    requestLabel: "grammar" | "optimization" | "final_audit" | "final_verification" | "quality_repair"
   ) {
     return runJsonCompletion(revisionInput, getTextProviderConfig(revisionInput), {
       kind: "revision",
+      requestLabel,
       systemPrompt,
       prompt,
       parse: (text, providerName) => parseRevisionJsonResponse(text, revisionInput, providerName, rules, stage),
@@ -909,7 +935,7 @@ export async function buildAiRevisionFeedback(
   }
 
   const grammarRevision = enforceRevisionRuleReferences(
-    await runRevisionPass(input, grammarPrompt.prompt, grammarPrompt.rules, "grammar"),
+    await runRevisionPass(input, grammarPrompt.prompt, grammarPrompt.rules, "grammar", "grammar"),
     grammarPrompt.rules
   );
   const grammarCleanEssay = materializeAnnotatedEssay(grammarRevision.annotatedEssay);
@@ -917,16 +943,44 @@ export async function buildAiRevisionFeedback(
     ...input,
     essay: grammarCleanEssay
   };
-  const optimizationPrompt = await buildRevisionPrompt(
-    optimizationInput,
-    minimumWords,
-    "optimization",
-    resolvedTaskContext
-  );
-  const optimizationRevision = enforceRevisionRuleReferences(
-    await runRevisionPass(optimizationInput, optimizationPrompt.prompt, optimizationPrompt.rules, "optimization"),
-    optimizationPrompt.rules
-  );
+  let optimizationRevision: WritingRevisionResult = {
+    ...grammarRevision,
+    annotatedEssay: grammarCleanEssay,
+    correctionNotes: []
+  };
+  if (input.priorReview) {
+    console.log("[IELTS_CHECK][RECHECK_OPTIMIZATION_SKIPPED]", {
+      taskType: input.taskType,
+      locale: getLocale(input.locale),
+      parentReviewId: input.priorReview.parentReviewId
+    });
+  } else {
+    try {
+      const optimizationPrompt = await buildRevisionPrompt(
+        optimizationInput,
+        minimumWords,
+        "optimization",
+        resolvedTaskContext
+      );
+      optimizationRevision = enforceRevisionRuleReferences(
+        await runRevisionPass(
+          optimizationInput,
+          optimizationPrompt.prompt,
+          optimizationPrompt.rules,
+          "optimization",
+          "optimization"
+        ),
+        optimizationPrompt.rules
+      );
+    } catch (optimizationError) {
+      console.warn("[IELTS_CHECK][OPTIMIZATION_PASS_SKIPPED]", {
+        taskType: input.taskType,
+        locale: getLocale(input.locale),
+        errorType: optimizationError instanceof Error ? optimizationError.name : typeof optimizationError,
+        errorMessage: optimizationError instanceof Error ? optimizationError.message : String(optimizationError)
+      });
+    }
+  }
   const optimizedEssay = materializeAnnotatedEssay(optimizationRevision.annotatedEssay);
   const auditInput: CheckInput = { ...input, essay: optimizedEssay };
   let finalGrammarRevision: WritingRevisionResult = {
@@ -940,11 +994,16 @@ export async function buildAiRevisionFeedback(
   };
 
   try {
-    const auditPrompt = await buildRevisionPrompt(auditInput, minimumWords, "grammar", resolvedTaskContext);
+    let currentAuditInput = auditInput;
     let unresolvedFeedback: WritingRevisionResult["correctionNotes"] = [];
-    let qualityVerified = false;
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      const auditPrompt = await buildRevisionPrompt(
+        currentAuditInput,
+        minimumWords,
+        "grammar",
+        resolvedTaskContext
+      );
       const repairPrompt = attempt === 0
         ? auditPrompt.prompt
         : `${auditPrompt.prompt}\n\nFinal grammar quality-gate repair:\nA previous correction pass still left the issues below. Return one consolidated edit list against the supplied Essay that fixes every supported issue. Do not return no-op edits.\n${JSON.stringify(
@@ -956,14 +1015,28 @@ export async function buildAiRevisionFeedback(
             }))
           )}`;
       const candidateRevision = enforceRevisionRuleReferences(
-        await runRevisionPass(auditInput, repairPrompt, auditPrompt.rules, "grammar"),
+        await runRevisionPass(
+          currentAuditInput,
+          repairPrompt,
+          auditPrompt.rules,
+          "grammar",
+          attempt === 0 ? "final_audit" : "quality_repair"
+        ),
         auditPrompt.rules
       );
 
       if (candidateRevision.correctionNotes.length === 0) {
         finalGrammarRevision = candidateRevision;
-        grammarQuality = { status: "verified", detectedIssueCount: 0 };
-        qualityVerified = true;
+        grammarQuality = attempt === 0
+          ? { status: "verified", detectedIssueCount: 0 }
+          : { status: "unverified", detectedIssueCount: unresolvedFeedback.length };
+        if (attempt > 0) {
+          console.warn("[IELTS_CHECK][GRAMMAR_QUALITY_GATE_CONFLICTING_FALLBACK]", {
+            draftHash: essayFingerprint(currentAuditInput.essay),
+            disputedIssueCount: unresolvedFeedback.length,
+            categories: unresolvedFeedback.map((issue) => issue.category ?? "other")
+          });
+        }
         break;
       }
 
@@ -978,9 +1051,17 @@ export async function buildAiRevisionFeedback(
       const finalVerification = enforceRevisionRuleReferences(
         await runRevisionPass(
           verificationInput,
-          `${finalVerificationPrompt.prompt}\n\nVerification-only pass: return an empty edits array if the essay has no remaining clear, rule-supported grammar errors. Do not suggest optional stylistic rewrites.`,
+          `${finalVerificationPrompt.prompt}\n\nVerification-only pass:\nInspect only the replacements made by the immediately preceding correction pass and the grammar of their directly adjacent context. Return an edit only when one of those replacements remains grammatically wrong or introduces a new clear, rule-supported grammar error. Do not scan untouched passages for additional issues, and do not suggest optional stylistic or naturalness rewrites. Return an empty edits array when the preceding replacements are safe.\n\nImmediately preceding replacements:\n${JSON.stringify(
+            candidateRevision.correctionNotes.map((note) => ({
+              original: note.original,
+              replacement: note.corrected,
+              category: note.category,
+              ruleIds: note.ruleReferences?.map((rule) => `${rule.id}@v${rule.version ?? 1}`) ?? []
+            }))
+          )}`,
           finalVerificationPrompt.rules,
-          "grammar"
+          "grammar",
+          "final_verification"
         ),
         finalVerificationPrompt.rules
       );
@@ -991,19 +1072,36 @@ export async function buildAiRevisionFeedback(
           status: "corrected",
           detectedIssueCount: candidateRevision.correctionNotes.length
         };
-        qualityVerified = true;
         break;
       }
 
       unresolvedFeedback = finalVerification.correctionNotes;
       console.warn("[IELTS_CHECK][GRAMMAR_QUALITY_GATE_RETRY]", {
         attempt: attempt + 1,
+        draftHash: essayFingerprint(correctedCandidateEssay),
         remainingIssueCount: unresolvedFeedback.length,
-        categories: unresolvedFeedback.map((issue) => issue.category ?? "other")
+        categories: unresolvedFeedback.map((issue) => issue.category ?? "other"),
+        ruleIds: unresolvedFeedback.flatMap((issue) =>
+          issue.ruleReferences?.map((rule) => `${rule.id}@v${rule.version ?? 1}`) ?? []
+        )
       });
-    }
 
-    if (!qualityVerified) throw new Error("GRAMMAR_QUALITY_GATE_FAILED");
+      if (attempt === 1) {
+        finalGrammarRevision = finalVerification;
+        grammarQuality = {
+          status: "unverified",
+          detectedIssueCount: finalVerification.correctionNotes.length
+        };
+        console.warn("[IELTS_CHECK][GRAMMAR_QUALITY_GATE_BOUNDED_FALLBACK]", {
+          draftHash: essayFingerprint(materializeAnnotatedEssay(finalVerification.annotatedEssay)),
+          appliedIssueCount: finalVerification.correctionNotes.length,
+          categories: finalVerification.correctionNotes.map((issue) => issue.category ?? "other")
+        });
+        break;
+      }
+
+      currentAuditInput = verificationInput;
+    }
 
     const introducedGrammarIssues = findOptimizationIntroducedGrammarIssues(
       grammarCleanEssay,
@@ -1011,17 +1109,32 @@ export async function buildAiRevisionFeedback(
       finalGrammarRevision.correctionNotes
     );
     if (finalGrammarRevision.correctionNotes.length > 0) {
-      console.warn("[IELTS_CHECK][FINAL_GRAMMAR_CORRECTIONS_VERIFIED]", {
-        issueCount: finalGrammarRevision.correctionNotes.length,
-        introducedByOptimization: introducedGrammarIssues.length
-      });
+      console.warn(
+        grammarQuality.status === "unverified"
+          ? "[IELTS_CHECK][FINAL_GRAMMAR_CORRECTIONS_APPLIED_UNVERIFIED]"
+          : "[IELTS_CHECK][FINAL_GRAMMAR_CORRECTIONS_VERIFIED]",
+        {
+          issueCount: finalGrammarRevision.correctionNotes.length,
+          introducedByOptimization: introducedGrammarIssues.length
+        }
+      );
     }
   } catch (auditError) {
-    console.error("[IELTS_CHECK][OPTIMIZATION_QUALITY_GATE_FAILED]", {
+    console.error("[IELTS_CHECK][GRAMMAR_QUALITY_GATE_SAFE_FALLBACK]", {
       errorType: auditError instanceof Error ? auditError.name : typeof auditError,
-      errorMessage: auditError instanceof Error ? auditError.message : String(auditError)
+      errorMessage: auditError instanceof Error ? auditError.message : String(auditError),
+      fallback: "grammar_clean_essay",
+      draftHash: essayFingerprint(grammarCleanEssay)
     });
-    throw new Error("GRAMMAR_QUALITY_GATE_FAILED", { cause: auditError });
+    finalGrammarRevision = {
+      ...grammarRevision,
+      annotatedEssay: grammarCleanEssay,
+      correctionNotes: []
+    };
+    grammarQuality = {
+      status: "unverified",
+      detectedIssueCount: 0
+    };
   }
 
   return {

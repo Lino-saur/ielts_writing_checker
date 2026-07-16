@@ -1938,7 +1938,9 @@ function CheckerPageContent() {
                       <Pill>
                         {result.grammarQuality.status === "verified"
                           ? t.grammarQualityVerified
-                          : t.grammarQualityCorrected}
+                          : result.grammarQuality.status === "corrected"
+                            ? t.grammarQualityCorrected
+                            : t.grammarQualityUnverified}
                       </Pill>
                     ) : null}
                   </div>
@@ -2149,6 +2151,20 @@ function CheckerPageContent() {
                       >
                         <span>{t.revisionStageOptimization}</span>
                       </button>
+                    </div>
+                    <div className="revisionLegend" aria-label={t.revisionLegendLabel}>
+                      <span className="revisionLegendItem">
+                        <span className="revisionLegendHighlight" aria-hidden="true">★</span>
+                        {t.revisionLegendHighlight}
+                      </span>
+                      <span className="revisionLegendItem">
+                        <span className="revisionLegendOriginal" aria-hidden="true">Aa</span>
+                        {t.revisionLegendOriginal}
+                      </span>
+                      <span className="revisionLegendItem">
+                        <span className="revisionLegendSuggested" aria-hidden="true">Aa</span>
+                        {t.revisionLegendSuggested}
+                      </span>
                     </div>
                     <div className="annotatedEssay reviseAnnotatedEssay">
                       {currentRevisionStage

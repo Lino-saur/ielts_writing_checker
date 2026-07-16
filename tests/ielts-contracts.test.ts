@@ -214,7 +214,7 @@ describe("IELTS JSON contracts", () => {
     expect(parsed.correctionNotes[0].reason).toBe("避免重复。");
   });
 
-  it("rejects English-only revision reasons for the Chinese locale", () => {
+  it("localizes English-only revision reasons instead of failing the Chinese review", () => {
     const response = JSON.stringify({
       schemaVersion: "revision.v1",
       edits: [
@@ -229,15 +229,16 @@ describe("IELTS JSON contracts", () => {
       ]
     });
 
-    expect(() =>
-      parseRevisionJsonResponse(
-        response,
-        { ...input, locale: "zh-CN" },
-        "qianwen",
-        rules,
-        "optimization"
-      )
-    ).toThrow("must contain a substantive Simplified Chinese explanation");
+    const parsed = parseRevisionJsonResponse(
+      response,
+      { ...input, locale: "zh-CN" },
+      "qianwen",
+      rules,
+      "optimization"
+    );
+
+    expect(parsed.correctionNotes[0].reason).toContain("表达更清晰");
+    expect(parsed.correctionNotes[0].reason).not.toContain("The replacement");
   });
 
   it("accepts a Chinese reason that quotes a long English revision", () => {

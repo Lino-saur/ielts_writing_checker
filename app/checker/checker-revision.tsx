@@ -357,7 +357,12 @@ export function renderAnnotatedEssay(
       }
 
       subparts.push(
-        <mark key={`${keyPrefix}-highlight-${cursor}`} className="essayHighlight">
+        <mark
+          key={`${keyPrefix}-highlight-${cursor}`}
+          className="essayHighlight"
+          title={t.revisionLegendHighlight}
+        >
+          <span className="essayHighlightIcon" aria-hidden="true">★</span>
           {matchedSentence}
         </mark>
       );

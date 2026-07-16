@@ -41,10 +41,28 @@ export async function evaluateWriting(input: CheckInput): Promise<WritingCheckRe
   try {
     const cleanInput = validateInput(input);
     const taskContext = await buildEvaluationTaskContext(cleanInput);
-    const [score, revision] = await Promise.all([
+    const [scoreOutcome, revisionOutcome] = await Promise.allSettled([
       buildAiScoreFeedback(cleanInput, taskContext),
       buildAiRevisionFeedback(cleanInput, taskContext)
     ]);
+    if (scoreOutcome.status === "rejected") {
+      console.error("[IELTS_CHECK][PIPELINE_COMPONENT_FAILED]", {
+        component: "score",
+        errorType: scoreOutcome.reason instanceof Error ? scoreOutcome.reason.name : typeof scoreOutcome.reason,
+        errorMessage: scoreOutcome.reason instanceof Error ? scoreOutcome.reason.message : String(scoreOutcome.reason)
+      });
+    }
+    if (revisionOutcome.status === "rejected") {
+      console.error("[IELTS_CHECK][PIPELINE_COMPONENT_FAILED]", {
+        component: "revision",
+        errorType: revisionOutcome.reason instanceof Error ? revisionOutcome.reason.name : typeof revisionOutcome.reason,
+        errorMessage: revisionOutcome.reason instanceof Error ? revisionOutcome.reason.message : String(revisionOutcome.reason)
+      });
+    }
+    if (scoreOutcome.status === "rejected") throw scoreOutcome.reason;
+    if (revisionOutcome.status === "rejected") throw revisionOutcome.reason;
+    const score = scoreOutcome.value;
+    const revision = revisionOutcome.value;
 
     const result: WritingCheckResult = {
       taskType: score.taskType,
