@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pill } from "@/components/ui-kit";
 import { TeachingRuleReferences } from "@/components/teaching-rule-references";
 import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
@@ -32,21 +32,72 @@ export function describeTaskFilter(taskType: "all" | "task1" | "task2", navbar: 
 export function ScoreCard({
   label,
   score,
-  rationale
+  rationale,
+  defaultExpanded = false,
+  showDetailsLabel,
+  hideDetailsLabel
 }: {
   label: string;
   score: number;
   rationale: string;
+  defaultExpanded?: boolean;
+  showDetailsLabel: string;
+  hideDetailsLabel: string;
 }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
   return (
     <article className="scoreCard">
-      <div className="scoreHeader">
+      <button
+        type="button"
+        className="scoreCardToggle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+      >
         <div>
           <p className="sectionLabel">{label}</p>
           <h3>{score.toFixed(1)}</h3>
         </div>
-      </div>
-      <p>{rationale}</p>
+        <span className="scoreCardToggleMeta">
+          {expanded ? hideDetailsLabel : showDetailsLabel}
+          <i className={`ai-chevron-${expanded ? "up" : "down"}`} aria-hidden="true" />
+        </span>
+      </button>
+      {expanded ? <p className="scoreCardRationale">{rationale}</p> : null}
+    </article>
+  );
+}
+
+function FeedbackDisclosure({
+  label,
+  count,
+  itemsLabel,
+  defaultExpanded = false,
+  children
+}: {
+  label: string;
+  count: number;
+  itemsLabel: string;
+  defaultExpanded?: boolean;
+  children: ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <article className="feedbackSection feedbackDisclosure">
+      <button
+        type="button"
+        className="feedbackDisclosureToggle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <span className="sectionLabel">{label}</span>
+        <span className="feedbackDisclosureMeta">
+          {count} {itemsLabel}
+          <i className={`ai-chevron-${expanded ? "up" : "down"}`} aria-hidden="true" />
+        </span>
+      </button>
+      {expanded ? <div className="feedbackDisclosureBody">{children}</div> : null}
     </article>
   );
 }
@@ -132,6 +183,7 @@ function renderAnnotatedEssay(
   text: string,
   highlightedSentences: string[],
   correctionNotes: CorrectionNote[],
+  isEnhancement: boolean,
   activeEditIndex: number | null,
   onToggleEdit: (index: number) => void,
   t: CheckerMessages
@@ -198,7 +250,7 @@ function renderAnnotatedEssay(
       return (
         <span
           key={`edit-${part.index}-${index}`}
-          className={`editChip${isActive ? " active" : ""}`}
+          className={`editChip${isEnhancement ? " is-enhancement" : ""}${isActive ? " active" : ""}`}
           role="button"
           tabIndex={0}
           onClick={() => onToggleEdit(part.index)}
@@ -209,10 +261,32 @@ function renderAnnotatedEssay(
             }
           }}
         >
-          <del className="essayDel">{part.original}</del>
-          <ins className="essayAdd">{part.corrected}</ins>
+          {isEnhancement ? (
+            <span className="essayEnhancement">
+              {part.original}
+              <span className="essayEnhancementIcon" aria-hidden="true">✦</span>
+            </span>
+          ) : (
+            <>
+              <del className="essayDel">{part.original}</del>
+              <ins className="essayAdd">{part.corrected}</ins>
+            </>
+          )}
           {part.note ? (
             <span className={`editTooltip${isActive ? " visible" : ""}`}>
+              {isEnhancement ? (
+                <>
+                  <span className="editTooltipEnhancementHeader">
+                    <span aria-hidden="true">✦</span>
+                    {t.revisionOptimizationOptional}
+                  </span>
+                  <span className="editTooltipEnhancementPair">
+                    <span>{part.original}</span>
+                    <i className="ai-arrow-right" aria-hidden="true" />
+                    <strong>{part.corrected}</strong>
+                  </span>
+                </>
+              ) : null}
               <strong>{t.correctionReason}:</strong> {part.note.reason}
             </span>
           ) : null}
@@ -276,6 +350,21 @@ export function ReviewDetailContent({
     () => groupRevisionEditsByCategory(parsedRevision.edits, locale),
     [locale, parsedRevision.edits]
   );
+  const weakestCriterionKey = [
+    { key: "taskAchievement", score: detail.result.bandBreakdown.taskAchievement.score },
+    { key: "coherence", score: detail.result.bandBreakdown.coherenceAndCohesion.score },
+    { key: "lexical", score: detail.result.bandBreakdown.lexicalResource.score },
+    { key: "grammar", score: detail.result.bandBreakdown.grammaticalRangeAndAccuracy.score }
+  ].reduce((weakest, criterion) => criterion.score < weakest.score ? criterion : weakest).key;
+
+  function openRevisionFromFeedback() {
+    setReportView("revise");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        activeEditRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }
 
   useEffect(() => {
     setActiveEditIndex(null);
@@ -360,7 +449,10 @@ export function ReviewDetailContent({
       <div className="resultHero">
         <div className="resultScore">
           <p className="sectionLabel">{t.estimatedBand}</p>
-          <h2>{detail.estimatedBand.toFixed(1)}</h2>
+          <div className="resultScoreValue">
+            <h2>{detail.estimatedBand.toFixed(1)}</h2>
+            <span>/ 9</span>
+          </div>
         </div>
         <div className="resultHeroActions">
           <div className="resultMeta">
@@ -371,7 +463,6 @@ export function ReviewDetailContent({
             <Pill>
               {detail.wordCount} {t.wordsUnit}
             </Pill>
-            <Pill>{detail.providerUsed}</Pill>
             <Pill>
               {t.historyCreatedAt}: {formatReviewTime(detail.createdAt, locale)}
             </Pill>
@@ -403,35 +494,76 @@ export function ReviewDetailContent({
               label={t.taskAchievement}
               score={detail.result.bandBreakdown.taskAchievement.score}
               rationale={detail.result.bandBreakdown.taskAchievement.rationale}
+              defaultExpanded={weakestCriterionKey === "taskAchievement"}
+              showDetailsLabel={t.scoreDetailsShow}
+              hideDetailsLabel={t.scoreDetailsHide}
             />
             <ScoreCard
               label={t.coherence}
               score={detail.result.bandBreakdown.coherenceAndCohesion.score}
               rationale={detail.result.bandBreakdown.coherenceAndCohesion.rationale}
+              defaultExpanded={weakestCriterionKey === "coherence"}
+              showDetailsLabel={t.scoreDetailsShow}
+              hideDetailsLabel={t.scoreDetailsHide}
             />
             <ScoreCard
               label={t.lexical}
               score={detail.result.bandBreakdown.lexicalResource.score}
               rationale={detail.result.bandBreakdown.lexicalResource.rationale}
+              defaultExpanded={weakestCriterionKey === "lexical"}
+              showDetailsLabel={t.scoreDetailsShow}
+              hideDetailsLabel={t.scoreDetailsHide}
             />
             <ScoreCard
               label={t.grammar}
               score={detail.result.bandBreakdown.grammaticalRangeAndAccuracy.score}
               rationale={detail.result.bandBreakdown.grammaticalRangeAndAccuracy.rationale}
+              defaultExpanded={weakestCriterionKey === "grammar"}
+              showDetailsLabel={t.scoreDetailsShow}
+              hideDetailsLabel={t.scoreDetailsHide}
             />
           </div>
 
-          <article className="feedbackSection">
-            <p className="sectionLabel">{t.strengths}</p>
+          <FeedbackDisclosure
+            label={t.priorityFixes}
+            count={detail.result.priorityFixes.length}
+            itemsLabel={t.feedbackItemsUnit}
+            defaultExpanded
+          >
+            <ul>
+              {detail.result.priorityFixes.map((item) => (
+                <li key={item.title}>
+                  <strong>{item.title}:</strong> {item.detail}
+                  <TeachingRuleReferences
+                    references={item.ruleReferences}
+                    label={t.ruleBasis}
+                  />
+                </li>
+              ))}
+            </ul>
+            <button type="button" className="feedbackNextAction" onClick={openRevisionFromFeedback}>
+              {t.startRevisionFromFeedback}
+              <span aria-hidden="true">→</span>
+            </button>
+          </FeedbackDisclosure>
+
+          <FeedbackDisclosure
+            label={t.strengths}
+            count={detail.result.strengths.length}
+            itemsLabel={t.feedbackItemsUnit}
+          >
             <ul>
               {detail.result.strengths.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ul>
-          </article>
+          </FeedbackDisclosure>
 
-          <article className="feedbackSection">
-            <p className="sectionLabel">{t.highlightedSentences}</p>
+          <FeedbackDisclosure
+            label={t.highlightedSentences}
+            count={detail.result.highlightedSentences.length}
+            itemsLabel={t.feedbackItemsUnit}
+          >
             <div className="correctionList">
               {detail.result.highlightedSentences.map((item, index) => (
                 <article key={`${item.sentence}-${index}`} className="correctionCard">
@@ -448,22 +580,7 @@ export function ReviewDetailContent({
                 </article>
               ))}
             </div>
-          </article>
-
-          <article className="feedbackSection">
-            <p className="sectionLabel">{t.priorityFixes}</p>
-            <ul>
-              {detail.result.priorityFixes.map((item) => (
-                <li key={item.title}>
-                  <strong>{item.title}:</strong> {item.detail}
-                  <TeachingRuleReferences
-                    references={item.ruleReferences}
-                    label={t.ruleBasis}
-                  />
-                </li>
-              ))}
-            </ul>
-          </article>
+          </FeedbackDisclosure>
         </>
       ) : (
         <section className="reviseWorkspace">
@@ -471,7 +588,6 @@ export function ReviewDetailContent({
             <div className="revisePanelHeader">
               <p className="sectionLabel">{t.reviseTitle}</p>
             </div>
-            <p className="revisionHint">{t.reviseBody}</p>
             <div className="reviseLayoutSwitch" role="group" aria-label="Revision stage">
               <button
                 type="button"
@@ -493,20 +609,30 @@ export function ReviewDetailContent({
                 <span className="revisionLegendHighlight" aria-hidden="true">★</span>
                 {t.revisionLegendHighlight}
               </span>
-              <span className="revisionLegendItem">
-                <span className="revisionLegendOriginal" aria-hidden="true">Aa</span>
-                {t.revisionLegendOriginal}
-              </span>
-              <span className="revisionLegendItem">
-                <span className="revisionLegendSuggested" aria-hidden="true">Aa</span>
-                {t.revisionLegendSuggested}
-              </span>
+              {activeRevisionStage === "grammar" ? (
+                <>
+                  <span className="revisionLegendItem">
+                    <span className="revisionLegendOriginal" aria-hidden="true">Aa</span>
+                    {t.revisionLegendOriginal}
+                  </span>
+                  <span className="revisionLegendItem">
+                    <span className="revisionLegendSuggested" aria-hidden="true">Aa</span>
+                    {t.revisionLegendSuggested}
+                  </span>
+                </>
+              ) : (
+                <span className="revisionLegendItem">
+                  <span className="revisionLegendOptimization" aria-hidden="true">✦</span>
+                  {t.revisionLegendOptimization}
+                </span>
+              )}
             </div>
             <div className="annotatedEssay reviseAnnotatedEssay" ref={activeEditRef}>
               {renderAnnotatedEssay(
                 currentRevisionStage.annotatedEssay,
                 detail.result.highlightedSentences.map((item) => item.sentence),
                 currentRevisionStage.correctionNotes,
+                activeRevisionStage === "optimization",
                 activeEditIndex,
                 (index) => setActiveEditIndex((current) => (current === index ? null : index)),
                 t

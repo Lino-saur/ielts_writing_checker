@@ -54,9 +54,13 @@ describe("IELTS JSON contracts", () => {
     const optimizationSchema = getRevisionResponseJsonSchema("optimization");
 
     expect(grammarSchema.properties.edits.items.properties.category.enum).toContain("subject_verb_agreement");
+    expect(grammarSchema.properties.edits.maxItems).toBe(200);
     expect(grammarSchema.properties.edits.items.properties.category.enum).toContain("word_order");
     expect(grammarSchema.properties.edits.items.properties.category.enum).not.toContain("clarity");
+    expect(grammarSchema.properties.edits.items.properties.original.description).toContain("smallest exact source span");
+    expect(grammarSchema.properties.edits.items.properties.original.description).toContain("never combine multiple errors");
     expect(optimizationSchema.properties.edits.items.properties.category.enum).toContain("clarity");
+    expect(optimizationSchema.properties.edits.maxItems).toBe(24);
     expect(optimizationSchema.properties.edits.items.properties.category.enum).not.toContain("subject_verb_agreement");
   });
 
@@ -167,6 +171,60 @@ describe("IELTS JSON contracts", () => {
       ]
     });
     expect(() => parseRevisionJsonResponse(overlapping, input, "deepseek", rules, "optimization")).toThrow("overlap");
+  });
+
+  it("shrinks a broad grammar correction to the smallest changed word", () => {
+    const grammarInput = {
+      ...input,
+      essay: "Some people thinks unpaid community service should be compulsory in high school."
+    };
+    const response = JSON.stringify({
+      schemaVersion: "revision.v1",
+      edits: [{
+        original: grammarInput.essay,
+        occurrence: 1,
+        replacement: "Some people think unpaid community service should be compulsory in high school.",
+        category: "subject_verb_agreement",
+        reason: "The plural subject requires the base verb form.",
+        ruleIds: ["grammar_subject_verb@v2"]
+      }]
+    });
+
+    const parsed = parseRevisionJsonResponse(response, grammarInput, "deepseek", rules, "grammar");
+
+    expect(parsed.annotatedEssay).toBe(
+      "Some people [del#1]thinks[/del#1][add#1]think[/add#1] unpaid community service should be compulsory in high school."
+    );
+    expect(parsed.correctionNotes[0].original).toBe("thinks");
+    expect(parsed.correctionNotes[0].corrected).toBe("think");
+  });
+
+  it("splits separate grammar errors that the model combines in one sentence", () => {
+    const grammarInput = {
+      ...input,
+      essay: "Some people thinks community service matters and it help students."
+    };
+    const response = JSON.stringify({
+      schemaVersion: "revision.v1",
+      edits: [{
+        original: grammarInput.essay,
+        occurrence: 1,
+        replacement: "Some people think community service matters and it helps students.",
+        category: "subject_verb_agreement",
+        reason: "Both verbs must agree with their subjects.",
+        ruleIds: ["grammar_subject_verb@v2"]
+      }]
+    });
+
+    const parsed = parseRevisionJsonResponse(response, grammarInput, "deepseek", rules, "grammar");
+
+    expect(parsed.annotatedEssay).toBe(
+      "Some people [del#1]thinks[/del#1][add#1]think[/add#1] community service matters and it [del#2]help[/del#2][add#2]helps[/add#2] students."
+    );
+    expect(parsed.correctionNotes.map((note) => [note.original, note.corrected])).toEqual([
+      ["thinks", "think"],
+      ["help", "helps"]
+    ]);
   });
 
   it("preserves exact whitespace anchors and accepts deletion edits", () => {

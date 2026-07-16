@@ -1,5 +1,10 @@
 import { CheckInput, countWords, getLocale, getTargetBand } from "./shared";
-import { GRAMMAR_REVISION_CATEGORIES, OPTIMIZATION_REVISION_CATEGORIES } from "./revision-categories";
+import {
+  GRAMMAR_REVISION_CATEGORIES,
+  GRAMMAR_REVISION_MAX_EDITS,
+  OPTIMIZATION_REVISION_CATEGORIES,
+  OPTIMIZATION_REVISION_MAX_EDITS
+} from "./revision-categories";
 import { buildApplicableTeachingRulesContext } from "@/lib/teaching-rules";
 import { classifyTask2Prompt, type EvaluationTaskContext } from "./task-context";
 
@@ -116,7 +121,8 @@ Target band:
 
 Constraints:
 - Return only atomic, non-overlapping edits. The server will generate the annotated essay and edit IDs.
-- Return at most 24 edits. Merge nearby changes when more would be needed.
+- {{revisionStageAtomicityRule}}
+- Return at most {{revisionMaxEdits}} edits. If more issues exist, prioritize the most important atomic issues; never merge unrelated errors merely to stay under the limit.
 - original must be copied character-for-character only from the current Essay inside Input data.
 - Never copy original from Previous-review context, the task Prompt, a prior model reply, or a corrected draft that is not the current Essay.
 - occurrence is one-based: use 1 for the first exact occurrence of original, 2 for the second, and so on.
@@ -137,7 +143,6 @@ Constraints:
 - Do not write vague reasons such as "grammar mistake", "better wording", "more natural", "improves clarity", or "fixed error" unless you also explain the exact error and the exact improvement.
 - The active-stage category contract above overrides any category wording found in source material.
 - If no supported edit is needed, return an empty edits array.
-- If many tiny edits would overlap, merge nearby edits into fewer larger non-overlapping revisions.
 - {{revisionStageConstraints}}
 - {{revisionStageExpansionRule}}
 - Consider the minimum word expectation of {{minimumWords}}.
@@ -268,7 +273,8 @@ const ZH_CN_PROMPTS = {
 
 约束：
 - 只返回原子化且互不重叠的修改；服务端负责生成批注文本和修改 ID。
-- 最多返回 24 项修改；数量可能超出时合并相邻修改。
+- {{revisionStageAtomicityRule}}
+- 最多返回 {{revisionMaxEdits}} 项修改；问题更多时优先保留最重要的原子问题，不得为了控制数量而合并互不相关的错误。
 - original 只能从 Input data 中当前 Essay 逐字复制，必须保持英文原文。
 - 禁止从上一次批改信息、题目 Prompt、先前模型回复或其他草稿复制 original。
 - occurrence 从 1 开始：第一次出现填 1，第二次出现填 2，以此类推。
@@ -289,7 +295,6 @@ const ZH_CN_PROMPTS = {
 - 禁止只写“语法错误”“表达更好”“更自然”“提升清晰度”等笼统原因，必须指出具体问题和具体改进。
 - 当前阶段分类契约优先于原始材料中的任何分类措辞。
 - 没有支持充分的修改时返回空 edits 数组。
-- 多个细小修改会重叠时，合并为更少且互不重叠的修改。
 - {{revisionStageConstraints}}
 - {{revisionStageExpansionRule}}
 - 参考最低字数要求：{{minimumWords}}。
@@ -482,6 +487,16 @@ export async function buildRevisionPrompt(
     : locale === "zh-CN"
       ? "不得为了新颖、个人偏好或不必要的复杂度而改写；保留优秀原文同样是成功结果。"
       : "Do not rewrite for novelty, personal preference, or unnecessary sophistication; preserving good writing is a successful result.";
+  const revisionStageAtomicityRule = stage === "grammar"
+    ? locale === "zh-CN"
+      ? "每条 edit 只能对应一个语法问题，并且 original 必须是能够表达该错误的最小连续片段。能用一个单词定位时绝不覆盖短语、分句或整句。例如 Some people thinks ... 只能返回 original=\"thinks\"、replacement=\"think\"。同一句中即使有多个错误，也必须拆成多条互不重叠的 edit；不得把相邻错误合并。错误示例：用一条 edit 把 Some people thinks ... and it help students 整句改写。正确示例：分别返回 {original:\"thinks\", replacement:\"think\"} 和 {original:\"help\", replacement:\"helps\"} 两条 edit。输出前逐项确认：每条 original 是否还能缩小、每条 replacement 是否只修正一个错误。"
+      : "Each edit must represent exactly one grammar issue, and original must be the smallest contiguous span that captures it. If one word is sufficient, never include the surrounding phrase, clause, or sentence. For example, Some people thinks ... must use original=\"thinks\" and replacement=\"think\". Multiple errors in the same sentence must be separate non-overlapping edits, even when they are adjacent; never combine them. Bad: one edit rewrites Some people thinks ... and it help students. Good: return separate edits {original:\"thinks\", replacement:\"think\"} and {original:\"help\", replacement:\"helps\"}. Before responding, verify that every original cannot be narrowed further and every replacement fixes only one issue."
+    : locale === "zh-CN"
+      ? "每条 edit 只表达一个连贯的优化目标；不要把互不相关的优化合并。"
+      : "Each edit should express one coherent optimization goal; do not combine unrelated improvements.";
+  const revisionMaxEdits = stage === "grammar"
+    ? GRAMMAR_REVISION_MAX_EDITS
+    : OPTIMIZATION_REVISION_MAX_EDITS;
 
   return {
     prompt: applyTemplate(revisionTemplate, {
@@ -492,6 +507,8 @@ export async function buildRevisionPrompt(
       revisionStage,
       revisionStageConstraints,
       revisionStageExpansionRule,
+      revisionStageAtomicityRule,
+      revisionMaxEdits,
       activeCategoryList: (stage === "grammar"
         ? GRAMMAR_REVISION_CATEGORIES
         : OPTIMIZATION_REVISION_CATEGORIES

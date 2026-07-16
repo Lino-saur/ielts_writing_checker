@@ -1,5 +1,8 @@
 import type { Locale } from "../types";
 
+export const GRAMMAR_REVISION_MAX_EDITS = 200;
+export const OPTIMIZATION_REVISION_MAX_EDITS = 24;
+
 export const GRAMMAR_REVISION_CATEGORIES = [
   "subject_verb_agreement",
   "tense",

@@ -13,6 +13,7 @@ describe("IELTS localized prompts", () => {
     expect(bundle.score).toContain("所有面向用户的 rationale、detail、reason、title、strengths 必须使用简体中文");
     expect(bundle.revision).toContain("edits[*].reason 必须包含完整、具体的简体中文说明");
     expect(bundle.revision).toContain("original 与 replacement 必须保持英文");
+    expect(bundle.revision).toContain("{{revisionStageAtomicityRule}}");
   });
 
   it("keeps English as the default prompt locale", async () => {

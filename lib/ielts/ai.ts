@@ -46,11 +46,15 @@ const VISUAL_FACTS_CACHE_TTL_MS = 10 * 60 * 1000;
 const VISUAL_FACTS_CACHE_MAX_ENTRIES = 64;
 const visualFactsCache = new Map<string, { expiresAt: number; promise: Promise<Task1Analysis> }>();
 
-function getAiRequestTimeoutMs(kind: "text" | "vision") {
-  const variableName = kind === "vision" ? "AI_VISION_REQUEST_TIMEOUT_MS" : "AI_REQUEST_TIMEOUT_MS";
+function getAiRequestTimeoutMs(kind: "text" | "long-text" | "vision") {
+  const variableName = kind === "vision"
+    ? "AI_VISION_REQUEST_TIMEOUT_MS"
+    : kind === "long-text"
+      ? "AI_GRAMMAR_REQUEST_TIMEOUT_MS"
+      : "AI_REQUEST_TIMEOUT_MS";
   const configured = Number(process.env[variableName]);
-  const defaultTimeout = kind === "vision" ? 120_000 : 45_000;
-  const maxTimeout = kind === "vision" ? 180_000 : 60_000;
+  const defaultTimeout = kind === "text" ? 45_000 : 120_000;
+  const maxTimeout = kind === "text" ? 60_000 : 180_000;
   return Number.isFinite(configured) ? Math.min(Math.max(configured, 5_000), maxTimeout) : defaultTimeout;
 }
 
@@ -180,6 +184,8 @@ async function runJsonCompletion<T>(
     prompt: string;
     parse: (text: string, providerName: ProviderConfig["name"]) => T;
     jsonSchema: Record<string, unknown>;
+    maxTokens?: number;
+    timeoutProfile?: "text" | "long-text";
   }
 ): Promise<T> {
   if (!config.apiKey) {
@@ -187,6 +193,8 @@ async function runJsonCompletion<T>(
   }
 
   const wordCount = countWords(input.essay);
+  const maxTokens = options.maxTokens ?? 3200;
+  const requestTimeoutMs = getAiRequestTimeoutMs(options.timeoutProfile ?? "text");
   const languageContract = input.locale === "zh-CN"
     ? options.kind === "revision"
       ? "输出语言是不可违反的契约：所有 edits[*].reason 必须使用简体中文，并包含实质性的中文解释。original 与 replacement 必须保持自然英文。禁止返回全英文 reason。"
@@ -213,7 +221,9 @@ async function runJsonCompletion<T>(
     wordCount,
     stage: options.requestLabel ?? options.kind,
     promptLength: options.prompt.length,
-    essayLength: input.essay.length
+    essayLength: input.essay.length,
+    maxTokens,
+    requestTimeoutMs
   });
 
   async function requestCompletion(messages: ChatMessage[], phase: "first" | "retry" | "repair") {
@@ -223,7 +233,7 @@ async function runJsonCompletion<T>(
     try {
       response = await fetch(config.endpoint, {
         method: "POST",
-        signal: AbortSignal.timeout(getAiRequestTimeoutMs("text")),
+        signal: AbortSignal.timeout(requestTimeoutMs),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.apiKey}`
@@ -233,7 +243,7 @@ async function runJsonCompletion<T>(
           messages,
           ...config.extraBody,
           temperature: 0,
-          max_tokens: 3200
+          max_tokens: maxTokens
         })
       });
     } catch (error) {
@@ -242,6 +252,8 @@ async function runJsonCompletion<T>(
         model: config.model,
         endpoint: config.endpoint,
         phase,
+        durationMs: Date.now() - requestStartedAt,
+        requestTimeoutMs,
         ...serializeError(error)
       });
       throw error;
@@ -930,7 +942,9 @@ export async function buildAiRevisionFeedback(
       systemPrompt,
       prompt,
       parse: (text, providerName) => parseRevisionJsonResponse(text, revisionInput, providerName, rules, stage),
-      jsonSchema: getRevisionResponseJsonSchema(stage)
+      jsonSchema: getRevisionResponseJsonSchema(stage),
+      maxTokens: requestLabel === "grammar" ? 8000 : 3200,
+      timeoutProfile: requestLabel === "grammar" ? "long-text" : "text"
     });
   }
 

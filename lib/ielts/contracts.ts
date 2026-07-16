@@ -1,7 +1,9 @@
 import type { CorrectionNote, TaskCheck, TeachingRuleReference, WritingRevisionResult, WritingScoreResult } from "@/lib/types";
 import { parseTeachingRuleReferences } from "@/lib/teaching-rules";
 import {
+  GRAMMAR_REVISION_MAX_EDITS,
   GRAMMAR_REVISION_CATEGORIES,
+  OPTIMIZATION_REVISION_MAX_EDITS,
   OPTIMIZATION_REVISION_CATEGORIES,
   getRevisionCategoryLabel
 } from "./revision-categories";
@@ -100,6 +102,7 @@ export const SCORE_RESPONSE_JSON_SCHEMA = {
 
 export function getRevisionResponseJsonSchema(stage: "grammar" | "optimization") {
   const categories = stage === "grammar" ? GRAMMAR_REVISION_CATEGORIES : OPTIMIZATION_REVISION_CATEGORIES;
+  const maxEdits = stage === "grammar" ? GRAMMAR_REVISION_MAX_EDITS : OPTIMIZATION_REVISION_MAX_EDITS;
 
   return {
     type: "object",
@@ -109,15 +112,25 @@ export function getRevisionResponseJsonSchema(stage: "grammar" | "optimization")
       schemaVersion: { type: "string", enum: [REVISION_SCHEMA_VERSION] },
       edits: {
         type: "array",
-        maxItems: 24,
+        maxItems: maxEdits,
         items: {
           type: "object",
           additionalProperties: false,
           required: ["original", "occurrence", "replacement", "category", "reason", "ruleIds"],
           properties: {
-            original: { type: "string" },
+            original: {
+              type: "string",
+              description: stage === "grammar"
+                ? "The smallest exact source span containing one grammar error; use a single word whenever sufficient and never combine multiple errors."
+                : "The smallest coherent source span needed for one optional enhancement."
+            },
             occurrence: { type: "integer", minimum: 1 },
-            replacement: { type: "string" },
+            replacement: {
+              type: "string",
+              description: stage === "grammar"
+                ? "The correction for this one atomic grammar error only."
+                : "The replacement for this one coherent enhancement only."
+            },
             category: { type: "string", enum: [...categories] },
             reason: { type: "string" },
             ruleIds: ruleIdsSchema
@@ -404,6 +417,91 @@ function findEditAnchor(text: string, needle: string, occurrence: number) {
   return { start, end, original: text.slice(start, end) };
 }
 
+type RevisionToken = { value: string; start: number; end: number };
+
+function tokenizeRevisionSpan(text: string): RevisionToken[] {
+  return [...text.matchAll(/[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*|[^\sA-Za-z0-9]/g)].map(
+    (match) => ({
+      value: match[0],
+      start: match.index,
+      end: match.index + match[0].length
+    })
+  );
+}
+
+function splitAtomicGrammarEdit(original: string, replacement: string) {
+  const fallback = [{ originalOffset: 0, original, replacement }];
+  const originalTokens = tokenizeRevisionSpan(original);
+  const replacementTokens = tokenizeRevisionSpan(replacement);
+  if (!originalTokens.length || !replacementTokens.length) {
+    return fallback;
+  }
+
+  const lcs = Array.from({ length: originalTokens.length + 1 }, () =>
+    Array<number>(replacementTokens.length + 1).fill(0)
+  );
+  for (let left = originalTokens.length - 1; left >= 0; left -= 1) {
+    for (let right = replacementTokens.length - 1; right >= 0; right -= 1) {
+      lcs[left][right] = originalTokens[left].value === replacementTokens[right].value
+        ? lcs[left + 1][right + 1] + 1
+        : Math.max(lcs[left + 1][right], lcs[left][right + 1]);
+    }
+  }
+
+  const hunks: Array<{ startLeft: number; endLeft: number; startRight: number; endRight: number }> = [];
+  let left = 0;
+  let right = 0;
+  let hunk: (typeof hunks)[number] | null = null;
+  while (left < originalTokens.length || right < replacementTokens.length) {
+    const isEqual =
+      left < originalTokens.length &&
+      right < replacementTokens.length &&
+      originalTokens[left].value === replacementTokens[right].value;
+    if (isEqual) {
+      if (hunk) {
+        hunks.push(hunk);
+        hunk = null;
+      }
+      left += 1;
+      right += 1;
+      continue;
+    }
+
+    hunk ??= { startLeft: left, endLeft: left, startRight: right, endRight: right };
+    if (
+      right >= replacementTokens.length ||
+      (left < originalTokens.length && lcs[left + 1][right] >= lcs[left][right + 1])
+    ) {
+      left += 1;
+      hunk.endLeft = left;
+    } else {
+      right += 1;
+      hunk.endRight = right;
+    }
+  }
+  if (hunk) hunks.push(hunk);
+  if (!hunks.length) {
+    return fallback;
+  }
+
+  const atomicEdits = hunks.flatMap((item) => {
+    if (item.startLeft === item.endLeft || item.startRight === item.endRight) {
+      return [];
+    }
+
+    const originalStart = originalTokens[item.startLeft].start;
+    const originalEnd = originalTokens[item.endLeft - 1].end;
+    const replacementStart = replacementTokens[item.startRight].start;
+    const replacementEnd = replacementTokens[item.endRight - 1].end;
+    return [{
+      originalOffset: originalStart,
+      original: original.slice(originalStart, originalEnd),
+      replacement: replacement.slice(replacementStart, replacementEnd)
+    }];
+  });
+
+  return atomicEdits.length === hunks.length ? atomicEdits : fallback;
+}
 export function parseRevisionJsonResponse(
   text: string,
   input: CheckInput,
@@ -412,14 +510,15 @@ export function parseRevisionJsonResponse(
   stage: "grammar" | "optimization"
 ): WritingRevisionResult {
   const root = parseJsonObject(text);
+  const maxEdits = stage === "grammar" ? GRAMMAR_REVISION_MAX_EDITS : OPTIMIZATION_REVISION_MAX_EDITS;
   requireExactKeys(root, ["schemaVersion", "edits"], "response");
   if (root.schemaVersion !== REVISION_SCHEMA_VERSION) throw new Error(`schemaVersion must be ${REVISION_SCHEMA_VERSION}.`);
   if (!Array.isArray(root.edits)) throw new Error("edits must be an array.");
-  if (root.edits.length > 24) throw new Error("edits must contain at most 24 items.");
+  if (root.edits.length > maxEdits) throw new Error(`edits must contain at most ${maxEdits} items.`);
 
   const allowedCategories = new Set<string>(stage === "grammar" ? GRAMMAR_REVISION_CATEGORIES : OPTIMIZATION_REVISION_CATEGORIES);
   const oppositeCategories = new Set<string>(stage === "grammar" ? OPTIMIZATION_REVISION_CATEGORIES : GRAMMAR_REVISION_CATEGORIES);
-  const positionedEdits = root.edits.flatMap((value, index) => {
+  const expandedEdits = root.edits.flatMap((value, index) => {
     const item = requireRecord(value, `edits[${index}]`);
     requireExactKeys(item, ["original", "occurrence", "replacement", "category", "reason", "ruleIds"], `edits[${index}]`);
     const suppliedOriginal = requireSourceText(item.original, `edits[${index}].original`);
@@ -431,27 +530,40 @@ export function parseRevisionJsonResponse(
     const occurrence = item.occurrence as number;
     const anchor = findEditAnchor(input.essay, suppliedOriginal, occurrence);
     if (!anchor) throw new Error(`edits[${index}].original occurrence ${occurrence} was not found in the current essay.`);
-    const { start, end, original } = anchor;
     const suppliedCategory = requireString(item.category, `edits[${index}].category`);
     if (oppositeCategories.has(suppliedCategory) && !allowedCategories.has(suppliedCategory)) {
       throw new Error(`edits[${index}].category is not allowed for the ${stage} stage: ${suppliedCategory}.`);
     }
     const category = allowedCategories.has(suppliedCategory) ? suppliedCategory : "other";
-    return [{
-      start,
-      end,
-      original,
-      replacement,
+    const atomicEdits = stage === "grammar"
+      ? splitAtomicGrammarEdit(anchor.original, replacement)
+      : [{ originalOffset: 0, original: anchor.original, replacement }];
+    const ruleReferences = validateRuleIds(item.ruleIds, `edits[${index}].ruleIds`, allowedRules, 1);
+
+    return atomicEdits.map((atomic) => ({
+      start: anchor.start + atomic.originalOffset,
+      end: anchor.start + atomic.originalOffset + atomic.original.length,
+      original: atomic.original,
+      replacement: atomic.replacement,
       category,
       reason: requireLocalizedRevisionReason(item.reason, `edits[${index}].reason`, input, {
-        original,
-        replacement,
+        original: atomic.original,
+        replacement: atomic.replacement,
         category,
         stage
       }),
-      ruleReferences: validateRuleIds(item.ruleIds, `edits[${index}].ruleIds`, allowedRules, 1)
-    }];
+      ruleReferences
+    }));
   }).sort((left, right) => left.start - right.start || left.end - right.end);
+  const positionedEdits = expandedEdits.slice(0, maxEdits);
+  console.log("[IELTS_CHECK][REVISION_EDIT_COUNTS]", {
+    stage,
+    modelEditCount: root.edits.length,
+    expandedEditCount: expandedEdits.length,
+    retainedEditCount: positionedEdits.length,
+    truncatedEditCount: Math.max(0, expandedEdits.length - positionedEdits.length),
+    maxEdits
+  });
 
   for (let index = 1; index < positionedEdits.length; index += 1) {
     if (positionedEdits[index].start < positionedEdits[index - 1].end) {

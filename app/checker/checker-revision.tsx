@@ -1,10 +1,12 @@
 import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
 import type { CheckerMessages } from "@/lib/i18n/messages";
 import type { CorrectionNote, Locale, RevisionStage } from "@/lib/types";
-import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { TeachingRuleReferences } from "@/components/teaching-rule-references";
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export type RevisionDecision = "accepted" | "ignored";
+export type RevisionPresentation = "correction" | "enhancement";
 
 type EditTooltipPosition = {
   left: number;
@@ -17,18 +19,23 @@ type EditTooltipPosition = {
 function RevisionEditChip({
   edit,
   decision,
+  presentation,
   isActive,
   onToggle,
+  onDecision,
   t
 }: {
   edit: ReturnType<typeof parseAnnotatedEssay>["edits"][number];
   decision?: RevisionDecision;
+  presentation: RevisionPresentation;
   isActive: boolean;
   onToggle: () => void;
+  onDecision: (decision: RevisionDecision) => void;
   t: CheckerMessages;
 }) {
+  const isEnhancement = presentation === "enhancement";
   const anchorRef = useRef<HTMLSpanElement>(null);
-  const tooltipRef = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<EditTooltipPosition | null>(null);
 
   const updateTooltipPosition = useCallback(() => {
@@ -64,7 +71,7 @@ function RevisionEditChip({
   }, []);
 
   useLayoutEffect(() => {
-    if (!isActive || !edit.note) {
+    if (!isActive) {
       setPosition(null);
       return;
     }
@@ -77,7 +84,7 @@ function RevisionEditChip({
       window.removeEventListener("resize", updateTooltipPosition);
       window.removeEventListener("scroll", updateTooltipPosition, true);
     };
-  }, [edit.note, isActive, updateTooltipPosition]);
+  }, [isActive, updateTooltipPosition]);
 
   const tooltipStyle = position
     ? ({
@@ -91,9 +98,13 @@ function RevisionEditChip({
   return (
     <span
       ref={anchorRef}
-      className={`editChip${isActive ? " active" : ""}${decision ? ` is-${decision}` : ""}`}
+      className={`editChip${isEnhancement ? " is-enhancement" : ""}${isActive ? " active" : ""}${decision ? ` is-${decision}` : ""}`}
+      data-revise-edit-index={edit.index}
+      data-revise-presentation={presentation}
       role="button"
       tabIndex={0}
+      aria-expanded={isActive}
+      aria-haspopup="dialog"
       onClick={onToggle}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -103,27 +114,71 @@ function RevisionEditChip({
       }}
     >
       {decision === "accepted" ? (
-        <ins className="essayAdd essayAccepted">{edit.corrected}</ins>
+        <ins className={`essayAdd essayAccepted${isEnhancement ? " essayEnhancementAccepted" : ""}`}>
+          {edit.corrected}
+        </ins>
       ) : decision === "ignored" ? (
-        <span className="essayIgnored">{edit.original}</span>
+        <span className={isEnhancement ? "essayEnhancementIgnored" : "essayIgnored"}>{edit.original}</span>
+      ) : isEnhancement ? (
+        <span className="essayEnhancement">
+          {edit.original}
+          <span className="essayEnhancementIcon" aria-hidden="true">✦</span>
+        </span>
       ) : (
         <>
           <del className="essayDel">{edit.original}</del>
           <ins className="essayAdd">{edit.corrected}</ins>
         </>
       )}
-      {isActive && edit.note && typeof document !== "undefined"
+      {isActive && typeof document !== "undefined"
         ? createPortal(
-            <span
+            <div
               ref={tooltipRef}
               className="editTooltip editTooltipPortal visible"
               data-placement={position?.placement ?? "below"}
               style={tooltipStyle}
-              role="tooltip"
+              role="dialog"
+              aria-label={isEnhancement ? t.revisionOptimizationOptional : t.correctionReason}
               onClick={(event) => event.stopPropagation()}
             >
-              <strong>{t.correctionReason}:</strong> {edit.note.reason}
-            </span>,
+              {isEnhancement ? (
+                <>
+                  <div className="editTooltipEnhancementHeader">
+                    <span aria-hidden="true">✦</span>
+                    {t.revisionOptimizationOptional}
+                  </div>
+                  <div className="editTooltipEnhancementPair">
+                    <span>{edit.original}</span>
+                    <i className="ai-arrow-right" aria-hidden="true" />
+                    <strong>{edit.corrected}</strong>
+                  </div>
+                </>
+              ) : null}
+              {edit.note?.reason ? (
+                <div className="editTooltipReason">
+                  <strong>{t.correctionReason}:</strong> {edit.note.reason}
+                </div>
+              ) : null}
+              <TeachingRuleReferences references={edit.note?.ruleReferences} label={t.ruleBasis} />
+              <div className="reviseDecisionActions editTooltipActions">
+                <button
+                  type="button"
+                  className={`reviseDecisionButton is-ignore${decision === "ignored" ? " is-active" : ""}`}
+                  aria-pressed={decision === "ignored"}
+                  onClick={() => onDecision("ignored")}
+                >
+                  {isEnhancement ? t.revisionKeepOriginal : t.revisionIgnore}
+                </button>
+                <button
+                  type="button"
+                  className={`reviseDecisionButton is-accept${decision === "accepted" ? " is-active" : ""}`}
+                  aria-pressed={decision === "accepted"}
+                  onClick={() => onDecision("accepted")}
+                >
+                  {isEnhancement ? t.revisionApplyOptimization : t.revisionAccept}
+                </button>
+              </div>
+            </div>,
             document.body
           )
         : null}
@@ -134,21 +189,72 @@ function RevisionEditChip({
 export function ScoreCard({
   label,
   score,
-  rationale
+  rationale,
+  defaultExpanded = false,
+  showDetailsLabel,
+  hideDetailsLabel
 }: {
   label: string;
   score: number;
   rationale: string;
+  defaultExpanded?: boolean;
+  showDetailsLabel: string;
+  hideDetailsLabel: string;
 }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
   return (
     <article className="scoreCard">
-      <div className="scoreHeader">
+      <button
+        type="button"
+        className="scoreCardToggle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+      >
         <div>
           <p className="sectionLabel">{label}</p>
           <h3>{score.toFixed(1)}</h3>
         </div>
-      </div>
-      <p>{rationale}</p>
+        <span className="scoreCardToggleMeta">
+          {expanded ? hideDetailsLabel : showDetailsLabel}
+          <i className={`ai-chevron-${expanded ? "up" : "down"}`} aria-hidden="true" />
+        </span>
+      </button>
+      {expanded ? <p className="scoreCardRationale">{rationale}</p> : null}
+    </article>
+  );
+}
+
+export function FeedbackDisclosure({
+  label,
+  count,
+  itemsLabel,
+  defaultExpanded = false,
+  children
+}: {
+  label: string;
+  count: number;
+  itemsLabel: string;
+  defaultExpanded?: boolean;
+  children: ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <article className="feedbackSection feedbackDisclosure">
+      <button
+        type="button"
+        className="feedbackDisclosureToggle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <span className="sectionLabel">{label}</span>
+        <span className="feedbackDisclosureMeta">
+          {count} {itemsLabel}
+          <i className={`ai-chevron-${expanded ? "up" : "down"}`} aria-hidden="true" />
+        </span>
+      </button>
+      {expanded ? <div className="feedbackDisclosureBody">{children}</div> : null}
     </article>
   );
 }
@@ -313,8 +419,11 @@ export function renderAnnotatedEssay(
   highlightedSentences: string[],
   correctionNotes: CorrectionNote[],
   decisions: Record<string, RevisionDecision>,
+  visibleEditIds: ReadonlySet<string>,
+  presentation: RevisionPresentation,
   activeEditIndex: number | null,
   onToggleEdit: (index: number) => void,
+  onDecision: (editId: string, decision: RevisionDecision) => void,
   t: CheckerMessages
 ) {
   const { parts } = parseAnnotatedEssay(text, correctionNotes);
@@ -379,13 +488,23 @@ export function renderAnnotatedEssay(
       const isActive = activeEditIndex === part.index;
       const decision = decisions[part.id];
 
+      if (!visibleEditIds.has(part.id)) {
+        return (
+          <span key={`filtered-edit-${part.index}-${index}`}>
+            {decision === "accepted" ? part.corrected : part.original}
+          </span>
+        );
+      }
+
       return (
         <RevisionEditChip
           key={`edit-${part.index}-${index}`}
           edit={part}
           decision={decision}
+          presentation={presentation}
           isActive={isActive}
           onToggle={() => onToggleEdit(part.index)}
+          onDecision={(nextDecision) => onDecision(part.id, nextDecision)}
           t={t}
         />
       );

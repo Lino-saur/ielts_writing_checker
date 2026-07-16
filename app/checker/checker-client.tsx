@@ -11,6 +11,7 @@ import { TeachingRuleReferences } from "@/components/teaching-rule-references";
 import type { AiProvider, FeedbackPayload, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
 import {
   groupRevisionEditsByCategory,
+  FeedbackDisclosure,
   materializeRevisionEssay,
   materializeVerifiedOptimizationEssay,
   parseAnnotatedEssay,
@@ -47,7 +48,6 @@ type EnergyState = {
 
 type ErrorSource = "auth" | "general";
 type ReportView = "overview" | "revise";
-type ReviseLayout = "split" | "stack";
 type RevisionStageKey = "grammar" | "optimization";
 type RevisionDecisions = Record<RevisionStageKey, Record<string, RevisionDecision>>;
 type FeedbackChoice = "helpful" | "notHelpful";
@@ -229,14 +229,12 @@ function CheckerPageContent() {
   const [draftReady, setDraftReady] = useState(false);
   const [draftDirty, setDraftDirty] = useState(false);
   const [reportView, setReportView] = useState<ReportView>("overview");
-  const [reviseLayout, setReviseLayout] = useState<ReviseLayout>("split");
   const [feedbackChoice, setFeedbackChoice] = useState<FeedbackChoice | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [exportingRevision, setExportingRevision] = useState(false);
-  const [expandedRevisionCategories, setExpandedRevisionCategories] = useState<Record<string, boolean>>({});
   const [revisionCategoryFilter, setRevisionCategoryFilter] = useState("all");
   const [revisionDecisions, setRevisionDecisions] = useState<RevisionDecisions>({
     grammar: {},
@@ -258,6 +256,14 @@ function CheckerPageContent() {
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
   const minimumWordCount = taskType === "task1" ? 150 : 250;
   const remainingWordCount = Math.max(0, minimumWordCount - wordCount);
+  const weakestCriterionKey = result
+    ? [
+        { key: "taskAchievement", score: result.bandBreakdown.taskAchievement.score },
+        { key: "coherence", score: result.bandBreakdown.coherenceAndCohesion.score },
+        { key: "lexical", score: result.bandBreakdown.lexicalResource.score },
+        { key: "grammar", score: result.bandBreakdown.grammaticalRangeAndAccuracy.score }
+      ].reduce((weakest, criterion) => criterion.score < weakest.score ? criterion : weakest).key
+    : null;
   const wordCountProgress = Math.min(100, Math.round((wordCount / minimumWordCount) * 100));
   const wordCountTone = remainingWordCount > 0 ? "low" : "ready";
   const promptEditLabel = promptEditing ? t.doneEditing : t.editPrompt;
@@ -298,6 +304,10 @@ function CheckerPageContent() {
   const filteredRevisionEdits = useMemo(
     () => filteredRevisionGroups.flatMap((group) => group.edits).sort((left, right) => left.index - right.index),
     [filteredRevisionGroups]
+  );
+  const visibleRevisionEditIds = useMemo(
+    () => new Set(filteredRevisionEdits.map((edit) => edit.id)),
+    [filteredRevisionEdits]
   );
   const currentRevisionDecisions = revisionDecisions[activeRevisionStage];
   const revisionDecisionCount =
@@ -753,7 +763,11 @@ function CheckerPageContent() {
       }
 
       const target = event.target;
-      if (target instanceof Node && !reviseWorkspaceRef.current.contains(target)) {
+      if (
+        target instanceof Element &&
+        !reviseWorkspaceRef.current.contains(target) &&
+        !target.closest(".editTooltipPortal")
+      ) {
         setActiveEditIndex(null);
       }
     }
@@ -768,54 +782,18 @@ function CheckerPageContent() {
   }, [activeEditIndex]);
 
   useEffect(() => {
-    if (!groupedRevisionEdits.length) {
-      setExpandedRevisionCategories((current) => (Object.keys(current).length ? {} : current));
+    if (activeEditIndex === null) {
       return;
     }
-
-    setExpandedRevisionCategories((current) => {
-      const next: Record<string, boolean> = {};
-
-      groupedRevisionEdits.forEach((group, index) => {
-        next[group.key] = current[group.key] ?? index === 0;
-      });
-
-      const currentKeys = Object.keys(current);
-      const nextKeys = Object.keys(next);
-      if (
-        currentKeys.length === nextKeys.length &&
-        nextKeys.every((key) => current[key] === next[key])
-      ) {
-        return current;
-      }
-
-      return next;
-    });
-  }, [groupedRevisionEdits]);
-
-  useEffect(() => {
-    if (activeEditIndex === null || !parsedRevision) {
-      return;
-    }
-
-    const activeEdit = parsedRevision.edits.find((edit) => edit.index === activeEditIndex);
-    const activeCategory = activeEdit?.note?.category?.trim() || "other";
-
-    setExpandedRevisionCategories((current) =>
-      current[activeCategory]
-        ? current
-        : {
-            ...current,
-            [activeCategory]: true
-          }
-    );
 
     window.requestAnimationFrame(() => {
       document
-        .querySelector<HTMLElement>(`[data-revise-card-index="${activeEditIndex}"]`)
-        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        .querySelector<HTMLElement>(
+          `[data-revise-presentation="${activeRevisionStage === "optimization" ? "enhancement" : "correction"}"][data-revise-edit-index="${activeEditIndex}"]`
+        )
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
     });
-  }, [activeEditIndex, parsedRevision]);
+  }, [activeEditIndex, activeRevisionStage]);
 
   useEffect(() => {
     if (
@@ -853,7 +831,6 @@ function CheckerPageContent() {
     }
 
     setReportView("overview");
-    setReviseLayout("split");
     setActiveEditIndex(null);
     setActiveRevisionStage("grammar");
     setRevisionCategoryFilter("all");
@@ -1247,6 +1224,16 @@ function CheckerPageContent() {
       }
     }));
     setRevisionCopyState("idle");
+
+    const currentPosition = filteredRevisionEdits.findIndex((edit) => edit.id === editId);
+    const remainingEdits = currentPosition >= 0
+      ? [
+          ...filteredRevisionEdits.slice(currentPosition + 1),
+          ...filteredRevisionEdits.slice(0, currentPosition)
+        ]
+      : filteredRevisionEdits;
+    const nextEdit = remainingEdits.find((edit) => currentRevisionDecisions[edit.id] == null);
+    setActiveEditIndex(nextEdit?.index ?? null);
   }
 
   function navigateRevision(direction: "previous" | "next") {
@@ -1320,6 +1307,15 @@ function CheckerPageContent() {
       const editor = document.querySelector<HTMLTextAreaElement>(".checkerEssayInput");
       editor?.scrollIntoView({ behavior: "smooth", block: "center" });
       editor?.focus();
+    });
+  }
+
+  function openRevisionFromFeedback() {
+    setReportView("revise");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        reviseWorkspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     });
   }
 
@@ -1923,7 +1919,10 @@ function CheckerPageContent() {
               <div className="resultHero">
                 <div className="resultScore">
                   <p className="sectionLabel">{t.estimatedBand}</p>
-                  <h2>{result.estimatedBand.toFixed(1)}</h2>
+                  <div className="resultScoreValue">
+                    <h2>{result.estimatedBand.toFixed(1)}</h2>
+                    <span>/ 9</span>
+                  </div>
                 </div>
                 <div className="resultHeroActions">
                   <div className="resultMeta">
@@ -1933,7 +1932,6 @@ function CheckerPageContent() {
                     <Pill>
                       {result.wordCount} {t.wordsUnit}
                     </Pill>
-                    <Pill>{t.aiMode}</Pill>
                     {result.grammarQuality ? (
                       <Pill>
                         {result.grammarQuality.status === "verified"
@@ -1973,35 +1971,76 @@ function CheckerPageContent() {
                       label={t.taskAchievement}
                       score={result.bandBreakdown.taskAchievement.score}
                       rationale={result.bandBreakdown.taskAchievement.rationale}
+                      defaultExpanded={weakestCriterionKey === "taskAchievement"}
+                      showDetailsLabel={t.scoreDetailsShow}
+                      hideDetailsLabel={t.scoreDetailsHide}
                     />
                     <ScoreCard
                       label={t.coherence}
                       score={result.bandBreakdown.coherenceAndCohesion.score}
                       rationale={result.bandBreakdown.coherenceAndCohesion.rationale}
+                      defaultExpanded={weakestCriterionKey === "coherence"}
+                      showDetailsLabel={t.scoreDetailsShow}
+                      hideDetailsLabel={t.scoreDetailsHide}
                     />
                     <ScoreCard
                       label={t.lexical}
                       score={result.bandBreakdown.lexicalResource.score}
                       rationale={result.bandBreakdown.lexicalResource.rationale}
+                      defaultExpanded={weakestCriterionKey === "lexical"}
+                      showDetailsLabel={t.scoreDetailsShow}
+                      hideDetailsLabel={t.scoreDetailsHide}
                     />
                     <ScoreCard
                       label={t.grammar}
                       score={result.bandBreakdown.grammaticalRangeAndAccuracy.score}
                       rationale={result.bandBreakdown.grammaticalRangeAndAccuracy.rationale}
+                      defaultExpanded={weakestCriterionKey === "grammar"}
+                      showDetailsLabel={t.scoreDetailsShow}
+                      hideDetailsLabel={t.scoreDetailsHide}
                     />
                   </div>
 
-                  <article className="feedbackSection">
-                    <p className="sectionLabel">{t.strengths}</p>
+                  <FeedbackDisclosure
+                    label={t.priorityFixes}
+                    count={result.priorityFixes.length}
+                    itemsLabel={t.feedbackItemsUnit}
+                    defaultExpanded
+                  >
+                    <ul>
+                      {result.priorityFixes.map((item) => (
+                        <li key={item.title}>
+                          <strong>{item.title}:</strong> {item.detail}
+                          <TeachingRuleReferences
+                            references={item.ruleReferences}
+                            label={t.ruleBasis}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                    <button type="button" className="feedbackNextAction" onClick={openRevisionFromFeedback}>
+                      {t.startRevisionFromFeedback}
+                      <span aria-hidden="true">→</span>
+                    </button>
+                  </FeedbackDisclosure>
+
+                  <FeedbackDisclosure
+                    label={t.strengths}
+                    count={result.strengths.length}
+                    itemsLabel={t.feedbackItemsUnit}
+                  >
                     <ul>
                       {result.strengths.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
-                  </article>
+                  </FeedbackDisclosure>
 
-                  <article className="feedbackSection">
-                    <p className="sectionLabel">{t.highlightedSentences}</p>
+                  <FeedbackDisclosure
+                    label={t.highlightedSentences}
+                    count={result.highlightedSentences.length}
+                    itemsLabel={t.feedbackItemsUnit}
+                  >
                     <div className="correctionList">
                       {result.highlightedSentences.map((item, index) => (
                         <article key={`${item.sentence}-${index}`} className="correctionCard">
@@ -2018,28 +2057,10 @@ function CheckerPageContent() {
                         </article>
                       ))}
                     </div>
-                  </article>
-
-                  <article className="feedbackSection">
-                    <p className="sectionLabel">{t.priorityFixes}</p>
-                    <ul>
-                      {result.priorityFixes.map((item) => (
-                        <li key={item.title}>
-                          <strong>{item.title}:</strong> {item.detail}
-                          <TeachingRuleReferences
-                            references={item.ruleReferences}
-                            label={t.ruleBasis}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
+                  </FeedbackDisclosure>
                 </>
               ) : (
-                <section
-                  className={`reviseWorkspace${reviseLayout === "stack" ? " is-stacked" : ""}`}
-                  ref={reviseWorkspaceRef}
-                >
+                <section className="reviseWorkspace is-stacked" ref={reviseWorkspaceRef}>
                   <div className="reviseWorkbenchToolbar">
                     <div className="reviseProgressBlock">
                       <div className="reviseProgressHeader">
@@ -2102,30 +2123,8 @@ function CheckerPageContent() {
                         >
                           {exportingRevision ? t.exportingRevisionDoc : t.exportRevisionDoc}
                         </ActionButton>
-                        <div className="reviseLayoutSwitch" role="group" aria-label="Revise layout">
-                          <button
-                            type="button"
-                            className={`reviseLayoutButton${reviseLayout === "split" ? " is-active" : ""}`}
-                            onClick={() => setReviseLayout("split")}
-                          >
-                            <i className="ai-layout-column" aria-hidden="true" />
-                            <span>{t.layoutSplit}</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={`reviseLayoutButton${reviseLayout === "stack" ? " is-active" : ""}`}
-                            onClick={() => setReviseLayout("stack")}
-                          >
-                            <i className="ai-layout-row" aria-hidden="true" />
-                            <span>{t.layoutStack}</span>
-                          </button>
-                        </div>
                       </div>
                     </div>
-                    <p className="revisionHint">{t.reviseBody}</p>
-                    {activeRevisionStage === "optimization" ? (
-                      <p className="revisionHint">{t.revisionVerifiedOptimizationHint}</p>
-                    ) : null}
                     <div className="reviseLayoutSwitch revisionStageSwitch" role="group" aria-label="Revision stage">
                       <button
                         type="button"
@@ -2157,14 +2156,69 @@ function CheckerPageContent() {
                         <span className="revisionLegendHighlight" aria-hidden="true">★</span>
                         {t.revisionLegendHighlight}
                       </span>
-                      <span className="revisionLegendItem">
-                        <span className="revisionLegendOriginal" aria-hidden="true">Aa</span>
-                        {t.revisionLegendOriginal}
-                      </span>
-                      <span className="revisionLegendItem">
-                        <span className="revisionLegendSuggested" aria-hidden="true">Aa</span>
-                        {t.revisionLegendSuggested}
-                      </span>
+                      {activeRevisionStage === "grammar" ? (
+                        <>
+                          <span className="revisionLegendItem">
+                            <span className="revisionLegendOriginal" aria-hidden="true">Aa</span>
+                            {t.revisionLegendOriginal}
+                          </span>
+                          <span className="revisionLegendItem">
+                            <span className="revisionLegendSuggested" aria-hidden="true">Aa</span>
+                            {t.revisionLegendSuggested}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="revisionLegendItem">
+                          <span className="revisionLegendOptimization" aria-hidden="true">✦</span>
+                          {t.revisionLegendOptimization}
+                        </span>
+                      )}
+                    </div>
+                    <div className="reviseInlineControls">
+                      <div className="reviseCategoryFilter" role="group" aria-label={t.revisionCategoryFilter}>
+                        <button
+                          type="button"
+                          className={`reviseFilterButton${revisionCategoryFilter === "all" ? " is-active" : ""}`}
+                          aria-pressed={revisionCategoryFilter === "all"}
+                          onClick={() => setRevisionCategoryFilter("all")}
+                        >
+                          {t.revisionFilterAll}
+                        </button>
+                        {groupedRevisionEdits.map((group) => (
+                          <button
+                            key={`revision-filter-${group.key}`}
+                            type="button"
+                            className={`reviseFilterButton${revisionCategoryFilter === group.key ? " is-active" : ""}`}
+                            aria-pressed={revisionCategoryFilter === group.key}
+                            onClick={() => setRevisionCategoryFilter(group.key)}
+                          >
+                            {group.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="reviseNavigation">
+                        <button
+                          type="button"
+                          onClick={() => navigateRevision("previous")}
+                          disabled={activeFilteredEditPosition <= 0}
+                        >
+                          <span aria-hidden="true">←</span> {t.revisionPrevious}
+                        </button>
+                        <span>
+                          {activeFilteredEditPosition >= 0 ? activeFilteredEditPosition + 1 : 0} /{" "}
+                          {filteredRevisionEdits.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => navigateRevision("next")}
+                          disabled={
+                            !filteredRevisionEdits.length ||
+                            activeFilteredEditPosition === filteredRevisionEdits.length - 1
+                          }
+                        >
+                          {t.revisionNext} <span aria-hidden="true">→</span>
+                        </button>
+                      </div>
                     </div>
                     <div className="annotatedEssay reviseAnnotatedEssay">
                       {currentRevisionStage
@@ -2173,184 +2227,17 @@ function CheckerPageContent() {
                             result.highlightedSentences.map((item) => item.sentence),
                             currentRevisionStage.correctionNotes,
                             currentRevisionDecisions,
+                            visibleRevisionEditIds,
+                            activeRevisionStage === "optimization" ? "enhancement" : "correction",
                             activeEditIndex,
                             (index) => setActiveEditIndex((current) => (current === index ? null : index)),
+                            updateRevisionDecision,
                             t
                           )
                         : null}
                     </div>
                   </article>
 
-                  <aside className="feedbackSection reviseSidebar">
-                    <p className="sectionLabel">
-                      {activeRevisionStage === "grammar"
-                        ? t.revisionStageGrammar
-                        : t.revisionStageOptimization}
-                    </p>
-                    <div className="reviseCategoryFilter" role="group" aria-label={t.revisionCategoryFilter}>
-                      <button
-                        type="button"
-                        className={`reviseFilterButton${revisionCategoryFilter === "all" ? " is-active" : ""}`}
-                        aria-pressed={revisionCategoryFilter === "all"}
-                        onClick={() => setRevisionCategoryFilter("all")}
-                      >
-                        {t.revisionFilterAll}
-                      </button>
-                      {groupedRevisionEdits.map((group) => (
-                        <button
-                          key={`revision-filter-${group.key}`}
-                          type="button"
-                          className={`reviseFilterButton${revisionCategoryFilter === group.key ? " is-active" : ""}`}
-                          aria-pressed={revisionCategoryFilter === group.key}
-                          onClick={() => {
-                            setRevisionCategoryFilter(group.key);
-                            setExpandedRevisionCategories((current) => ({
-                              ...current,
-                              [group.key]: true
-                            }));
-                          }}
-                        >
-                          {group.label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="reviseNavigation">
-                      <button
-                        type="button"
-                        onClick={() => navigateRevision("previous")}
-                        disabled={activeFilteredEditPosition <= 0}
-                      >
-                        <span aria-hidden="true">←</span> {t.revisionPrevious}
-                      </button>
-                      <span>
-                        {activeFilteredEditPosition >= 0 ? activeFilteredEditPosition + 1 : 0} /{" "}
-                        {filteredRevisionEdits.length}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => navigateRevision("next")}
-                        disabled={
-                          !filteredRevisionEdits.length ||
-                          activeFilteredEditPosition === filteredRevisionEdits.length - 1
-                        }
-                      >
-                        {t.revisionNext} <span aria-hidden="true">→</span>
-                      </button>
-                    </div>
-                    {groupedRevisionEdits.length ? (
-                      <div className="reviseDetailList">
-                        {filteredRevisionGroups.map((group) => {
-                          const isOpen = expandedRevisionCategories[group.key] ?? false;
-                          const completedInGroup = group.edits.filter(
-                            (edit) => currentRevisionDecisions[edit.id] != null
-                          ).length;
-
-                          return (
-                            <section key={`revise-group-${group.key}`} className="reviseCategoryGroup">
-                              <button
-                                type="button"
-                                className={`reviseCategoryButton${isOpen ? " is-open" : ""}`}
-                                onClick={() =>
-                                  setExpandedRevisionCategories((current) => ({
-                                    ...current,
-                                    [group.key]: !isOpen
-                                  }))
-                                }
-                              >
-                                <span className="reviseCategoryTitle">{group.label}</span>
-                                <span className="reviseCategoryMeta">
-                                  {completedInGroup}/{group.edits.length}
-                                  <i className={`ai-chevron-${isOpen ? "up" : "down"}`} aria-hidden="true" />
-                                </span>
-                              </button>
-                              {isOpen ? (
-                                <div className="reviseCategoryItems">
-                                  {group.edits.map((edit) => {
-                                    const isActive = activeEditIndex === edit.index;
-                                    const decision = currentRevisionDecisions[edit.id];
-
-                                    return (
-                                      <article
-                                        key={`revise-detail-${edit.id}-${edit.index}`}
-                                        data-revise-card-index={edit.index}
-                                        className={`reviseDetailCard${isActive ? " is-active" : ""}${
-                                          decision ? ` is-${decision}` : ""
-                                        }`}
-                                      >
-                                        <button
-                                          type="button"
-                                          className="reviseDetailSelect"
-                                          onClick={() =>
-                                            setActiveEditIndex((current) =>
-                                              current === edit.index ? null : edit.index
-                                            )
-                                          }
-                                        >
-                                          <div className="reviseDetailHeader">
-                                            <span className="reviseDetailIndex">
-                                              {String(edit.index + 1).padStart(2, "0")}
-                                            </span>
-                                            {decision ? (
-                                              <span className={`reviseDecisionBadge is-${decision}`}>
-                                                {decision === "accepted"
-                                                  ? t.revisionAccepted
-                                                  : t.revisionIgnored}
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                          <div className="reviseDetailSummary">
-                                            <p className="reviseDetailOriginal">{edit.original}</p>
-                                            <i className="ai-arrow-right" aria-hidden="true" />
-                                            <p className="reviseDetailSuggested">{edit.corrected}</p>
-                                          </div>
-                                        </button>
-                                        {isActive ? (
-                                          <div className="reviseDetailBody">
-                                            <div className="reviseReason">
-                                              <span>{t.correctionReason}</span>
-                                              <p>{edit.note?.reason ?? ""}</p>
-                                              <TeachingRuleReferences
-                                                references={edit.note?.ruleReferences}
-                                                label={t.ruleBasis}
-                                              />
-                                            </div>
-                                            <div className="reviseDecisionActions">
-                                              <button
-                                                type="button"
-                                                className={`reviseDecisionButton is-ignore${
-                                                  decision === "ignored" ? " is-active" : ""
-                                                }`}
-                                                aria-pressed={decision === "ignored"}
-                                                onClick={() => updateRevisionDecision(edit.id, "ignored")}
-                                              >
-                                                {t.revisionIgnore}
-                                              </button>
-                                              <button
-                                                type="button"
-                                                className={`reviseDecisionButton is-accept${
-                                                  decision === "accepted" ? " is-active" : ""
-                                                }`}
-                                                aria-pressed={decision === "accepted"}
-                                                onClick={() => updateRevisionDecision(edit.id, "accepted")}
-                                              >
-                                                {t.revisionAccept}
-                                              </button>
-                                            </div>
-                                          </div>
-                                        ) : null}
-                                      </article>
-                                    );
-                                  })}
-                                </div>
-                              ) : null}
-                            </section>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="reviseEmpty">{t.reviseEmpty}</p>
-                    )}
-                  </aside>
                 </section>
               )}
 
