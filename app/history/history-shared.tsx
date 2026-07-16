@@ -174,7 +174,12 @@ function renderAnnotatedEssay(
       }
 
       subparts.push(
-        <mark key={`${keyPrefix}-highlight-${cursor}`} className="essayHighlight">
+        <mark
+          key={`${keyPrefix}-highlight-${cursor}`}
+          className="essayHighlight"
+          title={t.revisionLegendHighlight}
+        >
+          <span className="essayHighlightIcon" aria-hidden="true">★</span>
           {matchedSentence}
         </mark>
       );
@@ -482,6 +487,20 @@ export function ReviewDetailContent({
               >
                 <span>{t.revisionStageOptimization}</span>
               </button>
+            </div>
+            <div className="revisionLegend" aria-label={t.revisionLegendLabel}>
+              <span className="revisionLegendItem">
+                <span className="revisionLegendHighlight" aria-hidden="true">★</span>
+                {t.revisionLegendHighlight}
+              </span>
+              <span className="revisionLegendItem">
+                <span className="revisionLegendOriginal" aria-hidden="true">Aa</span>
+                {t.revisionLegendOriginal}
+              </span>
+              <span className="revisionLegendItem">
+                <span className="revisionLegendSuggested" aria-hidden="true">Aa</span>
+                {t.revisionLegendSuggested}
+              </span>
             </div>
             <div className="annotatedEssay reviseAnnotatedEssay" ref={activeEditRef}>
               {renderAnnotatedEssay(

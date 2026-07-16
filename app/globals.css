@@ -23,8 +23,8 @@
   --success-ink: #2ea875;
   --danger-soft: #fdeeee;
   --danger-ink: #e82222;
-  --highlight-soft: #fdfaee;
-  --highlight-ink: #e8bd22;
+  --highlight-soft: #eaf3ff;
+  --highlight-ink: #175cd3;
   --shadow-lg: 0 36px 80px rgba(15, 23, 42, 0.10);
   --shadow-md: 0 22px 48px rgba(15, 23, 42, 0.08);
   --shadow-sm: 0 12px 24px rgba(15, 23, 42, 0.06);
@@ -59,8 +59,8 @@ html[data-theme="dark"] {
   --success-ink: #34bc83;
   --danger-soft: #240c0c;
   --danger-ink: #eb3939;
-  --highlight-soft: #664d03;
-  --highlight-ink: rgba(255, 255, 255, 0.7);
+  --highlight-soft: rgba(21, 112, 239, 0.24);
+  --highlight-ink: #b2ccff;
 }
 
 * {
@@ -4619,8 +4619,8 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
 }
 
 .essayHighlight {
-  background: #eaf3ff;
-  color: #175cd3;
+  background: var(--highlight-soft);
+  color: var(--highlight-ink);
   padding: 1px 4px;
   border-radius: 4px;
   box-decoration-break: clone;
@@ -4664,8 +4664,8 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
 }
 
 .revisionLegendHighlight {
-  background: #eaf3ff;
-  color: #175cd3;
+  background: var(--highlight-soft);
+  color: var(--highlight-ink);
 }
 
 .revisionLegendOriginal {
@@ -4678,12 +4678,6 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
 .revisionLegendSuggested {
   background: var(--success-soft);
   color: var(--success-ink);
-}
-
-html[data-theme="dark"] .essayHighlight,
-html[data-theme="dark"] .revisionLegendHighlight {
-  background: rgba(21, 112, 239, 0.24);
-  color: #b2ccff;
 }
 
 html[data-theme="dark"] .essayHighlightIcon {
