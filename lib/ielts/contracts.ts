@@ -555,20 +555,43 @@ export function parseRevisionJsonResponse(
       ruleReferences
     }));
   }).sort((left, right) => left.start - right.start || left.end - right.end);
-  const positionedEdits = expandedEdits.slice(0, maxEdits);
+  // Models occasionally return both a broad rewrite and a smaller edit inside
+  // that rewrite. Prefer the smallest atomic edits that can coexist instead of
+  // rejecting the entire otherwise-valid response and spending another model
+  // request on repair. Sorting by end position is the standard interval
+  // scheduling strategy: it retains the largest possible non-overlapping set;
+  // the span-length tie-breaker favors the more focused edit.
+  const nonOverlappingEdits = [...expandedEdits]
+    .sort((left, right) =>
+      left.end - right.end ||
+      (left.end - left.start) - (right.end - right.start) ||
+      left.start - right.start
+    )
+    .reduce<typeof expandedEdits>((retained, candidate) => {
+      const previous = retained[retained.length - 1];
+      if (!previous || candidate.start >= previous.end) retained.push(candidate);
+      return retained;
+    }, [])
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  const positionedEdits = nonOverlappingEdits.slice(0, maxEdits);
+  const overlappingEditCount = expandedEdits.length - nonOverlappingEdits.length;
   console.log("[IELTS_CHECK][REVISION_EDIT_COUNTS]", {
     stage,
     modelEditCount: root.edits.length,
     expandedEditCount: expandedEdits.length,
+    overlappingEditCount,
     retainedEditCount: positionedEdits.length,
-    truncatedEditCount: Math.max(0, expandedEdits.length - positionedEdits.length),
+    truncatedEditCount: Math.max(0, nonOverlappingEdits.length - positionedEdits.length),
     maxEdits
   });
 
-  for (let index = 1; index < positionedEdits.length; index += 1) {
-    if (positionedEdits[index].start < positionedEdits[index - 1].end) {
-      throw new Error(`edits[${index - 1}] and edits[${index}] overlap.`);
-    }
+  if (overlappingEditCount > 0) {
+    console.warn("[IELTS_CHECK][REVISION_OVERLAPPING_EDITS_DROPPED]", {
+      stage,
+      provider: providerName,
+      overlappingEditCount,
+      retainedEditCount: positionedEdits.length
+    });
   }
 
   let cursor = 0;

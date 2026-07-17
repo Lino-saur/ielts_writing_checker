@@ -1,4 +1,9 @@
-import { buildAiRevisionFeedback, buildAiScoreFeedback, buildEvaluationTaskContext } from "./ielts/ai";
+import {
+  buildAiRevisionFeedback,
+  buildAiScoreFeedback,
+  buildEvaluationTaskContext,
+  isAiTimeoutError
+} from "./ielts/ai";
 import { CheckInput, WritingCheckResult, WritingRevisionResult, WritingScoreResult, countWords, getLocale, getTargetBand } from "./ielts/shared";
 import { buildReviewProgress } from "./ielts/review-progress";
 
@@ -88,9 +93,7 @@ export async function evaluateWriting(input: CheckInput): Promise<WritingCheckRe
     }
     return result;
   } catch (error) {
-    const isTimeout =
-      error instanceof Error &&
-      (error.name === "TimeoutError" || error.name === "AbortError" || error.message.toLowerCase().includes("timeout"));
+    const isTimeout = isAiTimeoutError(error);
     console.error("[IELTS_CHECK][AI_REVIEW_FAILED]", {
       taskType: input.taskType,
       locale: getLocale(input.locale),

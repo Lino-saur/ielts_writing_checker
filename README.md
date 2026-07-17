@@ -44,6 +44,8 @@ OPENAI_REASONING_EFFORT=medium
 DEEPSEEK_API_KEY=your_deepseek_key_here
 QIANWEN_API_KEY=your_qianwen_key_here
 QIANWEN_MODEL=qwen3.7-plus
+# Optional full chat-completions URL. It must match the API key's Model Studio region.
+QIANWEN_API_ENDPOINT=https://<workspace-id>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions
 AI_REQUEST_TIMEOUT_MS=45000
 AI_GRAMMAR_REQUEST_TIMEOUT_MS=120000
 AI_VISION_REQUEST_TIMEOUT_MS=120000
@@ -108,6 +110,7 @@ Set these environment variables in Vercel:
 - `OPENAI_API_KEY`
 - `DEEPSEEK_API_KEY`
 - `QIANWEN_API_KEY`
+- `QIANWEN_API_ENDPOINT` (recommended in production; use the workspace-specific endpoint for the API key's region)
 - `NEXT_PUBLIC_APP_URL`
 - `RESEND_API_KEY`
 - `AUTH_EMAIL_FROM`
@@ -255,9 +258,3 @@ Accepts provider webhooks.
 - PostgreSQL is required for deployment. Local file-based SQLite is no longer used.
 - Neon(DB), Vercel(Deploy) and Spaceship(Domain)
 - The object storage bucket must allow browser `PUT` from your app origin with `Content-Type` in allowed headers.
-
-## TODO
-
-* [ ] 真题练习模式 UI
-* [ ] 真题题干授权内容导入
-* [ ] 练习记录与弱项统计

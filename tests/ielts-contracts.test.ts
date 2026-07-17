@@ -138,7 +138,7 @@ describe("IELTS JSON contracts", () => {
     expect(parsed.correctionNotes[1].original).toBe("Cities");
   });
 
-  it("accepts an empty revision and rejects overlapping edits", () => {
+  it("accepts an empty revision and keeps the smallest non-overlapping edits", () => {
     const empty = parseRevisionJsonResponse(
       JSON.stringify({ schemaVersion: "revision.v1", edits: [] }),
       input,
@@ -170,7 +170,12 @@ describe("IELTS JSON contracts", () => {
         }
       ]
     });
-    expect(() => parseRevisionJsonResponse(overlapping, input, "deepseek", rules, "optimization")).toThrow("overlap");
+    const normalized = parseRevisionJsonResponse(overlapping, input, "deepseek", rules, "optimization");
+    expect(normalized.annotatedEssay).toBe(
+      "Cities create [del#1]more opportunities[/del#1][add#1]more jobs[/add#1]. However, cities can also be expensive. Cities remain attractive overall."
+    );
+    expect(normalized.correctionNotes).toHaveLength(1);
+    expect(normalized.correctionNotes[0].original).toBe("more opportunities");
   });
 
   it("shrinks a broad grammar correction to the smallest changed word", () => {

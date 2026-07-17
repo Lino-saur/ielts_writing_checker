@@ -44,6 +44,7 @@ type VisionProvider = "qianwen" | "gemini";
 
 const VISUAL_FACTS_CACHE_TTL_MS = 10 * 60 * 1000;
 const VISUAL_FACTS_CACHE_MAX_ENTRIES = 64;
+const AI_NETWORK_MAX_ATTEMPTS = 3;
 const visualFactsCache = new Map<string, { expiresAt: number; promise: Promise<Task1Analysis> }>();
 
 function getAiRequestTimeoutMs(kind: "text" | "long-text" | "vision") {
@@ -84,7 +85,9 @@ function getQianwenConfig(): ProviderConfig {
   return {
     name: "qianwen",
     apiKey: process.env.QIANWEN_API_KEY || process.env.DASHSCOPE_API_KEY,
-    endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+    endpoint:
+      process.env.QIANWEN_API_ENDPOINT?.trim() ||
+      "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
     model: process.env.QIANWEN_MODEL || "qwen3.7-plus",
     extraBody: {
       enable_thinking: false,
@@ -157,6 +160,59 @@ function serializeError(error: unknown) {
   };
 }
 
+export function isRetryableAiNetworkError(error: unknown) {
+  const retryableNames = new Set(["ConnectTimeoutError", "SocketError"]);
+  const retryableCodes = new Set([
+    "UND_ERR_CONNECT_TIMEOUT",
+    "UND_ERR_SOCKET",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "EPIPE",
+    "ETIMEDOUT",
+    "EAI_AGAIN"
+  ]);
+  let current: unknown = error;
+
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (!(current instanceof Error)) return false;
+    const errorWithExtras = current as Error & { code?: string; cause?: unknown };
+    if (current.name === "AbortError" || current.name === "TimeoutError") return false;
+    if (retryableNames.has(current.name) || (errorWithExtras.code && retryableCodes.has(errorWithExtras.code))) {
+      return true;
+    }
+    current = errorWithExtras.cause;
+  }
+
+  return false;
+}
+
+export function isAiTimeoutError(error: unknown) {
+  let current: unknown = error;
+
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (!(current instanceof Error)) return false;
+    if (
+      current.name === "TimeoutError" ||
+      current.name === "AbortError" ||
+      current.name === "ConnectTimeoutError" ||
+      current.message.toLowerCase().includes("timeout")
+    ) {
+      return true;
+    }
+    current = (current as Error & { cause?: unknown }).cause;
+  }
+
+  return false;
+}
+
+function waitForNetworkRetry(attempt: number) {
+  const delayMs = 500 * (2 ** (attempt - 1)) + Math.floor(Math.random() * 400);
+  return {
+    delayMs,
+    promise: new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+  };
+}
+
 function validationErrorDetails(error: unknown) {
   return {
     errorType: error instanceof Error ? error.name : typeof error,
@@ -223,41 +279,72 @@ async function runJsonCompletion<T>(
     promptLength: options.prompt.length,
     essayLength: input.essay.length,
     maxTokens,
-    requestTimeoutMs
+    requestTimeoutMs,
+    maxNetworkAttempts: AI_NETWORK_MAX_ATTEMPTS,
+    endpoint: config.endpoint,
+    deploymentRegion: process.env.VERCEL_REGION || process.env.AWS_REGION || null
   });
 
   async function requestCompletion(messages: ChatMessage[], phase: "first" | "retry" | "repair") {
-    let response: Response;
     const requestStartedAt = Date.now();
+    let response: Response | undefined;
 
-    try {
-      response = await fetch(config.endpoint, {
-        method: "POST",
-        signal: AbortSignal.timeout(requestTimeoutMs),
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.apiKey}`
-        },
-        body: JSON.stringify({
+    for (let attempt = 1; attempt <= AI_NETWORK_MAX_ATTEMPTS; attempt += 1) {
+      const attemptStartedAt = Date.now();
+      try {
+        response = await fetch(config.endpoint, {
+          method: "POST",
+          signal: AbortSignal.timeout(requestTimeoutMs),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${config.apiKey}`
+          },
+          body: JSON.stringify({
+            model: config.model,
+            messages,
+            ...config.extraBody,
+            temperature: 0,
+            max_tokens: maxTokens
+          })
+        });
+        break;
+      } catch (error) {
+        const retryable = isRetryableAiNetworkError(error);
+        if (retryable && attempt < AI_NETWORK_MAX_ATTEMPTS) {
+          const retry = waitForNetworkRetry(attempt);
+          console.warn("[IELTS_CHECK][NETWORK_RETRY]", {
+            provider: config.name,
+            model: config.model,
+            stage: options.requestLabel ?? options.kind,
+            phase,
+            attempt,
+            nextAttempt: attempt + 1,
+            attemptDurationMs: Date.now() - attemptStartedAt,
+            delayMs: retry.delayMs,
+            error: serializeError(error)
+          });
+          await retry.promise;
+          continue;
+        }
+
+        console.error("[IELTS_CHECK][NETWORK_ERROR]", {
+          provider: config.name,
           model: config.model,
-          messages,
-          ...config.extraBody,
-          temperature: 0,
-          max_tokens: maxTokens
-        })
-      });
-    } catch (error) {
-      console.error("[IELTS_CHECK][NETWORK_ERROR]", {
-        provider: config.name,
-        model: config.model,
-        endpoint: config.endpoint,
-        phase,
-        durationMs: Date.now() - requestStartedAt,
-        requestTimeoutMs,
-        ...serializeError(error)
-      });
-      throw error;
+          endpoint: config.endpoint,
+          stage: options.requestLabel ?? options.kind,
+          phase,
+          attempt,
+          maxAttempts: AI_NETWORK_MAX_ATTEMPTS,
+          retryable,
+          durationMs: Date.now() - requestStartedAt,
+          requestTimeoutMs,
+          ...serializeError(error)
+        });
+        throw error;
+      }
     }
+
+    if (!response) throw new Error(`${config.name} response was unavailable.`);
 
     if (!response.ok) {
       const errorText = await response.text();
