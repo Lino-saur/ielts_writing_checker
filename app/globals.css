@@ -12023,3 +12023,146 @@ html[data-theme="dark"] .globalLoadingAnimation {
     gap: 16px;
   }
 }
+
+/* Keep review reports inside the mobile viewport while preserving intentional scrollers. */
+@media (max-width: 760px) {
+  .checkerReportShell,
+  .checkerReportPaper,
+  .reportPaper,
+  .resultHero,
+  .resultHeroActions,
+  .scoreGrid,
+  .scoreCard,
+  .feedbackSection,
+  .feedbackDisclosureBody,
+  .reviseWorkspace,
+  .reviseWorkbenchToolbar,
+  .reviseProgressBlock,
+  .reviseWorkbenchActions,
+  .reviseEssayPanel,
+  .reviseSidebar,
+  .reviseDetailList,
+  .reviseCategoryGroup,
+  .reviseCategoryItems,
+  .reviseDetailCard,
+  .annotatedEssay {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .checkerReportShell,
+  .checkerReportPaper,
+  .reportPaper,
+  .reviseWorkspace {
+    width: 100%;
+  }
+
+  .checkerReportShell {
+    padding: 12px;
+  }
+
+  .checkerReportPaper {
+    padding: 14px;
+  }
+
+  .resultHeroActions,
+  .resultMeta {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .resultMeta span {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .feedbackDisclosureToggle,
+  .scoreCardToggle,
+  .reviseCategoryButton {
+    min-width: 0;
+  }
+
+  .feedbackDisclosureToggle > :first-child,
+  .scoreCardToggle > :first-child,
+  .reviseCategoryTitle {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .reviseWorkbenchToolbar {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .reviseWorkbenchActions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .reviseWorkbenchActions .uiButton {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .revisionStageSwitch,
+  .reportModeSwitch {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .revisionStageSwitch .reviseLayoutButton,
+  .reportModeButton {
+    min-width: 0;
+    padding-inline: 8px;
+    white-space: normal;
+  }
+
+  .revisionLegend {
+    gap: 8px 10px;
+  }
+
+  .annotatedEssay,
+  .reviseDetailOriginal,
+  .reviseDetailSuggested,
+  .reviseReason p,
+  .feedbackDisclosureBody,
+  .correctionCard {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .reviseDetailSummary,
+  .editTooltipEnhancementPair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reviseDetailSummary > i,
+  .editTooltipEnhancementPair > i {
+    justify-self: center;
+    margin: 0;
+    transform: rotate(90deg);
+  }
+
+  .editTooltip:not(.editTooltipPortal) {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+  }
+
+  .reviewRoundNavigator {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .reviewRoundNav {
+    width: 100%;
+    min-width: 0;
+    overscroll-behavior-inline: contain;
+  }
+}
