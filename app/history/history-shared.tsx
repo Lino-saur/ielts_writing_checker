@@ -1,14 +1,44 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Pill } from "@/components/ui-kit";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ActionButton, Pill } from "@/components/ui-kit";
 import { TeachingRuleReferences } from "@/components/teaching-rule-references";
+import {
+  FeedbackDisclosure,
+  materializeRevisionEssay,
+  materializeVerifiedOptimizationEssay,
+  renderAnnotatedEssay as renderCheckerAnnotatedEssay,
+  ScoreCard,
+  type RevisionDecision
+} from "@/app/checker/checker-revision";
 import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
 import { getMessages } from "@/lib/i18n/messages";
-import type { CorrectionNote, Locale, WritingReviewDetail } from "@/lib/types";
+import type {
+  CorrectionNote,
+  Locale,
+  WritingCheckResult,
+  WritingReviewDetail,
+  WritingReviewProgressStage
+} from "@/lib/types";
 
 type CheckerMessages = ReturnType<typeof getMessages>["checker"];
 type NavbarMessages = ReturnType<typeof getMessages>["navbar"];
+
+export function describeReviewProgressStage(stage: WritingReviewProgressStage, t: CheckerMessages) {
+  const labels: Record<WritingReviewProgressStage, string> = {
+    queued: t.reviewStageQueued,
+    preparing: t.reviewStagePreparing,
+    analyzing_task: t.reviewStageAnalyzingTask,
+    scoring: t.reviewStageScoring,
+    checking_grammar: t.reviewStageCheckingGrammar,
+    optimizing: t.reviewStageOptimizing,
+    verifying: t.reviewStageVerifying,
+    saving: t.reviewStageSaving,
+    completed: t.reviewStageCompleted,
+    failed: t.reviewStageFailed
+  };
+  return labels[stage];
+}
 
 export function formatReviewTime(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en-US", {
@@ -27,79 +57,6 @@ export function describeTaskFilter(taskType: "all" | "task1" | "task2", navbar: 
   }
 
   return allTasksLabel;
-}
-
-export function ScoreCard({
-  label,
-  score,
-  rationale,
-  defaultExpanded = false,
-  showDetailsLabel,
-  hideDetailsLabel
-}: {
-  label: string;
-  score: number;
-  rationale: string;
-  defaultExpanded?: boolean;
-  showDetailsLabel: string;
-  hideDetailsLabel: string;
-}) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-
-  return (
-    <article className="scoreCard">
-      <button
-        type="button"
-        className="scoreCardToggle"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((current) => !current)}
-      >
-        <div>
-          <p className="sectionLabel">{label}</p>
-          <h3>{score.toFixed(1)}</h3>
-        </div>
-        <span className="scoreCardToggleMeta">
-          {expanded ? hideDetailsLabel : showDetailsLabel}
-          <i className={`ai-chevron-${expanded ? "up" : "down"}`} aria-hidden="true" />
-        </span>
-      </button>
-      {expanded ? <p className="scoreCardRationale">{rationale}</p> : null}
-    </article>
-  );
-}
-
-function FeedbackDisclosure({
-  label,
-  count,
-  itemsLabel,
-  defaultExpanded = false,
-  children
-}: {
-  label: string;
-  count: number;
-  itemsLabel: string;
-  defaultExpanded?: boolean;
-  children: ReactNode;
-}) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-
-  return (
-    <article className="feedbackSection feedbackDisclosure">
-      <button
-        type="button"
-        className="feedbackDisclosureToggle"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((current) => !current)}
-      >
-        <span className="sectionLabel">{label}</span>
-        <span className="feedbackDisclosureMeta">
-          {count} {itemsLabel}
-          <i className={`ai-chevron-${expanded ? "up" : "down"}`} aria-hidden="true" />
-        </span>
-      </button>
-      {expanded ? <div className="feedbackDisclosureBody">{children}</div> : null}
-    </article>
-  );
 }
 
 function parseAnnotatedEssay(text: string, correctionNotes: CorrectionNote[]) {
@@ -179,156 +136,28 @@ function groupRevisionEditsByCategory(
   return Array.from(groups.values());
 }
 
-function renderAnnotatedEssay(
-  text: string,
-  highlightedSentences: string[],
-  correctionNotes: CorrectionNote[],
-  isEnhancement: boolean,
-  activeEditIndex: number | null,
-  onToggleEdit: (index: number) => void,
-  t: CheckerMessages
-) {
-  const { parts } = parseAnnotatedEssay(text, correctionNotes);
-
-  function renderPlainTextSegment(segment: string, keyPrefix: string) {
-    if (!highlightedSentences.length) {
-      return <span key={keyPrefix}>{segment}</span>;
-    }
-
-    const normalizedCandidates = highlightedSentences.filter(Boolean);
-    if (!normalizedCandidates.length) {
-      return <span key={keyPrefix}>{segment}</span>;
-    }
-
-    const subparts: React.ReactNode[] = [];
-    let remaining = segment;
-    let cursor = 0;
-
-    while (remaining.length > 0) {
-      let matchedSentence = "";
-      let matchedIndex = -1;
-
-      for (const candidate of normalizedCandidates) {
-        const index = remaining.indexOf(candidate);
-        if (index !== -1 && (matchedIndex === -1 || index < matchedIndex)) {
-          matchedSentence = candidate;
-          matchedIndex = index;
-        }
-      }
-
-      if (matchedIndex === -1) {
-        subparts.push(<span key={`${keyPrefix}-tail-${cursor}`}>{remaining}</span>);
-        break;
-      }
-
-      if (matchedIndex > 0) {
-        subparts.push(<span key={`${keyPrefix}-plain-${cursor}`}>{remaining.slice(0, matchedIndex)}</span>);
-      }
-
-      subparts.push(
-        <mark
-          key={`${keyPrefix}-highlight-${cursor}`}
-          className="essayHighlight"
-          title={t.revisionLegendHighlight}
-        >
-          <span className="essayHighlightIcon" aria-hidden="true">★</span>
-          {matchedSentence}
-        </mark>
-      );
-
-      remaining = remaining.slice(matchedIndex + matchedSentence.length);
-      cursor += 1;
-    }
-
-    return <span key={keyPrefix}>{subparts}</span>;
-  }
-
-  return parts.map((part, index) => {
-    if (part.type === "edit") {
-      const isActive = activeEditIndex === part.index;
-
-      return (
-        <span
-          key={`edit-${part.index}-${index}`}
-          className={`editChip${isEnhancement ? " is-enhancement" : ""}${isActive ? " active" : ""}`}
-          role="button"
-          tabIndex={0}
-          onClick={() => onToggleEdit(part.index)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onToggleEdit(part.index);
-            }
-          }}
-        >
-          {isEnhancement ? (
-            <span className="essayEnhancement">
-              {part.original}
-              <span className="essayEnhancementIcon" aria-hidden="true">✦</span>
-            </span>
-          ) : (
-            <>
-              <del className="essayDel">{part.original}</del>
-              <ins className="essayAdd">{part.corrected}</ins>
-            </>
-          )}
-          {part.note ? (
-            <span className={`editTooltip${isActive ? " visible" : ""}`}>
-              {isEnhancement ? (
-                <>
-                  <span className="editTooltipEnhancementHeader">
-                    <span aria-hidden="true">✦</span>
-                    {t.revisionOptimizationOptional}
-                  </span>
-                  <span className="editTooltipEnhancementPair">
-                    <span>{part.original}</span>
-                    <i className="ai-arrow-right" aria-hidden="true" />
-                    <strong>{part.corrected}</strong>
-                  </span>
-                </>
-              ) : null}
-              <strong>{t.correctionReason}:</strong> {part.note.reason}
-            </span>
-          ) : null}
-        </span>
-      );
-    }
-
-    if (part.type === "del") {
-      return (
-        <del key={index} className="essayDel">
-          {part.text}
-        </del>
-      );
-    }
-
-    if (part.type === "add") {
-      return (
-        <ins key={index} className="essayAdd">
-          {part.text}
-        </ins>
-      );
-    }
-
-    return renderPlainTextSegment(part.text, `plain-${index}`);
-  });
-}
-
 export function ReviewDetailContent({
   detail,
   locale,
   navbar,
-  t
+  t,
+  onContinueRevision
 }: {
-  detail: WritingReviewDetail;
+  detail: WritingReviewDetail & { result: WritingCheckResult };
   locale: Locale;
   navbar: NavbarMessages;
   t: CheckerMessages;
+  onContinueRevision?: (essay: string, acceptedRevisionIds: string[]) => void;
 }) {
   const [reportView, setReportView] = useState<"overview" | "revise">("overview");
   const [activeEditIndex, setActiveEditIndex] = useState<number | null>(null);
   const [activeRevisionStage, setActiveRevisionStage] = useState<"grammar" | "optimization">("optimization");
   const [expandedRevisionCategories, setExpandedRevisionCategories] = useState<Record<string, boolean>>({});
+  const [revisionDecisions, setRevisionDecisions] = useState<Record<"grammar" | "optimization", Record<string, RevisionDecision>>>({
+    grammar: {},
+    optimization: {}
+  });
+  const [revisionCopyState, setRevisionCopyState] = useState<"idle" | "copied" | "error">("idle");
   const activeEditRef = useRef<HTMLDivElement | null>(null);
   const currentRevisionStage = useMemo(
     () => activeRevisionStage === "grammar"
@@ -350,6 +179,29 @@ export function ReviewDetailContent({
     () => groupRevisionEditsByCategory(parsedRevision.edits, locale),
     [locale, parsedRevision.edits]
   );
+  const currentRevisionDecisions = revisionDecisions[activeRevisionStage];
+  const revisionDecisionCount = parsedRevision.edits.filter((edit) => currentRevisionDecisions[edit.id]).length;
+  const acceptedRevisionCount = parsedRevision.edits.filter(
+    (edit) => currentRevisionDecisions[edit.id] === "accepted"
+  ).length;
+  const visibleEditIds = useMemo(() => new Set(parsedRevision.edits.map((edit) => edit.id)), [parsedRevision.edits]);
+  const resolvedRevision = useMemo(() => {
+    if (activeRevisionStage === "optimization") {
+      return materializeVerifiedOptimizationEssay(
+        currentRevisionStage,
+        currentRevisionDecisions,
+        detail.result.finalGrammarRevision
+      );
+    }
+    return {
+      essay: materializeRevisionEssay(
+        currentRevisionStage.annotatedEssay,
+        currentRevisionStage.correctionNotes,
+        currentRevisionDecisions
+      ),
+      appliedFinalGrammarIds: [] as string[]
+    };
+  }, [activeRevisionStage, currentRevisionDecisions, currentRevisionStage, detail.result.finalGrammarRevision]);
   const weakestCriterionKey = [
     { key: "taskAchievement", score: detail.result.bandBreakdown.taskAchievement.score },
     { key: "coherence", score: detail.result.bandBreakdown.coherenceAndCohesion.score },
@@ -364,6 +216,45 @@ export function ReviewDetailContent({
         activeEditRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
+  }
+
+  function updateRevisionDecision(editId: string, decision: RevisionDecision) {
+    setRevisionDecisions((current) => ({
+      ...current,
+      [activeRevisionStage]: {
+        ...current[activeRevisionStage],
+        [editId]: decision
+      }
+    }));
+    setRevisionCopyState("idle");
+  }
+
+  function acceptAllCurrentRevisions() {
+    setRevisionDecisions((current) => ({
+      ...current,
+      [activeRevisionStage]: Object.fromEntries(
+        parsedRevision.edits.map((edit) => [edit.id, "accepted" as const])
+      )
+    }));
+    setRevisionCopyState("idle");
+  }
+
+  async function copyResolvedRevision() {
+    try {
+      await navigator.clipboard.writeText(resolvedRevision.essay);
+      setRevisionCopyState("copied");
+    } catch {
+      setRevisionCopyState("error");
+    }
+  }
+
+  function continueRevision() {
+    if (!onContinueRevision) return;
+    const acceptedIds = Object.entries(currentRevisionDecisions)
+      .filter(([, decision]) => decision === "accepted")
+      .map(([id]) => `${activeRevisionStage}:${id}`);
+    acceptedIds.push(...resolvedRevision.appliedFinalGrammarIds.map((id) => `finalGrammar:${id}`));
+    onContinueRevision(acceptedRevisionCount ? resolvedRevision.essay : detail.essay, acceptedIds);
   }
 
   useEffect(() => {
@@ -583,12 +474,54 @@ export function ReviewDetailContent({
           </FeedbackDisclosure>
         </>
       ) : (
-        <section className="reviseWorkspace">
+        <section className="reviseWorkspace is-stacked">
+          <div className="reviseWorkbenchToolbar">
+            <div className="reviseProgressBlock">
+              <div className="reviseProgressHeader">
+                <span>{t.revisionProgress}</span>
+                <strong>{revisionDecisionCount} / {parsedRevision.edits.length}</strong>
+              </div>
+              <progress
+                className="reviseProgress"
+                max={parsedRevision.edits.length || 1}
+                value={revisionDecisionCount}
+                aria-label={t.revisionProgress}
+              />
+              <p>{t.revisionPendingKeepsOriginal}</p>
+            </div>
+            <div className="reviseWorkbenchActions">
+              <ActionButton
+                type="button"
+                variant="secondary"
+                disabled={!parsedRevision.edits.length || revisionDecisionCount === parsedRevision.edits.length}
+                onClick={acceptAllCurrentRevisions}
+              >
+                {activeRevisionStage === "grammar" ? t.revisionAcceptAllGrammar : t.revisionAcceptAllOptimization}
+              </ActionButton>
+              <ActionButton
+                type="button"
+                variant="secondary"
+                disabled={!acceptedRevisionCount}
+                onClick={() => void copyResolvedRevision()}
+              >
+                {revisionCopyState === "copied"
+                  ? t.revisionCopied
+                  : revisionCopyState === "error"
+                    ? t.revisionCopyFailed
+                    : t.revisionCopyFullText}
+              </ActionButton>
+              {onContinueRevision ? (
+                <ActionButton type="button" variant="primary" onClick={continueRevision}>
+                  {t.revisionContinueReview}
+                </ActionButton>
+              ) : null}
+            </div>
+          </div>
           <article className="feedbackSection reviseEssayPanel">
             <div className="revisePanelHeader">
               <p className="sectionLabel">{t.reviseTitle}</p>
             </div>
-            <div className="reviseLayoutSwitch" role="group" aria-label="Revision stage">
+            <div className="reviseLayoutSwitch revisionStageSwitch" role="group" aria-label="Revision stage">
               <button
                 type="button"
                 className={`reviseLayoutButton${activeRevisionStage === "grammar" ? " is-active" : ""}`}
@@ -628,13 +561,16 @@ export function ReviewDetailContent({
               )}
             </div>
             <div className="annotatedEssay reviseAnnotatedEssay" ref={activeEditRef}>
-              {renderAnnotatedEssay(
+              {renderCheckerAnnotatedEssay(
                 currentRevisionStage.annotatedEssay,
                 detail.result.highlightedSentences.map((item) => item.sentence),
                 currentRevisionStage.correctionNotes,
-                activeRevisionStage === "optimization",
+                currentRevisionDecisions,
+                visibleEditIds,
+                activeRevisionStage === "optimization" ? "enhancement" : "correction",
                 activeEditIndex,
                 (index) => setActiveEditIndex((current) => (current === index ? null : index)),
+                updateRevisionDecision,
                 t
               )}
             </div>
@@ -716,28 +652,6 @@ export function ReviewDetailContent({
         </section>
       )}
 
-      <article className="feedbackSection">
-        <p className="sectionLabel">{t.historyOriginalPrompt}</p>
-        <p className="historyTextBlock">{detail.prompt}</p>
-      </article>
-
-      <article className="feedbackSection">
-        <p className="sectionLabel">{t.historyOriginalEssay}</p>
-        <pre className="historyEssayBlock">{detail.essay}</pre>
-      </article>
-
-      <article className="feedbackSection">
-        <p className="sectionLabel">{t.historyOriginalImage}</p>
-        {detail.image ? (
-          <div className="historyImagePanel">
-            {/* Authenticated review images cannot be fetched by Next's unauthenticated server image optimizer. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={detail.image.url} alt={detail.image.name} className="historyImage" />
-          </div>
-        ) : (
-          <p>{t.historyNoImage}</p>
-        )}
-      </article>
     </>
   );
 }

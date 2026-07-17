@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { LoadingLottie } from "@/components/loading-lottie";
-import { ActionButton, ActionLink, Surface } from "@/components/ui-kit";
+import { ActionButton, Pill, Surface } from "@/components/ui-kit";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
-import type { WritingReviewDetail } from "@/lib/types";
-import { ReviewDetailContent } from "./history-shared";
+import type { WritingReviewDetail, WritingReviewThread } from "@/lib/types";
+import { describeReviewProgressStage, formatReviewTime, ReviewDetailContent } from "./history-shared";
 
 type EnergyState = {
   balance: number;
@@ -26,71 +26,128 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
   const [locale, setLocale] = useRouteLocale();
   const [energy, setEnergy] = useState<EnergyState | null>(sessionContext.energy as EnergyState | null);
   const [authRequest, setAuthRequest] = useState<{ mode: "signIn" | "signUp"; id: number } | null>(null);
-  const [detail, setDetail] = useState<WritingReviewDetail | null>(null);
+  const [thread, setThread] = useState<WritingReviewThread | null>(null);
+  const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
+  const [editingBaseReviewId, setEditingBaseReviewId] = useState<string | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftEssay, setDraftEssay] = useState("");
+  const [editingAcceptedRevisionIds, setEditingAcceptedRevisionIds] = useState<string[]>([]);
+  const [submittingRevision, setSubmittingRevision] = useState(false);
+  const [revisionError, setRevisionError] = useState<string | null>(null);
 
   const { checker: t, navbar } = getMessages(locale);
-  const historyHref = useMemo(() => `/${locale}/history`, [locale]);
   const sessionReady = sessionResolved;
   const isAuthenticated = Boolean(sessionContext.user);
+  const firstReview = thread?.items[0] ?? null;
+  const latestReview = thread?.items[thread.items.length - 1] ?? null;
+  const selectedReview = thread?.items.find((item) => item.id === selectedReviewId) ?? latestReview;
+  const editingBaseReview = thread?.items.find((item) => item.id === editingBaseReviewId) ?? null;
+  const draftWordCount = draftEssay.trim() ? draftEssay.trim().split(/\s+/).length : 0;
+  const draftMinimumWords = editingBaseReview?.taskType === "task1" ? 150 : 250;
+
+  const loadThread = useCallback(async (silent = false) => {
+    if (!silent) setLoadingDetail(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/reviews/${encodeURIComponent(reviewId)}?thread=1`, { cache: "no-store" });
+      const data = (await response.json()) as WritingReviewThread | { error?: string };
+      if (response.status === 404) throw new Error("NOT_FOUND");
+      if (!response.ok || !("items" in data)) throw new Error("REQUEST_FAILED");
+      setThread(data);
+      const newest = data.items[data.items.length - 1];
+      if (newest) setSelectedReviewId((current) => current && data.items.some((item) => item.id === current) ? current : newest.id);
+    } catch (loadError) {
+      if (!silent) {
+        setThread(null);
+        setError(loadError instanceof Error && loadError.message === "NOT_FOUND" ? t.historyNotFound : t.historyLoadError);
+      }
+    } finally {
+      if (!silent) setLoadingDetail(false);
+    }
+  }, [reviewId, t.historyLoadError, t.historyNotFound]);
 
   useEffect(() => {
     setEnergy(sessionContext.energy as EnergyState | null);
   }, [sessionContext.energy]);
 
   useEffect(() => {
-    if (!sessionReady) {
-      return;
-    }
-
+    if (!sessionReady) return;
     if (!isAuthenticated) {
-      setDetail(null);
+      setThread(null);
       setError(null);
       return;
     }
+    void loadThread();
+  }, [isAuthenticated, loadThread, sessionReady]);
 
-    let cancelled = false;
+  useEffect(() => {
+    if (latestReview?.status !== "processing") return;
+    const timer = window.setInterval(() => void loadThread(true), 3_000);
+    return () => window.clearInterval(timer);
+  }, [latestReview?.status, loadThread]);
 
-    async function loadDetail() {
-      setLoadingDetail(true);
-      setError(null);
+  useEffect(() => {
+    if (!selectedReview || editingBaseReviewId === selectedReview.id) return;
+    setEditingBaseReviewId(selectedReview.id);
+    setDraftEssay(selectedReview.essay);
+    setEditingAcceptedRevisionIds([]);
+    setRevisionError(null);
+  }, [editingBaseReviewId, selectedReview]);
 
-      try {
-        const response = await fetch(`/api/reviews/${encodeURIComponent(reviewId)}`, {
-          cache: "no-store"
-        });
-        const data = (await response.json()) as WritingReviewDetail | { error?: string };
+  function startRevisionFromRound(review: WritingReviewDetail, essay: string, acceptedRevisionIds: string[]) {
+    setSelectedReviewId(review.id);
+    setEditingBaseReviewId(review.id);
+    setDraftEssay(essay);
+    setEditingAcceptedRevisionIds(acceptedRevisionIds);
+    setRevisionError(null);
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLTextAreaElement>(".historyEssayEditor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.querySelector<HTMLTextAreaElement>(".historyEssayEditor")?.focus();
+    });
+  }
 
-        if (response.status === 404) {
-          throw new Error("NOT_FOUND");
-        }
-
-        if (!response.ok || !("id" in data)) {
-          throw new Error("REQUEST_FAILED");
-        }
-
-        if (!cancelled) {
-          setDetail(data);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setDetail(null);
-          setError(loadError instanceof Error && loadError.message === "NOT_FOUND" ? t.historyNotFound : t.historyLoadError);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingDetail(false);
-        }
+  async function submitNextRevision() {
+    if (!editingBaseReview || editingBaseReview.status !== "completed" || submittingRevision || !draftEssay.trim()) return;
+    setSubmittingRevision(true);
+    setRevisionError(null);
+    try {
+      const response = await fetch("/api/check", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": window.crypto.randomUUID()
+        },
+        body: JSON.stringify({
+          taskType: editingBaseReview.taskType,
+          prompt: editingBaseReview.prompt,
+          essay: draftEssay,
+          locale,
+          targetBand: editingBaseReview.targetBand,
+          parentReviewId: editingBaseReview.id,
+          acceptedRevisionIds: editingAcceptedRevisionIds
+        })
+      });
+      const data = (await response.json()) as {
+        reviewId?: string;
+        energy?: EnergyState;
+        error?: string;
+      };
+      if (data.energy) setEnergy(data.energy);
+      if (!response.ok) {
+        if (data.error === "INSUFFICIENT_ENERGY") throw new Error(t.insufficientEnergy);
+        throw new Error(t.genericError);
       }
+      if (data.reviewId) setSelectedReviewId(data.reviewId);
+      setEditingBaseReviewId(null);
+      setEditingAcceptedRevisionIds([]);
+      await loadThread(true);
+    } catch (submitError) {
+      setRevisionError(submitError instanceof Error ? submitError.message : t.genericError);
+    } finally {
+      setSubmittingRevision(false);
     }
-
-    void loadDetail();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated, reviewId, sessionReady, t.historyLoadError, t.historyNotFound]);
+  }
 
   return (
     <main className="pageShell">
@@ -110,19 +167,6 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
         authRequest={authRequest}
       />
 
-      <section className="historyHero">
-        <Surface className="historyHeroCard">
-          <div>
-            <p className="eyebrow">{t.historyTitle}</p>
-            <h1>{t.historyResultTitle}</h1>
-            <p className="uiSectionBody">{t.historyBody}</p>
-          </div>
-          <ActionLink href={historyHref} variant="secondary">
-            {t.historyTitle}
-          </ActionLink>
-        </Surface>
-      </section>
-
       {!sessionReady ? (
         <Surface className="historyEmptyState">
           <LoadingLottie label={t.historyLoadingDetail} showLabel={false} />
@@ -140,13 +184,200 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
         </Surface>
       ) : (
         <section className="historyDetailPage">
-          <Surface as="section" className="checkerReportShell is-revealed">
-            <Surface className="reportPaper checkerReportPaper historyDetailStandalone">
-              {loadingDetail ? <LoadingLottie label={t.historyLoadingDetail} showLabel={false} /> : null}
-              {error && !loadingDetail ? <p className="errorBox">{error}</p> : null}
-              {!loadingDetail && detail ? <ReviewDetailContent detail={detail} locale={locale} navbar={navbar} t={t} /> : null}
+          {loadingDetail ? (
+            <Surface className="historyEmptyState">
+              <LoadingLottie label={t.historyLoadingDetail} showLabel={false} />
             </Surface>
-          </Surface>
+          ) : null}
+          {error && !loadingDetail ? <p className="errorBox">{error}</p> : null}
+
+          {!loadingDetail && firstReview && selectedReview ? (
+            <Surface as="section" className="checkerWorkbench historySourceWorkbench">
+              <div className="checkerTaskContext" aria-label={t.taskContextLabel}>
+                <Pill>{firstReview.taskType === "task1" ? navbar.task1 : navbar.task2}</Pill>
+                <div>
+                  <strong>{t.taskContextLabel}</strong>
+                  <span>{firstReview.taskType === "task1" ? t.task1ContextBody : t.task2ContextBody}</span>
+                </div>
+                <span className="checkerModeToggle historyReadOnlyBadge">{t.historyReadOnly}</span>
+              </div>
+              <div className="checkerInputWorkspace">
+                <div className="checkerQuestionColumn">
+                  <div className="checkerField checkerPromptBlock">
+                    <div className="checkerPromptHeader"><span>{t.prompt}</span></div>
+                    <div className="checkerPromptBody"><p className="checkerPromptText">{firstReview.prompt}</p></div>
+                  </div>
+                  {firstReview.taskType === "task1" ? (
+                    <div className="checkerField checkerUploadBlock">
+                      <div className="checkerPromptHeader"><span>{t.task1ImageLabel}</span></div>
+                      <div className="checkerPromptBody checkerUploadBody">
+                        <div className={`checkerUploadDropzone is-readonly${firstReview.image ? " has-preview" : ""}`}>
+                          {firstReview.image ? (
+                            // Authenticated review images must bypass Next's unauthenticated image optimizer.
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={firstReview.image.url} alt={firstReview.image.name} className="checkerUploadPreviewImage" />
+                          ) : (
+                            <span className="checkerUploadReadonlyEmpty">{t.practiceImageUnavailable}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="checkerDraftPanel historyEssayDraftPanel">
+                  <div className="checkerDraftHeader">
+                    <div>
+                      <h2>{t.essay}</h2>
+                      <span className="checkerDraftStatus">
+                        {t.reviewRoundLabel.replace(
+                          "{round}",
+                          String((thread?.items.findIndex((item) => item.id === selectedReview.id) ?? 0) + 1)
+                        )}
+                      </span>
+                    </div>
+                    <div className="checkerTargetBandControl historyTargetBandControl">
+                      <label className="checkerInlineSelect">
+                        <span>{t.targetBand}</span>
+                        <select value={selectedReview.targetBand} disabled aria-label={t.targetBand}>
+                          <option value={5}>5.0</option>
+                          <option value={5.5}>5.5</option>
+                          <option value={6}>6.0</option>
+                          <option value={6.5}>6.5</option>
+                          <option value={7}>7.0</option>
+                          <option value={7.5}>7.5</option>
+                          <option value={8}>8.0</option>
+                        </select>
+                      </label>
+                      <span className="checkerTargetBandHint">
+                        {selectedReview.status === "processing"
+                          ? `${t.reviewStatusProcessing} ${selectedReview.progressPercent}%`
+                          : t.targetBandHint}
+                      </span>
+                    </div>
+                  </div>
+                  <label className="checkerEssayField">
+                    <span className="srOnly">{t.essay}</span>
+                    <textarea
+                      className="checkerEssayInput historyEssayEditor"
+                      value={draftEssay}
+                      onChange={(event) => setDraftEssay(event.target.value)}
+                      rows={20}
+                      readOnly={selectedReview.status !== "completed"}
+                      aria-label={t.essay}
+                    />
+                  </label>
+                  {revisionError ? <p className="errorBox">{revisionError}</p> : null}
+                  <div className="checkerDraftFooter">
+                    <div className="checkerDraftMeta">
+                      <div className={`checkerWordProgress is-${draftWordCount >= draftMinimumWords ? "ready" : "low"}`}>
+                        <div className="checkerWordProgressHeader">
+                          <span className="checkerWordHint">
+                            <strong>{draftWordCount}</strong>
+                            <span> / {draftMinimumWords} {t.wordsUnit}</span>
+                          </span>
+                        </div>
+                        <span className="checkerWordProgressTrack" aria-hidden="true">
+                          <span
+                            className="checkerWordProgressFill"
+                            style={{ width: `${Math.min(100, Math.round((draftWordCount / draftMinimumWords) * 100))}%` }}
+                          />
+                        </span>
+                      </div>
+                    </div>
+                    <ActionButton
+                      variant="primary"
+                      disabled={
+                        selectedReview.status !== "completed" ||
+                        submittingRevision ||
+                        !draftEssay.trim() ||
+                        draftEssay.trim() === selectedReview.essay.trim()
+                      }
+                      onClick={() => void submitNextRevision()}
+                    >
+                      {submittingRevision || selectedReview.status === "processing"
+                        ? t.checking
+                        : t.reviewContinueSubmit.replace("{cost}", String(sessionContext.reviewCost ?? 1))}
+                    </ActionButton>
+                  </div>
+                  {selectedReview.status === "processing" ? (
+                    <div className="reviewProgressPanel" role="status" aria-live="polite">
+                      <div className="reviewProgressHeader">
+                        <div>
+                          <strong>{t.reviewProgressTitle}</strong>
+                          <span>{describeReviewProgressStage(selectedReview.progressStage, t)}</span>
+                        </div>
+                        <b>{selectedReview.progressPercent}%</b>
+                      </div>
+                      <progress
+                        className="reviewProgressBar"
+                        max={100}
+                        value={selectedReview.progressPercent}
+                        aria-label={t.reviewProgressTitle}
+                      />
+                      <p>{t.reviewProgressBackgroundHint}</p>
+                    </div>
+                  ) : null}
+                  {selectedReview.status === "failed" ? <p className="errorBox">{t.aiReviewFailedAlert}</p> : null}
+                </div>
+              </div>
+            </Surface>
+          ) : null}
+
+          {!loadingDetail && thread && selectedReview ? (
+            <>
+              <Surface as="section" className="reviewRoundNavigator" role="navigation" aria-label={t.reviewThreadTitle}>
+                <div className="reviewRoundNavHeader">
+                  <p className="sectionLabel">{t.reviewThreadTitle}</p>
+                  <strong>{t.reviewThreadCount.replace("{count}", String(thread.items.length))}</strong>
+                </div>
+                <div className="reviewRoundNav" role="tablist">
+                  {thread.items.map((item, index) => {
+                    const isSelected = item.id === selectedReview.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={isSelected}
+                        className={`reviewRoundNavButton${isSelected ? " is-active" : ""}`}
+                        onClick={() => setSelectedReviewId(item.id)}
+                      >
+                        <span className="reviewRoundNavIndex">{index + 1}</span>
+                        <span className="reviewRoundNavCopy">
+                          <strong>{t.reviewRoundLabel.replace("{round}", String(index + 1))}</strong>
+                          <small>{formatReviewTime(item.createdAt, locale)}</small>
+                        </span>
+                        <span className={`reviewRoundNavStatus is-${item.status}`}>
+                          {item.status === "completed"
+                            ? `Band ${item.estimatedBand.toFixed(1)}`
+                            : item.status === "processing"
+                              ? `${t.reviewStatusProcessing} ${item.progressPercent}%`
+                              : t.reviewStatusFailed}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Surface>
+
+              {selectedReview.status === "completed" && selectedReview.result ? (
+                <Surface as="section" className="checkerReportShell is-revealed historySelectedReport">
+                  <Surface className="reportPaper checkerReportPaper">
+                    <ReviewDetailContent
+                      key={selectedReview.id}
+                      detail={selectedReview as WritingReviewDetail & { result: NonNullable<WritingReviewDetail["result"]> }}
+                      locale={locale}
+                      navbar={navbar}
+                      t={t}
+                      onContinueRevision={(essay, acceptedRevisionIds) =>
+                        startRevisionFromRound(selectedReview, essay, acceptedRevisionIds)
+                      }
+                    />
+                  </Surface>
+                </Surface>
+              ) : null}
+            </>
+          ) : null}
         </section>
       )}
     </main>

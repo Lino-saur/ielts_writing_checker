@@ -8,7 +8,15 @@ import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import { ActionButton, ActionLink, Alert, Pill, Surface } from "@/components/ui-kit";
 import { TeachingRuleReferences } from "@/components/teaching-rule-references";
-import type { AiProvider, FeedbackPayload, TargetBand, TaskType, WritingCheckResult } from "@/lib/types";
+import type {
+  AiProvider,
+  FeedbackPayload,
+  TargetBand,
+  TaskType,
+  WritingCheckResult,
+  WritingReviewDetail,
+  WritingReviewProgressStage
+} from "@/lib/types";
 import {
   groupRevisionEditsByCategory,
   FeedbackDisclosure,
@@ -179,6 +187,25 @@ async function readResponseError(response: Response) {
   }
 }
 
+function getReviewStageLabel(
+  stage: WritingReviewProgressStage,
+  copy: ReturnType<typeof getMessages>["checker"]
+) {
+  const labels: Record<WritingReviewProgressStage, string> = {
+    queued: copy.reviewStageQueued,
+    preparing: copy.reviewStagePreparing,
+    analyzing_task: copy.reviewStageAnalyzingTask,
+    scoring: copy.reviewStageScoring,
+    checking_grammar: copy.reviewStageCheckingGrammar,
+    optimizing: copy.reviewStageOptimizing,
+    verifying: copy.reviewStageVerifying,
+    saving: copy.reviewStageSaving,
+    completed: copy.reviewStageCompleted,
+    failed: copy.reviewStageFailed
+  };
+  return labels[stage];
+}
+
 function CheckerPageContent() {
   const { sessionContext, sessionResolved, refreshSessionContext: refreshAuthSessionContext } = useAuthSession();
   const reviseWorkspaceRef = useRef<HTMLElement | null>(null);
@@ -216,6 +243,11 @@ function CheckerPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [errorSource, setErrorSource] = useState<ErrorSource>("general");
   const [loading, setLoading] = useState(false);
+  const [activeReviewProgress, setActiveReviewProgress] = useState<{
+    reviewId: string | null;
+    progressPercent: number;
+    progressStage: WritingReviewProgressStage;
+  } | null>(null);
   const [activeEditIndex, setActiveEditIndex] = useState<number | null>(null);
   const [activeRevisionStage, setActiveRevisionStage] = useState<RevisionStageKey>("grammar");
   const [energy, setEnergy] = useState<EnergyState | null>(sessionContext.energy as EnergyState | null);
@@ -883,6 +915,7 @@ function CheckerPageContent() {
     }
     checkInFlightRef.current = true;
     setLoading(true);
+    setActiveReviewProgress({ reviewId: null, progressPercent: 3, progressStage: "queued" });
     clearError();
     const requestId = checkRequestIdRef.current || window.crypto.randomUUID();
     checkRequestIdRef.current = requestId;
@@ -891,6 +924,12 @@ function CheckerPageContent() {
       type CheckResponse =
         | {
             result: WritingCheckResult;
+            energy: EnergyState;
+            cost: number;
+            reviewId: string;
+          }
+        | {
+            review: WritingReviewDetail | null;
             energy: EnergyState;
             cost: number;
             reviewId: string;
@@ -910,12 +949,7 @@ function CheckerPageContent() {
         taskImageName: taskImage?.name,
         ...(pendingReviewLineageRef.current ?? {})
       });
-      let response: Response;
-      let data: CheckResponse;
-      let pendingRetries = 0;
-
-      do {
-        response = await fetch("/api/check", {
+      const response = await fetch("/api/check", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -923,20 +957,7 @@ function CheckerPageContent() {
           },
           body: requestBody
         });
-        data = (await response.json()) as CheckResponse;
-
-        if (
-          response.status !== 409 ||
-          !isErrorPayload(data) ||
-          data.error !== "REVIEW_IN_PROGRESS" ||
-          pendingRetries >= 5
-        ) {
-          break;
-        }
-
-        pendingRetries += 1;
-        await new Promise((resolve) => window.setTimeout(resolve, 10_000));
-      } while (true);
+      const data = (await response.json()) as CheckResponse;
 
       if (response.ok || !isErrorPayload(data) || data.error !== "REVIEW_IN_PROGRESS") {
         checkRequestIdRef.current = null;
@@ -973,22 +994,54 @@ function CheckerPageContent() {
         throw new Error(isErrorPayload(data) ? data.error || "Request failed." : "Request failed.");
       }
 
-      if (!("result" in data)) {
+      if (response.status === 202 && "review" in data) {
+        currentReviewIdRef.current = data.reviewId;
+        pendingReviewLineageRef.current = null;
+        setEnergy(data.energy);
+        setReviewCost(data.cost);
+        setActiveReviewProgress({
+          reviewId: data.reviewId,
+          progressPercent: data.review?.progressPercent ?? 5,
+          progressStage: data.review?.progressStage ?? "queued"
+        });
+
+        while (true) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+          const statusResponse = await fetch(`/api/reviews/${encodeURIComponent(data.reviewId)}`, {
+            cache: "no-store"
+          });
+          const review = (await statusResponse.json()) as WritingReviewDetail | { error?: string };
+          if (!statusResponse.ok || !("id" in review)) throw new Error(t.genericError);
+
+          setActiveReviewProgress({
+            reviewId: review.id,
+            progressPercent: review.progressPercent,
+            progressStage: review.progressStage
+          });
+          if (review.status === "failed") throw new Error(t.aiReviewFailedAlert);
+          if (review.status === "completed" && review.result) {
+            setResult(review.result);
+            setActiveEditIndex(null);
+            break;
+          }
+        }
+      } else if ("result" in data && data.result) {
+        setResult(data.result);
+        currentReviewIdRef.current = data.reviewId;
+        pendingReviewLineageRef.current = null;
+        setEnergy(data.energy);
+        setReviewCost(data.cost);
+        setActiveEditIndex(null);
+      } else {
         throw new Error(t.genericError);
       }
-
-      setResult(data.result);
-      currentReviewIdRef.current = data.reviewId;
-      pendingReviewLineageRef.current = null;
-      setEnergy(data.energy);
-      setReviewCost(data.cost);
-      setActiveEditIndex(null);
     } catch (submissionError) {
       setResult(null);
       showError(submissionError instanceof Error ? submissionError.message : t.genericError);
     } finally {
       checkInFlightRef.current = false;
       setLoading(false);
+      setActiveReviewProgress(null);
     }
   }
 
@@ -1792,6 +1845,24 @@ function CheckerPageContent() {
                 </ActionButton>
               ) : null}
             </div>
+            {loading && activeReviewProgress ? (
+              <div className="reviewProgressPanel" role="status" aria-live="polite">
+                <div className="reviewProgressHeader">
+                  <div>
+                    <strong>{t.reviewProgressTitle}</strong>
+                    <span>{getReviewStageLabel(activeReviewProgress.progressStage, t)}</span>
+                  </div>
+                  <b>{activeReviewProgress.progressPercent}%</b>
+                </div>
+                <progress
+                  className="reviewProgressBar"
+                  max={100}
+                  value={activeReviewProgress.progressPercent}
+                  aria-label={t.reviewProgressTitle}
+                />
+                <p>{t.reviewProgressBackgroundHint}</p>
+              </div>
+            ) : null}
           </div>
           </div>
 

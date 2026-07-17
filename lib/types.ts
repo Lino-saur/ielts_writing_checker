@@ -165,6 +165,20 @@ export type WritingReviewImage = {
   url: string;
 };
 
+export type WritingReviewStatus = "processing" | "completed" | "failed";
+
+export type WritingReviewProgressStage =
+  | "queued"
+  | "preparing"
+  | "analyzing_task"
+  | "scoring"
+  | "checking_grammar"
+  | "optimizing"
+  | "verifying"
+  | "saving"
+  | "completed"
+  | "failed";
+
 export type WritingReviewListItem = {
   id: string;
   taskType: TaskType;
@@ -176,6 +190,15 @@ export type WritingReviewListItem = {
   createdAt: string;
   promptPreview: string;
   essayPreview: string;
+  status: WritingReviewStatus;
+  progressPercent: number;
+  progressStage: WritingReviewProgressStage;
+  revisionCount: number;
+};
+
+export type WritingReviewThread = {
+  rootReviewId: string;
+  items: WritingReviewDetail[];
 };
 
 export type WritingReviewTaskFilter = "all" | TaskType;
@@ -212,7 +235,11 @@ export type WritingReviewDetail = {
   estimatedBand: number;
   wordCount: number;
   providerUsed: ActiveProvider;
-  result: WritingCheckResult;
+  result: WritingCheckResult | null;
+  status: WritingReviewStatus;
+  progressPercent: number;
+  progressStage: WritingReviewProgressStage;
+  errorCode: string | null;
   parentReviewId: string | null;
   acceptedRevisionIds: string[];
   image: WritingReviewImage | null;

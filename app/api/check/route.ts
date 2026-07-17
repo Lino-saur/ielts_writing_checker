@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
 import {
   apiErrorResponse,
@@ -15,9 +15,13 @@ import { getPracticeQuestion } from "@/lib/practice-library";
 import { getHistoricalPracticeQuestion } from "@/lib/historical-practice";
 import type { AiProvider, Locale, TargetBand, TaskType } from "@/lib/types";
 import {
-  createWritingReview,
+  completePendingWritingReview,
+  createPendingWritingReview,
+  failPendingWritingReview,
   getWritingReview,
-  loadTaskImageInputFromObject
+  getWritingReviewImageSource,
+  loadTaskImageInputFromObject,
+  updateWritingReviewProgress
 } from "@/lib/writing-reviews";
 
 const MAX_CHECK_BODY_BYTES = 64 * 1024;
@@ -44,8 +48,7 @@ type RequestBody = {
 };
 
 export async function POST(request: Request) {
-  let reservedRequest: { userId: string; requestId: string; leaseToken: string } | null = null;
-  let reservationHeartbeat: ReturnType<typeof setInterval> | null = null;
+  let reservedRequest: { userId: string; requestId: string; leaseToken: string; reviewId?: string } | null = null;
   let sessionUserId: string | null = null;
 
   try {
@@ -150,9 +153,14 @@ export async function POST(request: Request) {
       : null;
     if (
       parentReviewId &&
-      (!parentReview || parentReview.taskType !== taskType || parentReview.prompt.trim() !== canonicalPrompt.trim())
+      (!parentReview || parentReview.status !== "completed" || !parentReview.result || parentReview.taskType !== taskType || parentReview.prompt.trim() !== canonicalPrompt.trim())
     ) {
       return NextResponse.json({ error: "INVALID_PARENT_REVIEW" }, { status: 400 });
+    }
+    if (parentReview && taskType === "task1" && (!taskImageObjectKey || !taskImageName)) {
+      const inheritedImage = await getWritingReviewImageSource(session.user.id, parentReview.id);
+      taskImageObjectKey = inheritedImage?.objectKey;
+      taskImageName = inheritedImage?.name;
     }
 
     const requestHash = createHash("sha256")
@@ -184,10 +192,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "IDEMPOTENCY_KEY_REUSED" }, { status: 409 });
     }
     if (reservation.status === "pending") {
-      console.warn("[IELTS_CHECK][REQUEST_CONFLICT]", {
-        reservationStatus: reservation.status,
-        responseError: "REVIEW_IN_PROGRESS"
-      });
+      if (reservation.reviewId) {
+        const [review, energy] = await Promise.all([
+          getWritingReview(session.user.id, reservation.reviewId),
+          getEnergyState(session.user.id)
+        ]);
+        if (review) {
+          return NextResponse.json({ review, reviewId: review.id, energy, cost }, { status: 202 });
+        }
+      }
       return NextResponse.json({ error: "REVIEW_IN_PROGRESS" }, { status: 409 });
     }
     if (reservation.status === "failed") {
@@ -215,63 +228,113 @@ export async function POST(request: Request) {
     }
 
     reservedRequest = { userId: session.user.id, requestId, leaseToken: reservation.leaseToken };
-    reservationHeartbeat = setInterval(() => {
-      void touchReviewRequest(session.user.id, requestId, reservation.leaseToken).catch((heartbeatError) => {
-        console.error("[IELTS_CHECK][RESERVATION_HEARTBEAT_FAILED]", {
-          error: heartbeatError instanceof Error ? heartbeatError.message : "UNKNOWN_ERROR"
-        });
-      });
-    }, 10_000);
-    const loadedImage =
-      taskImageObjectKey && taskImageName
-        ? await loadTaskImageInputFromObject({
-            userId: session.user.id,
-            objectKey: taskImageObjectKey,
-            name: taskImageName
-          })
-        : null;
-
-    const result = await evaluateWriting({
+    const reviewId = await createPendingWritingReview({
+      userId: session.user.id,
+      reviewRequestId: requestId,
+      reviewRequestLeaseToken: reservation.leaseToken,
       taskType,
       prompt: canonicalPrompt,
       essay,
-      taskImage: loadedImage?.taskImage ?? null,
-      provider: body.provider,
-      locale: body.locale,
-      targetBand: body.targetBand,
-      priorReview: parentReview
-        ? {
-            parentReviewId: parentReview.id,
-            previousEssay: parentReview.essay,
-            previousResult: parentReview.result,
-            acceptedRevisionIds
-          }
-        : undefined
-    });
-
-    const savedReview = await createWritingReview({
-      userId: session.user.id,
-      prompt: canonicalPrompt,
-      essay,
-      taskImageObjectKey: loadedImage ? taskImageObjectKey || null : null,
-      taskImageName: loadedImage?.taskImage.name ?? null,
-      taskImageMimeType: loadedImage?.mimeType ?? null,
-      taskImageSizeBytes: loadedImage?.sizeBytes ?? null,
-      reviewRequestId: requestId,
-      reviewRequestLeaseToken: reservation.leaseToken,
+      providerUsed: taskType === "task2" ? "qianwen" : "deepseek",
+      targetBand: body.targetBand ?? 6.5,
+      taskImageObjectKey: taskImageObjectKey ?? null,
+      taskImageName: taskImageName ?? null,
       parentReviewId: parentReview?.id ?? null,
-      acceptedRevisionIds,
-      result
+      acceptedRevisionIds
     });
-    reservedRequest = null;
-    const energy = await getEnergyState(session.user.id);
+    reservedRequest.reviewId = reviewId;
+    const backgroundInput = {
+      userId: session.user.id,
+      requestId,
+      leaseToken: reservation.leaseToken,
+      reviewId
+    };
 
-    return NextResponse.json({
-      result,
-      energy,
-      cost,
-      reviewId: savedReview.reviewId
+    after(async () => {
+      const heartbeat = setInterval(() => {
+        void touchReviewRequest(backgroundInput.userId, backgroundInput.requestId, backgroundInput.leaseToken).catch(
+          (heartbeatError) => {
+            console.error("[IELTS_CHECK][RESERVATION_HEARTBEAT_FAILED]", {
+              reviewId: backgroundInput.reviewId,
+              error: heartbeatError instanceof Error ? heartbeatError.message : "UNKNOWN_ERROR"
+            });
+          }
+        );
+      }, 10_000);
+
+      try {
+        await updateWritingReviewProgress(backgroundInput.userId, backgroundInput.reviewId, 8, "preparing");
+        const loadedImage = taskImageObjectKey && taskImageName
+          ? await loadTaskImageInputFromObject({
+              userId: backgroundInput.userId,
+              objectKey: taskImageObjectKey,
+              name: taskImageName
+            })
+          : null;
+        const result = await evaluateWriting(
+          {
+            taskType,
+            prompt: canonicalPrompt,
+            essay,
+            taskImage: loadedImage?.taskImage ?? null,
+            provider: body.provider,
+            locale: body.locale,
+            targetBand: body.targetBand,
+            priorReview: parentReview?.result
+              ? {
+                  parentReviewId: parentReview.id,
+                  previousEssay: parentReview.essay,
+                  previousResult: parentReview.result,
+                  acceptedRevisionIds
+                }
+              : undefined
+          },
+          (progressPercent, progressStage) =>
+            updateWritingReviewProgress(
+              backgroundInput.userId,
+              backgroundInput.reviewId,
+              progressPercent,
+              progressStage
+            )
+        );
+        await completePendingWritingReview({
+          userId: backgroundInput.userId,
+          reviewId: backgroundInput.reviewId,
+          reviewRequestId: backgroundInput.requestId,
+          reviewRequestLeaseToken: backgroundInput.leaseToken,
+          result,
+          taskImageMimeType: loadedImage?.mimeType ?? null,
+          taskImageSizeBytes: loadedImage?.sizeBytes ?? null
+        });
+      } catch (backgroundError) {
+        const normalized = apiErrorResponse(backgroundError);
+        console.error("[IELTS_CHECK][BACKGROUND_REVIEW_FAILED]", {
+          reviewId: backgroundInput.reviewId,
+          errorType: backgroundError instanceof Error ? backgroundError.name : typeof backgroundError,
+          errorMessage: backgroundError instanceof Error ? backgroundError.message : String(backgroundError)
+        });
+        await failPendingWritingReview(backgroundInput.userId, backgroundInput.reviewId, normalized.message).catch(() => undefined);
+        await failReviewRequest(
+          backgroundInput.userId,
+          backgroundInput.requestId,
+          backgroundInput.leaseToken,
+          normalized.message
+        ).catch(() => undefined);
+      } finally {
+        clearInterval(heartbeat);
+      }
     });
+
+    reservedRequest = null;
+    return NextResponse.json(
+      {
+        review: await getWritingReview(session.user.id, reviewId),
+        energy: reservation.energy,
+        cost,
+        reviewId
+      },
+      { status: 202 }
+    );
   } catch (error) {
     const normalized = apiErrorResponse(error);
     console.error("[IELTS_CHECK][REQUEST_FAILED]", {
@@ -280,6 +343,13 @@ export async function POST(request: Request) {
       responseStatus: normalized.status
     });
     if (reservedRequest) {
+      if (reservedRequest.reviewId) {
+        await failPendingWritingReview(
+          reservedRequest.userId,
+          reservedRequest.reviewId,
+          normalized.message
+        ).catch(() => undefined);
+      }
       try {
         await failReviewRequest(
           reservedRequest.userId,
@@ -312,9 +382,5 @@ export async function POST(request: Request) {
           : undefined
       }
     );
-  } finally {
-    if (reservationHeartbeat) {
-      clearInterval(reservationHeartbeat);
-    }
   }
 }

@@ -1009,7 +1009,8 @@ export async function buildAiScoreFeedback(
 
 export async function buildAiRevisionFeedback(
   input: CheckInput,
-  taskContext?: EvaluationTaskContext
+  taskContext?: EvaluationTaskContext,
+  onProgress?: (progressPercent: number, progressStage: import("@/lib/types").WritingReviewProgressStage) => void | Promise<void>
 ): Promise<WritingRevisionResult> {
   const minimumWords = input.taskType === "task1" ? 150 : 250;
   const systemPrompt = await loadBasePrompt(input.locale);
@@ -1039,6 +1040,7 @@ export async function buildAiRevisionFeedback(
     await runRevisionPass(input, grammarPrompt.prompt, grammarPrompt.rules, "grammar", "grammar"),
     grammarPrompt.rules
   );
+  await onProgress?.(45, "checking_grammar");
   const grammarCleanEssay = materializeAnnotatedEssay(grammarRevision.annotatedEssay);
   const optimizationInput: CheckInput = {
     ...input,
@@ -1073,6 +1075,7 @@ export async function buildAiRevisionFeedback(
         ),
         optimizationPrompt.rules
       );
+      await onProgress?.(68, "optimizing");
     } catch (optimizationError) {
       console.warn("[IELTS_CHECK][OPTIMIZATION_PASS_SKIPPED]", {
         taskType: input.taskType,
@@ -1095,6 +1098,7 @@ export async function buildAiRevisionFeedback(
   };
 
   try {
+    await onProgress?.(76, "verifying");
     let currentAuditInput = auditInput;
     let unresolvedFeedback: WritingRevisionResult["correctionNotes"] = [];
 
@@ -1237,6 +1241,8 @@ export async function buildAiRevisionFeedback(
       detectedIssueCount: 0
     };
   }
+
+  await onProgress?.(90, "verifying");
 
   return {
     ...finalGrammarRevision,

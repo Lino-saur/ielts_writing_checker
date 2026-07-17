@@ -7,7 +7,7 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 13;
+const CURRENT_SCHEMA_VERSION = 14;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -254,7 +254,7 @@ export async function ensureDatabase() {
         task_type TEXT NOT NULL,
         prompt_text TEXT NOT NULL,
         essay_text TEXT NOT NULL,
-        result_json JSONB NOT NULL,
+        result_json JSONB,
         provider_used TEXT NOT NULL,
         target_band NUMERIC(3, 1) NOT NULL,
         estimated_band NUMERIC(3, 1) NOT NULL,
@@ -265,6 +265,8 @@ export async function ensureDatabase() {
         image_size_bytes BIGINT,
         status TEXT NOT NULL DEFAULT 'completed',
         error_code TEXT,
+        progress_percent INTEGER NOT NULL DEFAULT 100,
+        progress_stage TEXT NOT NULL DEFAULT 'completed',
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
@@ -278,6 +280,16 @@ export async function ensureDatabase() {
     await db.query(`
       ALTER TABLE writing_reviews
       ADD COLUMN IF NOT EXISTS error_code TEXT;
+    `);
+
+    await db.query(`
+      ALTER TABLE writing_reviews
+      ADD COLUMN IF NOT EXISTS progress_percent INTEGER NOT NULL DEFAULT 100;
+    `);
+
+    await db.query(`
+      ALTER TABLE writing_reviews
+      ADD COLUMN IF NOT EXISTS progress_stage TEXT NOT NULL DEFAULT 'completed';
     `);
 
     await db.query(`
@@ -1088,6 +1100,24 @@ export async function ensureDatabase() {
         await db.query(
           `INSERT INTO schema_migrations (version, applied_at)
            VALUES (13, NOW())`
+        );
+      }
+      if (appliedVersion < 14) {
+        await db.query(`
+          ALTER TABLE writing_reviews
+          ALTER COLUMN result_json DROP NOT NULL;
+        `);
+        await db.query(`
+          ALTER TABLE writing_reviews
+          ADD COLUMN IF NOT EXISTS progress_percent INTEGER NOT NULL DEFAULT 100;
+        `);
+        await db.query(`
+          ALTER TABLE writing_reviews
+          ADD COLUMN IF NOT EXISTS progress_stage TEXT NOT NULL DEFAULT 'completed';
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (14, NOW())`
         );
       }
       await db.query("COMMIT");

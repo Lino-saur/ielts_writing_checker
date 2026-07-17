@@ -5,6 +5,7 @@ import {
   isAiTimeoutError
 } from "./ielts/ai";
 import { CheckInput, WritingCheckResult, WritingRevisionResult, WritingScoreResult, countWords, getLocale, getTargetBand } from "./ielts/shared";
+import type { WritingReviewProgressStage } from "./types";
 import { buildReviewProgress } from "./ielts/review-progress";
 
 function validateInput(input: CheckInput) {
@@ -42,13 +43,22 @@ export async function evaluateWritingRevision(input: CheckInput): Promise<Writin
   return buildAiRevisionFeedback(cleanInput, taskContext);
 }
 
-export async function evaluateWriting(input: CheckInput): Promise<WritingCheckResult> {
+export async function evaluateWriting(
+  input: CheckInput,
+  onProgress?: (progressPercent: number, progressStage: WritingReviewProgressStage) => void | Promise<void>
+): Promise<WritingCheckResult> {
   try {
     const cleanInput = validateInput(input);
+    await onProgress?.(10, "analyzing_task");
     const taskContext = await buildEvaluationTaskContext(cleanInput);
+    await onProgress?.(20, "scoring");
+    const scorePromise = buildAiScoreFeedback(cleanInput, taskContext).then(async (score) => {
+      await onProgress?.(55, "scoring");
+      return score;
+    });
     const [scoreOutcome, revisionOutcome] = await Promise.allSettled([
-      buildAiScoreFeedback(cleanInput, taskContext),
-      buildAiRevisionFeedback(cleanInput, taskContext)
+      scorePromise,
+      buildAiRevisionFeedback(cleanInput, taskContext, onProgress)
     ]);
     if (scoreOutcome.status === "rejected") {
       console.error("[IELTS_CHECK][PIPELINE_COMPONENT_FAILED]", {
@@ -91,6 +101,7 @@ export async function evaluateWriting(input: CheckInput): Promise<WritingCheckRe
     if (cleanInput.priorReview) {
       result.reviewProgress = buildReviewProgress(cleanInput.essay, result, cleanInput.priorReview);
     }
+    await onProgress?.(94, "saving");
     return result;
   } catch (error) {
     const isTimeout = isAiTimeoutError(error);

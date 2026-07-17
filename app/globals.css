@@ -2134,6 +2134,11 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   margin-bottom: 24px;
 }
 
+.historyDetailPage {
+  display: grid;
+  gap: 24px;
+}
+
 .historyListSurface,
 .historyDetailStandalone,
 .historyEmptyState {
@@ -2143,6 +2148,195 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
 .historyListSurface {
   display: grid;
   gap: 12px;
+}
+
+.reviewProgressPanel {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  border-radius: 16px;
+  background: rgba(var(--accent-rgb), 0.06);
+}
+
+.reviewProgressHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reviewProgressHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.reviewProgressHeader span,
+.reviewProgressPanel p {
+  color: var(--muted-strong);
+  font-size: 0.88rem;
+}
+
+.reviewProgressHeader b {
+  color: var(--accent);
+  font-size: 1.05rem;
+}
+
+.reviewProgressBar {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.14);
+  accent-color: var(--accent);
+}
+
+.reviewProgressBar::-webkit-progress-bar {
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.14);
+}
+
+.reviewProgressBar::-webkit-progress-value,
+.reviewProgressBar::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.reviewProgressPanel p {
+  margin: 0;
+}
+
+.reviewRoundNavigator {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+}
+
+.reviewRoundNavHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reviewRoundNavHeader strong {
+  color: var(--muted-strong);
+  font-size: 0.9rem;
+}
+
+.reviewRoundNav {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
+}
+
+.reviewRoundNavButton {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr);
+  grid-template-areas: "index copy" "status status";
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 220px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-muted);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.reviewRoundNavButton:hover {
+  border-color: rgba(var(--accent-rgb), 0.34);
+  transform: translateY(-1px);
+}
+
+.reviewRoundNavButton.is-active {
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.08);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.08);
+}
+
+.reviewRoundNavIndex {
+  grid-area: index;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent);
+  font-weight: 750;
+}
+
+.reviewRoundNavCopy {
+  grid-area: copy;
+  display: grid;
+  gap: 2px;
+}
+
+.reviewRoundNavCopy small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.reviewRoundNavStatus {
+  grid-area: status;
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.reviewRoundNavStatus.is-processing {
+  color: var(--accent);
+}
+
+.reviewRoundNavStatus.is-failed {
+  color: var(--danger, #b42318);
+}
+
+.historySelectedReport {
+  margin-top: 0;
+}
+
+.historySourceWorkbench {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.historyEssayDraftPanel .checkerDraftHeader {
+  align-items: flex-start;
+}
+
+.historyEssayDraftPanel .checkerTaskContextMeta {
+  flex: 0 0 auto;
+}
+
+.historyEssayEditor[readonly] {
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .reviewRoundNavigator {
+    padding: 16px;
+  }
+
+  .reviewRoundNavButton {
+    min-width: min(82vw, 250px);
+  }
+
+  .historyEssayDraftPanel .checkerDraftHeader {
+    align-items: stretch;
+  }
 }
 
 .historySidebarHeader {
@@ -2238,35 +2432,6 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   margin-top: 18px;
 }
 
-.historyTextBlock,
-.historyEssayBlock {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.8;
-  white-space: pre-wrap;
-}
-
-.historyEssayBlock {
-  font-family:
-    "SFMono-Regular",
-    "Menlo",
-    "Consolas",
-    monospace;
-}
-
-.historyImagePanel {
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--surface-muted);
-}
-
-.historyImage {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
 .heroStatCard,
 .previewMetric,
 .correctionCard,
@@ -3089,35 +3254,6 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   margin-top: 18px;
 }
 
-.historyTextBlock,
-.historyEssayBlock {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.8;
-  white-space: pre-wrap;
-}
-
-.historyEssayBlock {
-  font-family:
-    "SFMono-Regular",
-    "Menlo",
-    "Consolas",
-    monospace;
-}
-
-.historyImagePanel {
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--surface-muted);
-}
-
-.historyImage {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
 .heroStatCard,
 .previewMetric,
 .correctionCard,
@@ -3938,35 +4074,6 @@ html[data-theme="dark"] .checkerWordHint.is-extended {
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 18px;
-}
-
-.historyTextBlock,
-.historyEssayBlock {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.8;
-  white-space: pre-wrap;
-}
-
-.historyEssayBlock {
-  font-family:
-    "SFMono-Regular",
-    "Menlo",
-    "Consolas",
-    monospace;
-}
-
-.historyImagePanel {
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--surface-muted);
-}
-
-.historyImage {
-  display: block;
-  width: 100%;
-  height: auto;
 }
 
 .revisionHint {
@@ -11866,5 +11973,53 @@ html[data-theme="dark"] .globalLoadingAnimation {
 @media (prefers-reduced-motion: reduce) {
   .globalLoadingAnimation {
     box-shadow: none;
+  }
+}
+
+/* History detail mirrors the checker workspace; keep these final overrides after legacy theme passes. */
+.historyDetailPage {
+  display: grid;
+  gap: 24px;
+}
+
+.historyDetailPage .historySourceWorkbench {
+  display: grid;
+  gap: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.historyDetailPage .historySourceWorkbench .checkerInputWorkspace,
+.historyDetailPage .historySourceWorkbench .checkerQuestionColumn {
+  display: contents;
+}
+
+.historyDetailPage .historyEssayDraftPanel {
+  margin: 0;
+}
+
+.historyDetailPage .historyReadOnlyBadge {
+  cursor: default;
+  user-select: none;
+}
+
+.historyDetailPage .reviewRoundNavigator {
+  box-shadow: none;
+}
+
+.historyDetailPage .historySelectedReport {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .historyDetailPage {
+    gap: 18px;
+  }
+
+  .historyDetailPage .historySourceWorkbench {
+    gap: 16px;
   }
 }

@@ -23,7 +23,7 @@ type ReviewRequestRow = {
 
 export type BeginReviewRequestResult =
   | { status: "reserved"; energy: EnergyState; leaseToken: string }
-  | { status: "pending" }
+  | { status: "pending"; reviewId: string | null }
   | { status: "completed"; reviewId: string }
   | { status: "failed" }
   | { status: "conflict" };
@@ -94,7 +94,7 @@ export async function beginReviewRequest(
         const ageMs = Date.now() - new Date(existingRequest.updated_at).getTime();
         if (ageMs < STALE_REQUEST_MS) {
           await client.query("COMMIT");
-          return { status: "pending" };
+          return { status: "pending", reviewId: existingRequest.review_id };
         }
         await refundPendingRequest(client, userId, existingRequest, "STALE_REQUEST");
         const reservation = await reserveExistingRequest(client, userId, requestId, requestHash);
@@ -123,7 +123,7 @@ export async function beginReviewRequest(
       const ageMs = Date.now() - new Date(pendingRequest.updated_at).getTime();
       if (ageMs < STALE_REQUEST_MS) {
         await client.query("COMMIT");
-        return { status: "pending" };
+        return { status: "pending", reviewId: pendingRequest.review_id };
       }
       await refundPendingRequest(client, userId, pendingRequest, "STALE_REQUEST");
     }

@@ -14,8 +14,11 @@ import type {
   WritingCheckResult,
   WritingReviewDetail,
   WritingReviewListItem,
+  WritingReviewProgressStage,
   WritingReviewStats,
-  WritingReviewTaskFilter
+  WritingReviewStatus,
+  WritingReviewTaskFilter,
+  WritingReviewThread
 } from "./types";
 
 type WritingReviewRow = {
@@ -24,7 +27,7 @@ type WritingReviewRow = {
   task_type: WritingReviewDetail["taskType"];
   prompt_text: string;
   essay_text: string;
-  result_json: WritingCheckResult;
+  result_json: WritingCheckResult | null;
   provider_used: WritingReviewDetail["providerUsed"];
   target_band: number | string;
   estimated_band: number | string;
@@ -34,6 +37,12 @@ type WritingReviewRow = {
   image_mime_type: string | null;
   parent_review_id: string | null;
   accepted_revision_ids: string[] | null;
+  status: WritingReviewStatus;
+  error_code: string | null;
+  progress_percent: number;
+  progress_stage: WritingReviewProgressStage;
+  root_id?: string;
+  revision_count?: number;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -70,7 +79,7 @@ function buildPreview(text: string, maxLength: number) {
 
 function mapReviewSummary(row: WritingReviewRow): WritingReviewListItem {
   return {
-    id: row.id,
+    id: row.root_id ?? row.id,
     taskType: row.task_type,
     targetBand: Number(row.target_band),
     estimatedBand: Number(row.estimated_band),
@@ -79,7 +88,11 @@ function mapReviewSummary(row: WritingReviewRow): WritingReviewListItem {
     hasImage: Boolean(row.image_object_key),
     createdAt: new Date(row.created_at).toISOString(),
     promptPreview: buildPreview(row.prompt_text, 132),
-    essayPreview: buildPreview(row.essay_text, 168)
+    essayPreview: buildPreview(row.essay_text, 168),
+    status: row.status,
+    progressPercent: row.progress_percent,
+    progressStage: row.progress_stage,
+    revisionCount: row.revision_count ?? 1
   };
 }
 
@@ -95,6 +108,10 @@ function mapReviewDetail(row: WritingReviewRow): WritingReviewDetail {
     wordCount: row.word_count,
     providerUsed: row.provider_used,
     result: row.result_json,
+    status: row.status,
+    progressPercent: row.progress_percent,
+    progressStage: row.progress_stage,
+    errorCode: row.error_code,
     parentReviewId: row.parent_review_id ?? null,
     acceptedRevisionIds: Array.isArray(row.accepted_revision_ids) ? row.accepted_revision_ids : [],
     image:
@@ -278,6 +295,184 @@ export async function createWritingReview(input: {
   }
 }
 
+export async function createPendingWritingReview(input: {
+  userId: string;
+  reviewRequestId: string;
+  reviewRequestLeaseToken: string;
+  taskType: WritingReviewDetail["taskType"];
+  prompt: string;
+  essay: string;
+  providerUsed: WritingReviewDetail["providerUsed"];
+  targetBand: number;
+  taskImageObjectKey?: string | null;
+  taskImageName?: string | null;
+  parentReviewId?: string | null;
+  acceptedRevisionIds?: string[];
+}) {
+  await ensureDatabase();
+  const reviewId = randomUUID();
+  const wordCount = input.essay.trim() ? input.essay.trim().split(/\s+/).length : 0;
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+    const reservation = await client.query<{ status: string; lease_token: string | null }>(
+      `SELECT status, lease_token
+       FROM ai_review_requests
+       WHERE id = $1 AND user_id = $2
+       FOR UPDATE`,
+      [input.reviewRequestId, input.userId]
+    );
+    if (
+      reservation.rows[0]?.status !== "pending" ||
+      reservation.rows[0].lease_token !== input.reviewRequestLeaseToken
+    ) {
+      throw new Error("INVALID_REVIEW_RESERVATION");
+    }
+
+    await client.query(
+      `INSERT INTO writing_reviews (
+        id, user_id, task_type, prompt_text, essay_text, result_json, provider_used,
+        target_band, estimated_band, word_count, image_object_key, image_name,
+        parent_review_id, accepted_revision_ids, status, error_code,
+        progress_percent, progress_stage, created_at, updated_at
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, NULL, $6,
+        $7, 0, $8, $9, $10, $11, $12::jsonb, 'processing', NULL,
+        5, 'queued', NOW(), NOW()
+      )`,
+      [
+        reviewId,
+        input.userId,
+        input.taskType,
+        input.prompt.trim(),
+        input.essay.trim(),
+        input.providerUsed,
+        input.targetBand,
+        wordCount,
+        input.taskImageObjectKey ?? null,
+        input.taskImageName ?? null,
+        input.parentReviewId ?? null,
+        JSON.stringify(input.acceptedRevisionIds ?? [])
+      ]
+    );
+    await client.query(
+      `UPDATE ai_review_requests
+       SET review_id = $3, updated_at = NOW()
+       WHERE id = $1 AND user_id = $2 AND status = 'pending' AND lease_token = $4`,
+      [input.reviewRequestId, input.userId, reviewId, input.reviewRequestLeaseToken]
+    );
+    await client.query("COMMIT");
+    return reviewId;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function updateWritingReviewProgress(
+  userId: string,
+  reviewId: string,
+  progressPercent: number,
+  progressStage: WritingReviewProgressStage
+) {
+  await ensureDatabase();
+  const boundedProgress = Math.min(Math.max(Math.round(progressPercent), 5), 99);
+  await db.query(
+    `UPDATE writing_reviews
+     SET progress_percent = GREATEST(progress_percent, $3),
+         progress_stage = CASE WHEN $3 >= progress_percent THEN $4 ELSE progress_stage END,
+         updated_at = NOW()
+     WHERE id = $1 AND user_id = $2 AND status = 'processing'`,
+    [reviewId, userId, boundedProgress, progressStage]
+  );
+}
+
+export async function completePendingWritingReview(input: {
+  userId: string;
+  reviewId: string;
+  reviewRequestId: string;
+  reviewRequestLeaseToken: string;
+  result: WritingCheckResult;
+  taskImageMimeType?: string | null;
+  taskImageSizeBytes?: number | null;
+}) {
+  await ensureDatabase();
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+    const reservation = await client.query<{ status: string; lease_token: string | null }>(
+      `SELECT status, lease_token
+       FROM ai_review_requests
+       WHERE id = $1 AND user_id = $2
+       FOR UPDATE`,
+      [input.reviewRequestId, input.userId]
+    );
+    if (
+      reservation.rows[0]?.status !== "pending" ||
+      reservation.rows[0].lease_token !== input.reviewRequestLeaseToken
+    ) {
+      throw new Error("INVALID_REVIEW_RESERVATION");
+    }
+
+    const completed = await client.query(
+      `UPDATE writing_reviews
+       SET result_json = $3::jsonb,
+           provider_used = $4,
+           target_band = $5,
+           estimated_band = $6,
+           word_count = $7,
+           image_mime_type = COALESCE($8, image_mime_type),
+           image_size_bytes = COALESCE($9, image_size_bytes),
+           status = 'completed',
+           error_code = NULL,
+           progress_percent = 100,
+           progress_stage = 'completed',
+           updated_at = NOW()
+       WHERE id = $1 AND user_id = $2 AND status = 'processing'`,
+      [
+        input.reviewId,
+        input.userId,
+        JSON.stringify(input.result),
+        input.result.providerUsed,
+        input.result.targetBand,
+        input.result.estimatedBand,
+        input.result.wordCount,
+        input.taskImageMimeType ?? null,
+        input.taskImageSizeBytes ?? null
+      ]
+    );
+    if (completed.rowCount !== 1) throw new Error("PENDING_REVIEW_NOT_FOUND");
+
+    await client.query(
+      `UPDATE ai_review_requests
+       SET status = 'completed', review_id = $3, error_code = NULL, updated_at = NOW()
+       WHERE id = $1 AND user_id = $2 AND status = 'pending' AND lease_token = $4`,
+      [input.reviewRequestId, input.userId, input.reviewId, input.reviewRequestLeaseToken]
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function failPendingWritingReview(userId: string, reviewId: string, errorCode: string) {
+  await ensureDatabase();
+  await db.query(
+    `UPDATE writing_reviews
+     SET status = 'failed', error_code = $3, progress_stage = 'failed', updated_at = NOW()
+     WHERE id = $1 AND user_id = $2 AND status = 'processing'`,
+    [reviewId, userId, errorCode]
+  );
+}
+
 export async function listWritingReviews(
   userId: string,
   options?: { limit?: number; offset?: number; taskType?: WritingReviewTaskFilter }
@@ -286,11 +481,31 @@ export async function listWritingReviews(
 
   const limit = Math.min(Math.max(options?.limit ?? 20, 1), 100);
   const offset = Math.max(options?.offset ?? 0, 0);
-  const filters = buildReviewFilters(userId, options);
-  const listValues = [...filters.values, limit, offset];
+  const taskType = options?.taskType ?? "all";
+  const listValues: Array<string | number> = [userId];
+  const taskFilter = taskType === "all" ? "" : `AND wr.task_type = $${listValues.push(taskType)}`;
+  listValues.push(limit, offset);
   const result = await db.query<WritingReviewRow>(
-    `SELECT
+    `WITH RECURSIVE review_lineage AS (
+      SELECT wr.*, wr.id AS root_id
+      FROM writing_reviews wr
+      WHERE wr.user_id = $1 AND wr.parent_review_id IS NULL ${taskFilter}
+      UNION ALL
+      SELECT child.*, lineage.root_id
+      FROM writing_reviews child
+      INNER JOIN review_lineage lineage ON child.parent_review_id = lineage.id
+      WHERE child.user_id = $1
+    ), ranked_reviews AS (
+      SELECT
+        review_lineage.*,
+        COUNT(*) OVER (PARTITION BY root_id)::integer AS revision_count,
+        ROW_NUMBER() OVER (PARTITION BY root_id ORDER BY created_at DESC, id DESC) AS latest_rank
+      FROM review_lineage
+    )
+    SELECT
       id,
+      root_id,
+      revision_count,
       user_id,
       task_type,
       prompt_text,
@@ -305,10 +520,14 @@ export async function listWritingReviews(
       image_mime_type,
       parent_review_id,
       accepted_revision_ids,
+      status,
+      error_code,
+      progress_percent,
+      progress_stage,
       created_at,
       updated_at
-     FROM writing_reviews
-     WHERE ${filters.whereClause}
+     FROM ranked_reviews
+     WHERE latest_rank = 1
      ORDER BY created_at DESC
      LIMIT $${listValues.length - 1} OFFSET $${listValues.length}`,
     listValues
@@ -316,14 +535,43 @@ export async function listWritingReviews(
 
   const totalResult = await db.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count
-     FROM writing_reviews
-     WHERE ${filters.whereClause}`,
-    filters.values
+     FROM writing_reviews wr
+     WHERE wr.user_id = $1 AND wr.parent_review_id IS NULL ${taskFilter}`,
+    listValues.slice(0, listValues.length - 2)
   );
 
   return {
     items: result.rows.map(mapReviewSummary),
     total: Number(totalResult.rows[0]?.count || 0)
+  };
+}
+
+export async function getWritingReviewThread(userId: string, rootReviewId: string): Promise<WritingReviewThread | null> {
+  await ensureDatabase();
+  const result = await db.query<WritingReviewRow>(
+    `WITH RECURSIVE review_thread AS (
+      SELECT *
+      FROM writing_reviews
+      WHERE id = $1 AND user_id = $2
+      UNION ALL
+      SELECT child.*
+      FROM writing_reviews child
+      INNER JOIN review_thread parent ON child.parent_review_id = parent.id
+      WHERE child.user_id = $2
+    )
+    SELECT
+      id, user_id, task_type, prompt_text, essay_text, result_json, provider_used,
+      target_band, estimated_band, word_count, image_object_key, image_name,
+      image_mime_type, parent_review_id, accepted_revision_ids, status, error_code,
+      progress_percent, progress_stage, created_at, updated_at
+    FROM review_thread
+    ORDER BY created_at ASC, id ASC`,
+    [rootReviewId, userId]
+  );
+  if (!result.rows.length) return null;
+  return {
+    rootReviewId,
+    items: result.rows.map(mapReviewDetail)
   };
 }
 
@@ -343,7 +591,7 @@ export async function getWritingReviewStats(
       estimated_band,
       created_at
      FROM writing_reviews
-     WHERE ${filters.whereClause}
+     WHERE ${filters.whereClause} AND status = 'completed'
      ORDER BY created_at DESC
      LIMIT $${filters.values.length + 1}`,
     [...filters.values, recentCount]
@@ -354,7 +602,7 @@ export async function getWritingReviewStats(
   let totalGrammarCorrections = 0;
 
   orderedRows.forEach((row) => {
-    const grammarNotes = row.result_json.grammarRevision?.correctionNotes ?? row.result_json.correctionNotes ?? [];
+    const grammarNotes = row.result_json?.grammarRevision?.correctionNotes ?? row.result_json?.correctionNotes ?? [];
     grammarNotes.forEach((note) => {
       const category = normalizeRevisionCategory(note.category);
       categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
@@ -409,6 +657,10 @@ export async function getWritingReview(userId: string, reviewId: string) {
       image_mime_type,
       parent_review_id,
       accepted_revision_ids,
+      status,
+      error_code,
+      progress_percent,
+      progress_stage,
       created_at,
       updated_at
      FROM writing_reviews
@@ -447,6 +699,21 @@ export async function getWritingReviewImage(userId: string, reviewId: string) {
     mimeType: row.image_mime_type,
     body: response.body
   };
+}
+
+export async function getWritingReviewImageSource(userId: string, reviewId: string) {
+  await ensureDatabase();
+  const result = await db.query<Pick<WritingReviewRow, "image_object_key" | "image_name">>(
+    `SELECT image_object_key, image_name
+     FROM writing_reviews
+     WHERE id = $1 AND user_id = $2
+     LIMIT 1`,
+    [reviewId, userId]
+  );
+  const row = result.rows[0];
+  return row?.image_object_key && row.image_name
+    ? { objectKey: row.image_object_key, name: row.image_name }
+    : null;
 }
 
 export async function loadTaskImageInputFromObject(input: {

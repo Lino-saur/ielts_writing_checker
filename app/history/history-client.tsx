@@ -11,7 +11,7 @@ import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import type { WritingReviewListItem, WritingReviewStats, WritingReviewTaskFilter } from "@/lib/types";
-import { describeTaskFilter, formatReviewTime } from "./history-shared";
+import { describeReviewProgressStage, describeTaskFilter, formatReviewTime } from "./history-shared";
 
 const PieChart = dynamic(
   () => import("./history-charts").then((module) => module.PieChart),
@@ -56,11 +56,13 @@ export default function HistoryPageClient() {
   const sessionReady = sessionResolved;
   const isAuthenticated = Boolean(sessionContext.user);
 
-  const loadReviews = useCallback(async () => {
-    setLoadingList(true);
-    setItems([]);
-    setTotalReviews(0);
-    setError(null);
+  const loadReviews = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoadingList(true);
+      setItems([]);
+      setTotalReviews(0);
+      setError(null);
+    }
 
     try {
       const params = new URLSearchParams({
@@ -81,9 +83,15 @@ export default function HistoryPageClient() {
     } catch {
       setError(t.historyLoadError);
     } finally {
-      setLoadingList(false);
+      if (!silent) setLoadingList(false);
     }
   }, [recentCount, t.historyLoadError, taskFilter]);
+
+  useEffect(() => {
+    if (!items.some((item) => item.status === "processing")) return;
+    const timer = window.setInterval(() => void loadReviews(true), 4_000);
+    return () => window.clearInterval(timer);
+  }, [items, loadReviews]);
 
   const loadStats = useCallback(async () => {
     setLoadingStats(true);
@@ -243,14 +251,20 @@ export default function HistoryPageClient() {
                           <strong>{item.taskType === "task1" ? navbar.task1 : navbar.task2}</strong>
                           <span className="historyListTimestamp">{formatReviewTime(item.createdAt, locale)}</span>
                         </div>
-                        <Pill>Band {item.estimatedBand.toFixed(1)}</Pill>
+                        <Pill>
+                          {item.status === "processing"
+                            ? `${t.reviewStatusProcessing} · ${item.progressPercent}%`
+                            : item.status === "failed"
+                              ? t.reviewStatusFailed
+                              : `Band ${item.estimatedBand.toFixed(1)}`}
+                        </Pill>
                       </div>
                       <div className={`historyListContent${item.hasImage ? " has-image" : ""}`}>
                         <div className="historyListCopy">
                           <p className="historyListPreview">{item.promptPreview}</p>
                           <p className="historyListEssayPreview">{item.essayPreview}</p>
                         </div>
-                        {item.hasImage ? (
+                        {item.hasImage && item.status === "completed" ? (
                           <div className="historyListThumbnail">
                             <Image
                               src={`/api/reviews/${encodeURIComponent(item.id)}/image`}
@@ -265,12 +279,16 @@ export default function HistoryPageClient() {
                       </div>
                       <div className="historyListFooter">
                         <div className="historyListMeta">
+                          <span>{t.reviewThreadCount.replace("{count}", String(item.revisionCount))}</span>
                           <span>
                             {item.wordCount} {t.wordsUnit}
                           </span>
+                          {item.status === "processing" ? (
+                            <span>{describeReviewProgressStage(item.progressStage, t)}</span>
+                          ) : null}
                         </div>
                         <span className="historyListAction" aria-hidden="true">
-                          {t.historyViewDetail} <span>→</span>
+                          {item.status === "completed" ? t.historyViewDetail : item.status === "processing" ? t.reviewStatusProcessing : t.reviewStatusFailed} <span>→</span>
                         </span>
                       </div>
                     </Link>
