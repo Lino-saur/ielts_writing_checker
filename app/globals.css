@@ -6146,6 +6146,8 @@ html[data-theme="dark"] .authSwitchButton {
 .shareDialogHeader,
 .shareDialogActions,
 .sharedReviewHeader,
+.sharedReviewIdentity,
+.sharedReviewBrand,
 .sharedReviewHeaderActions {
   display: flex;
   align-items: center;
@@ -6233,16 +6235,59 @@ html[data-theme="dark"] .authSwitchButton {
 .sharedReviewHeader {
   justify-content: space-between;
   gap: 18px;
-  min-height: 52px;
-  padding: 0 0 18px;
-  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 12px;
+  z-index: 20;
+  min-height: 62px;
+  padding: 9px 10px 9px 16px;
+  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--paper-strong) 88%, transparent);
+  box-shadow: 0 12px 34px rgba(18, 22, 29, 0.08);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.sharedReviewIdentity {
+  min-width: 0;
+  gap: 12px;
 }
 
 .sharedReviewBrand {
+  gap: 9px;
   color: var(--ink);
-  font-size: 1.05rem;
+  font-size: 0.98rem;
   font-weight: 850;
   text-decoration: none;
+}
+
+.sharedReviewBrandMark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--paper-strong);
+  background: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.sharedReviewHeaderDivider {
+  width: 1px;
+  height: 22px;
+  background: var(--line-strong);
+}
+
+.sharedReviewReportLabel {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sharedReviewHeaderActions {
@@ -6250,8 +6295,8 @@ html[data-theme="dark"] .authSwitchButton {
 }
 
 .sharedReviewLanguage {
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 42px;
+  padding: 0 13px;
   border: 1px solid var(--line);
   border-radius: 12px;
   color: var(--muted-strong);
@@ -6259,6 +6304,14 @@ html[data-theme="dark"] .authSwitchButton {
   font: inherit;
   font-weight: 750;
   cursor: pointer;
+}
+
+.sharedReviewCheckerCta {
+  min-height: 42px;
+  gap: 8px;
+  padding-inline: 17px;
+  border-radius: 12px;
+  white-space: nowrap;
 }
 
 .sharedReviewContent {
@@ -6323,33 +6376,97 @@ html[data-theme="dark"] .authSwitchButton {
 .sharedReviewNav {
   display: grid;
   grid-template-columns: repeat(3, minmax(112px, 1fr));
-  gap: 8px;
+  gap: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--paper-soft) 82%, transparent);
 }
 
 .sharedReviewNav a {
-  display: grid;
-  gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   min-width: 112px;
-  padding: 13px 14px;
-  border: 1px solid var(--line);
-  border-radius: 13px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 11px;
   color: var(--ink);
-  background: var(--paper);
+  background: transparent;
   font-size: 0.86rem;
   font-weight: 800;
   text-decoration: none;
-  transition: border-color 160ms ease, transform 160ms ease;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .sharedReviewNav a:hover {
-  border-color: var(--line-strong);
-  transform: translateY(-2px);
+  color: var(--accent);
+  background: var(--paper-strong);
+  box-shadow: 0 5px 14px rgba(18, 22, 29, 0.07);
 }
 
 .sharedReviewNav a span {
-  color: var(--muted);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--muted-strong);
+  background: var(--paper);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+}
+
+.uiSurface.sharedReviewCta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  overflow: hidden;
+  padding: clamp(26px, 5vw, 44px);
+  border-radius: 22px;
+  color: var(--paper-strong);
+  background:
+    radial-gradient(circle at 82% 20%, color-mix(in srgb, var(--accent) 48%, transparent), transparent 34%),
+    var(--ink);
+}
+
+.sharedReviewCta .sectionLabel {
+  margin: 0 0 10px;
+  color: color-mix(in srgb, var(--paper-strong) 65%, transparent);
+}
+
+.sharedReviewPage .sharedReviewCta h2 {
+  max-width: 650px;
+  margin: 0;
+  color: inherit;
+  font-size: clamp(1.55rem, 3vw, 2.25rem);
+  letter-spacing: -0.035em;
+}
+
+.sharedReviewCta p:last-child {
+  max-width: 650px;
+  margin: 11px 0 0;
+  color: color-mix(in srgb, var(--paper-strong) 72%, transparent);
+  line-height: 1.65;
+}
+
+.sharedReviewPage .sharedReviewCta .uiButton {
+  flex: 0 0 auto;
+  gap: 12px;
+  min-height: 50px;
+  padding-inline: 22px;
+  border-color: var(--paper-strong);
+  color: var(--ink);
+  background: var(--paper-strong);
+  white-space: nowrap;
+}
+
+.sharedReviewPage .sharedReviewCta .uiButton:hover {
+  border-color: #ecece8;
+  color: var(--ink);
+  background: #ecece8;
 }
 
 .sharedReviewSource {
@@ -6667,7 +6784,22 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .sharedReviewHeaderActions {
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-content: stretch;
+  }
+
+  .sharedReviewBadge {
+    display: none;
+  }
+
+  .sharedReviewCheckerCta {
+    justify-content: center;
+  }
+
+  .sharedReviewHeaderDivider,
+  .sharedReviewReportLabel {
+    display: none;
   }
 
   .shareDialog {
@@ -6700,8 +6832,23 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .sharedReviewNav a {
+    display: grid;
+    justify-items: center;
     min-width: 0;
-    padding: 11px;
+    gap: 6px;
+    padding: 9px 5px;
+    text-align: center;
+  }
+
+  .sharedReviewCta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .sharedReviewPage .sharedReviewCta .uiButton {
+    justify-content: center;
+    width: 100%;
   }
 
   .sharedReviewPromptBlock {

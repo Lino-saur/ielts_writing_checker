@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Pill, Surface } from "@/components/ui-kit";
+import { ActionLink, Pill, Surface } from "@/components/ui-kit";
 import { parseAnnotatedEssay } from "@/app/checker/checker-revision";
 import { getRevisionCategoryLabel } from "@/lib/ielts/revision-categories";
 import { getMessages } from "@/lib/i18n/messages";
@@ -237,6 +237,10 @@ export default function SharedReviewClient({ sharedReview }: { sharedReview: Sha
   const copy = locale === "zh-CN"
     ? {
         badge: "公开分享 · 只读",
+        reportLabel: "批改报告",
+        checkerCta: "去批改",
+        checkerCtaTitle: "也想知道自己的作文能得多少分？",
+        checkerCtaBody: "提交 IELTS 作文，获得评分、逐句修改与表达优化建议。",
         title: "IELTS 写作批改报告",
         prompt: "写作题目",
         essay: "原始作文",
@@ -262,6 +266,10 @@ export default function SharedReviewClient({ sharedReview }: { sharedReview: Sha
       }
     : {
         badge: "Public share · Read only",
+        reportLabel: "Review report",
+        checkerCta: "Check my essay",
+        checkerCtaTitle: "Want to know how your essay would score?",
+        checkerCtaBody: "Submit your IELTS essay for scoring, corrections and expression improvements.",
         title: "IELTS Writing Review",
         prompt: "Writing prompt",
         essay: "Original essay",
@@ -301,12 +309,22 @@ export default function SharedReviewClient({ sharedReview }: { sharedReview: Sha
       </div>
 
       <header className="sharedReviewHeader">
-        <Link className="sharedReviewBrand" href={`/${locale}`}>{navbar.brand}</Link>
+        <div className="sharedReviewIdentity">
+          <Link className="sharedReviewBrand" href={`/${locale}`}>
+            <span className="sharedReviewBrandMark" aria-hidden="true">W</span>
+            <span>{navbar.brand}</span>
+          </Link>
+          <span className="sharedReviewHeaderDivider" aria-hidden="true" />
+          <span className="sharedReviewReportLabel">{copy.reportLabel}</span>
+        </div>
         <div className="sharedReviewHeaderActions">
           <span className="sharedReviewBadge">{copy.badge}</span>
           <button type="button" className="sharedReviewLanguage" onClick={() => setLocale(locale === "zh-CN" ? "en" : "zh-CN")}>
             {copy.language}
           </button>
+          <ActionLink className="sharedReviewCheckerCta" href={`/${locale}/checker`} variant="primary">
+            {copy.checkerCta}<span aria-hidden="true">↗</span>
+          </ActionLink>
         </div>
       </header>
 
@@ -400,6 +418,17 @@ export default function SharedReviewClient({ sharedReview }: { sharedReview: Sha
           locale={locale}
           tone="optimization"
         />
+
+        <Surface as="section" className="sharedReviewCta">
+          <div>
+            <p className="sectionLabel">IELTS Writing Checker</p>
+            <h2>{copy.checkerCtaTitle}</h2>
+            <p>{copy.checkerCtaBody}</p>
+          </div>
+          <ActionLink href={`/${locale}/checker`} variant="primary">
+            {copy.checkerCta}<span aria-hidden="true">→</span>
+          </ActionLink>
+        </Surface>
       </article>
     </main>
   );
