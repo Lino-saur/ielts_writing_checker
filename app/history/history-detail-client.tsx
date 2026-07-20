@@ -21,6 +21,12 @@ type HistoryDetailPageClientProps = {
   reviewId: string;
 };
 
+type ShareState = {
+  active: boolean;
+  token: string | null;
+  createdAt: string | null;
+};
+
 export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageClientProps) {
   const { sessionContext, sessionResolved } = useAuthSession();
   const [locale, setLocale] = useRouteLocale();
@@ -35,6 +41,11 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
   const [editingAcceptedRevisionIds, setEditingAcceptedRevisionIds] = useState<string[]>([]);
   const [submittingRevision, setSubmittingRevision] = useState(false);
   const [revisionError, setRevisionError] = useState<string | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareState, setShareState] = useState<ShareState | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareCopyState, setShareCopyState] = useState<"idle" | "copied">("idle");
 
   const { checker: t, navbar } = getMessages(locale);
   const sessionReady = sessionResolved;
@@ -94,6 +105,106 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
     setEditingAcceptedRevisionIds([]);
     setRevisionError(null);
   }, [editingBaseReviewId, selectedReview]);
+
+  useEffect(() => {
+    setShareDialogOpen(false);
+    setShareState(null);
+    setShareError(null);
+    setShareCopyState("idle");
+  }, [selectedReviewId]);
+
+  useEffect(() => {
+    if (!shareDialogOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setShareDialogOpen(false);
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [shareDialogOpen]);
+
+  async function openShareDialog() {
+    if (!selectedReview || selectedReview.status !== "completed") return;
+    setShareDialogOpen(true);
+    setShareLoading(true);
+    setShareError(null);
+    setShareCopyState("idle");
+    try {
+      const response = await fetch(`/api/reviews/${encodeURIComponent(selectedReview.id)}/share`, { cache: "no-store" });
+      const data = (await response.json()) as ShareState | { error?: string };
+      if (!response.ok || !("active" in data)) throw new Error("SHARE_LOAD_FAILED");
+      setShareState(data);
+    } catch {
+      setShareError(t.shareReviewFailed);
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
+  async function ensureShareLink() {
+    if (!selectedReview) return null;
+    if (shareState?.active && shareState.token) {
+      return `${window.location.origin}/share/${shareState.token}`;
+    }
+    const response = await fetch(`/api/reviews/${encodeURIComponent(selectedReview.id)}/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale })
+    });
+    const data = (await response.json()) as ShareState | { error?: string };
+    if (!response.ok || !("active" in data) || !data.token) throw new Error("SHARE_CREATE_FAILED");
+    setShareState(data);
+    return `${window.location.origin}/share/${data.token}`;
+  }
+
+  async function copyShareLink() {
+    setShareLoading(true);
+    setShareError(null);
+    try {
+      const link = await ensureShareLink();
+      if (!link) throw new Error("SHARE_CREATE_FAILED");
+      await navigator.clipboard.writeText(link);
+      setShareCopyState("copied");
+    } catch {
+      setShareError(t.shareReviewFailed);
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
+  async function shareWithSystem() {
+    setShareLoading(true);
+    setShareError(null);
+    try {
+      const link = await ensureShareLink();
+      if (!link) throw new Error("SHARE_CREATE_FAILED");
+      if (navigator.share) {
+        await navigator.share({ title: t.shareReviewTitle, text: t.shareReviewMessage, url: link });
+      } else {
+        await navigator.clipboard.writeText(link);
+        setShareCopyState("copied");
+      }
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) setShareError(t.shareReviewFailed);
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
+  async function revokeShareLink() {
+    if (!selectedReview) return;
+    setShareLoading(true);
+    setShareError(null);
+    try {
+      const response = await fetch(`/api/reviews/${encodeURIComponent(selectedReview.id)}/share`, { method: "DELETE" });
+      if (!response.ok) throw new Error("SHARE_REVOKE_FAILED");
+      setShareState({ active: false, token: null, createdAt: null });
+      setShareCopyState("idle");
+    } catch {
+      setShareError(t.shareReviewFailed);
+    } finally {
+      setShareLoading(false);
+    }
+  }
 
   function startRevisionFromRound(review: WritingReviewDetail, essay: string, acceptedRevisionIds: string[]) {
     setSelectedReviewId(review.id);
@@ -362,6 +473,13 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
 
               {selectedReview.status === "completed" && selectedReview.result ? (
                 <Surface as="section" className="checkerReportShell is-revealed historySelectedReport">
+                  <div className="historyReportToolbar">
+                    <div>
+                      <p className="sectionLabel">{t.historyResultTitle}</p>
+                      <span>{t.shareReviewPrivateHint}</span>
+                    </div>
+                    <ActionButton onClick={() => void openShareDialog()}>{t.shareReviewAction}</ActionButton>
+                  </div>
                   <Surface className="reportPaper checkerReportPaper">
                     <ReviewDetailContent
                       key={selectedReview.id}
@@ -380,6 +498,50 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
           ) : null}
         </section>
       )}
+
+      {shareDialogOpen ? (
+        <div className="shareDialogBackdrop" role="presentation" onMouseDown={() => setShareDialogOpen(false)}>
+          <Surface
+            as="section"
+            className="shareDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-review-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="shareDialogHeader">
+              <div>
+                <p className="sectionLabel">{t.shareReviewEyebrow}</p>
+                <h2 id="share-review-title">{t.shareReviewTitle}</h2>
+              </div>
+              <button type="button" className="shareDialogClose" aria-label={t.shareReviewClose} onClick={() => setShareDialogOpen(false)}>×</button>
+            </div>
+            <p className="shareDialogBody">{t.shareReviewBody}</p>
+            <div className="sharePrivacyList">
+              <span>✓ {t.shareReviewIncludes}</span>
+              <span>✓ {t.shareReviewExcludes}</span>
+              <span>✓ {t.shareReviewRevocable}</span>
+            </div>
+            {shareState?.active && shareState.token ? (
+              <div className="shareLinkField">
+                <span>{`/share/${shareState.token}`}</span>
+              </div>
+            ) : null}
+            {shareError ? <p className="errorBox">{shareError}</p> : null}
+            <div className="shareDialogActions">
+              {shareState?.active ? (
+                <ActionButton disabled={shareLoading} onClick={() => void revokeShareLink()}>{t.shareReviewDisable}</ActionButton>
+              ) : null}
+              <ActionButton disabled={shareLoading} onClick={() => void copyShareLink()}>
+                {shareCopyState === "copied" ? t.shareReviewCopied : shareState?.active ? t.shareReviewCopy : t.shareReviewCreate}
+              </ActionButton>
+              <ActionButton variant="primary" disabled={shareLoading} onClick={() => void shareWithSystem()}>
+                {shareLoading ? t.shareReviewWorking : t.shareReviewSystem}
+              </ActionButton>
+            </div>
+          </Surface>
+        </div>
+      ) : null}
     </main>
   );
 }

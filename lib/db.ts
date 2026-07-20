@@ -7,7 +7,7 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 14;
+const CURRENT_SCHEMA_VERSION = 15;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -1118,6 +1118,33 @@ export async function ensureDatabase() {
         await db.query(
           `INSERT INTO schema_migrations (version, applied_at)
            VALUES (14, NOW())`
+        );
+      }
+      if (appliedVersion < 15) {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS writing_review_shares (
+            id TEXT PRIMARY KEY,
+            review_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            locale TEXT NOT NULL DEFAULT 'en',
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            revoked_at TIMESTAMPTZ
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS writing_review_shares_token_active_idx
+          ON writing_review_shares (token)
+          WHERE revoked_at IS NULL;
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS writing_review_shares_user_updated_idx
+          ON writing_review_shares (user_id, updated_at DESC);
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (15, NOW())`
         );
       }
       await db.query("COMMIT");

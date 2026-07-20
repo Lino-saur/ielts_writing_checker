@@ -6103,6 +6103,622 @@ html[data-theme="dark"] .authSwitchButton {
   }
 }
 
+/* Read-only review sharing */
+.historyReportToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper-strong);
+}
+
+.historyReportToolbar .sectionLabel {
+  margin: 0 0 3px;
+}
+
+.historyReportToolbar span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.shareDialogBackdrop {
+  position: fixed;
+  z-index: 160;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(18, 22, 29, 0.54);
+  backdrop-filter: blur(8px);
+}
+
+.shareDialog {
+  width: min(560px, 100%);
+  padding: 24px;
+  border-radius: 22px;
+  box-shadow: 0 28px 80px rgba(18, 22, 29, 0.26);
+}
+
+.shareDialogHeader,
+.shareDialogActions,
+.sharedReviewHeader,
+.sharedReviewHeaderActions {
+  display: flex;
+  align-items: center;
+}
+
+.shareDialogHeader {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.shareDialogHeader h2 {
+  margin: 4px 0 0;
+  font-size: 1.45rem;
+}
+
+.shareDialogClose {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted-strong);
+  background: var(--paper);
+  font-size: 1.45rem;
+  cursor: pointer;
+}
+
+.shareDialogBody {
+  margin: 18px 0;
+  color: var(--muted-strong);
+  line-height: 1.65;
+}
+
+.sharePrivacyList {
+  display: grid;
+  gap: 9px;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  color: var(--muted-strong);
+  background: var(--paper-soft);
+  font-size: 0.86rem;
+}
+
+.shareLinkField {
+  overflow: hidden;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--paper);
+}
+
+.shareLinkField span {
+  display: block;
+  overflow: hidden;
+  color: var(--muted-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shareDialogActions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.sharedReviewPage {
+  min-height: 100vh;
+  padding: 18px clamp(18px, 4vw, 54px) 72px;
+}
+
+.sharedReviewHeader,
+.sharedReviewContent {
+  position: relative;
+  z-index: 1;
+  width: min(1160px, 100%);
+  margin-inline: auto;
+}
+
+.sharedReviewHeader {
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 52px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sharedReviewBrand {
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.sharedReviewHeaderActions {
+  gap: 10px;
+}
+
+.sharedReviewLanguage {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted-strong);
+  background: var(--paper);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.sharedReviewContent {
+  display: grid;
+  gap: 22px;
+  padding-top: 24px;
+}
+
+.sharedReviewHero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 32px;
+  padding: clamp(22px, 4vw, 36px);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, var(--paper-strong)), var(--paper-strong) 56%);
+}
+
+.sharedReviewBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted-strong);
+  background: var(--paper);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.sharedReviewHeroCopy > .sectionLabel {
+  margin: 0 0 12px;
+}
+
+.sharedReviewScore {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sharedReviewScore strong {
+  font-size: clamp(4rem, 9vw, 6.2rem);
+  line-height: 0.9;
+  letter-spacing: -0.065em;
+}
+
+.sharedReviewScore span {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+
+.sharedReviewMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.sharedReviewNav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.sharedReviewNav a {
+  display: grid;
+  gap: 12px;
+  min-width: 112px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--ink);
+  background: var(--paper);
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.sharedReviewNav a:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+}
+
+.sharedReviewNav a span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+}
+
+.sharedReviewSource {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.78fr) minmax(0, 1.5fr);
+  gap: 0;
+  padding: 0;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.sharedReviewPromptBlock,
+.sharedReviewEssayBlock {
+  padding: clamp(20px, 3vw, 28px);
+}
+
+.sharedReviewPromptBlock {
+  border-right: 1px solid var(--line);
+  background: var(--paper-soft);
+}
+
+.sharedReviewPromptBlock > p:not(.sectionLabel),
+.sharedReviewEssayBlock > p:not(.sectionLabel) {
+  margin: 10px 0 0;
+  color: var(--ink);
+  line-height: 1.75;
+}
+
+.sharedReviewEssayBlock > p:last-child,
+.sharedRevisedEssayBlock > p:last-child {
+  white-space: pre-wrap;
+}
+
+.sharedReviewPromptBlock small {
+  display: block;
+  margin-top: 14px;
+  color: var(--muted-strong);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.sharedReportSection {
+  display: grid;
+  gap: 24px;
+  padding: clamp(22px, 4vw, 34px);
+  border-radius: 20px;
+  scroll-margin-top: 20px;
+}
+
+.sharedSectionHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 15px;
+}
+
+.sharedSectionIndex {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--muted-strong);
+  background: var(--paper-soft);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.sharedSectionHeader h2 {
+  margin: 0;
+  font-size: clamp(1.3rem, 3vw, 1.75rem);
+  letter-spacing: -0.025em;
+}
+
+.sharedSectionHeader p {
+  margin: 6px 0 0;
+  color: var(--muted-strong);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.sharedCriteriaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sharedCriterionCard {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--paper);
+}
+
+.sharedCriterionCard > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sharedCriterionCard span {
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.sharedCriterionCard strong {
+  font-size: 1.55rem;
+}
+
+.sharedCriterionCard p {
+  margin: 14px 0 0;
+  color: var(--muted-strong);
+  font-size: 0.86rem;
+  line-height: 1.68;
+}
+
+.sharedFeedbackGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+  gap: 12px;
+}
+
+.sharedFeedbackGrid > section {
+  padding: 20px;
+  border-radius: 15px;
+  background: var(--paper-soft);
+}
+
+.sharedFeedbackGrid h3 {
+  margin: 0 0 14px;
+  font-size: 0.95rem;
+}
+
+.sharedFeedbackGrid ol,
+.sharedFeedbackGrid ul {
+  display: grid;
+  gap: 13px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.sharedFeedbackGrid li,
+.sharedFeedbackGrid li p {
+  color: var(--muted-strong);
+  font-size: 0.85rem;
+  line-height: 1.62;
+}
+
+.sharedFeedbackGrid li strong {
+  color: var(--ink);
+}
+
+.sharedFeedbackGrid li p {
+  margin: 3px 0 0;
+}
+
+.sharedRevisedEssayBlock {
+  padding: clamp(20px, 3vw, 28px);
+  border-radius: 16px;
+  background: var(--paper-soft);
+}
+
+.sharedRevisedEssayHeader,
+.sharedRevisionLegend {
+  display: flex;
+  align-items: center;
+}
+
+.sharedRevisedEssayHeader {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sharedRevisedEssayHeader .sectionLabel {
+  margin: 0;
+}
+
+.sharedRevisionLegend {
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.sharedReadOnlyEdit .essayAdd {
+  margin-left: 2px;
+}
+
+.sharedRevisedEssayBlock > p:last-child {
+  margin: 12px 0 0;
+  color: var(--ink);
+  line-height: 1.82;
+}
+
+.sharedAnnotatedEssay {
+  white-space: pre-wrap;
+}
+
+.sharedRevisionDetails > .sectionLabel {
+  margin-bottom: 12px;
+}
+
+.sharedRevisionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sharedRevisionCard {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--paper);
+}
+
+.sharedRevisionCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sharedRevisionCardHeader > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--paper-soft);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.sharedRevisionCardHeader strong {
+  font-size: 0.82rem;
+}
+
+.sharedRevisionPair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+}
+
+.sharedRevisionPair > span {
+  align-self: center;
+  color: var(--muted);
+}
+
+.sharedRevisionPair > div {
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: var(--paper-soft);
+}
+
+.sharedRevisionPair small {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sharedRevisionPair p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.sharedRevisionSection.is-correction .sharedRevisionPair > div:last-child {
+  background: color-mix(in srgb, #4b8f70 9%, var(--paper-soft));
+}
+
+.sharedRevisionSection.is-optimization .sharedRevisionPair > div:last-child {
+  background: color-mix(in srgb, var(--accent) 9%, var(--paper-soft));
+}
+
+.sharedRevisionReason {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.8rem;
+  line-height: 1.62;
+}
+
+.sharedRevisionReason strong {
+  margin-right: 4px;
+  color: var(--ink);
+}
+
+.sharedRevisionEmpty {
+  margin: 0;
+  padding: 22px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 680px) {
+  .historyReportToolbar,
+  .sharedReviewHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .historyReportToolbar .uiButton,
+  .sharedReviewHeaderActions .uiButton {
+    justify-content: center;
+  }
+
+  .sharedReviewHeaderActions {
+    justify-content: space-between;
+  }
+
+  .shareDialog {
+    padding: 20px;
+  }
+
+  .shareDialogActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .shareDialogActions .uiButton {
+    width: 100%;
+  }
+
+  .sharedReviewHero,
+  .sharedReviewSource,
+  .sharedCriteriaGrid,
+  .sharedFeedbackGrid,
+  .sharedRevisionGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sharedReviewHero {
+    align-items: stretch;
+  }
+
+  .sharedReviewNav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .sharedReviewNav a {
+    min-width: 0;
+    padding: 11px;
+  }
+
+  .sharedReviewPromptBlock {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .sharedRevisionPair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sharedRevisionPair > span {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+}
+
 /* Monochrome contrast and rhythm pass. */
 .pageShell > .aroundNavbar {
   margin-bottom: 22px;

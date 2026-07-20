@@ -143,7 +143,7 @@ export function ReviewDetailContent({
   t,
   onContinueRevision
 }: {
-  detail: WritingReviewDetail & { result: WritingCheckResult };
+  detail: Omit<WritingReviewDetail, "userId" | "result"> & { result: WritingCheckResult; userId?: string };
   locale: Locale;
   navbar: NavbarMessages;
   t: CheckerMessages;
