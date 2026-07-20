@@ -65,22 +65,6 @@ function logAiDebug(event: string, details: Record<string, unknown>) {
   }
 }
 
-function getDeepSeekConfig(): ProviderConfig {
-  return {
-    name: "deepseek",
-    apiKey: process.env.DEEPSEEK_API_KEY,
-    endpoint: "https://api.deepseek.com/chat/completions",
-    model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
-    extraBody: {
-      thinking: {
-        type: "disabled"
-      },
-      temperature: 0.3,
-      response_format: { type: "json_object" }
-    }
-  };
-}
-
 function getQianwenConfig(): ProviderConfig {
   return {
     name: "qianwen",
@@ -98,8 +82,8 @@ function getQianwenConfig(): ProviderConfig {
   };
 }
 
-function getTextProviderConfig(input: CheckInput) {
-  return input.taskType === "task2" ? getQianwenConfig() : getDeepSeekConfig();
+function getTextProviderConfig() {
+  return getQianwenConfig();
 }
 
 function getGeminiConfig(): ProviderConfig {
@@ -112,10 +96,6 @@ function getGeminiConfig(): ProviderConfig {
 }
 
 function getVisionProvider(): VisionProvider {
-  // Keep the alternate provider available in code, but route production traffic to Qianwen by default.
-  if (process.env.ENABLE_GEMINI_VISION === "true") {
-    return "gemini";
-  }
   return "qianwen";
 }
 
@@ -990,7 +970,7 @@ export async function buildAiScoreFeedback(
   const resolvedTaskContext = taskContext ?? await buildEvaluationTaskContext(input);
   const promptContext = await buildScorePrompt(input, minimumWords, resolvedTaskContext);
 
-  const result = await runJsonCompletion(input, getTextProviderConfig(input), {
+  const result = await runJsonCompletion(input, getTextProviderConfig(), {
     kind: "score",
     requestLabel: "score",
     systemPrompt,
@@ -1024,7 +1004,7 @@ export async function buildAiRevisionFeedback(
     stage: "grammar" | "optimization",
     requestLabel: "grammar" | "optimization" | "final_audit" | "final_verification" | "quality_repair"
   ) {
-    return runJsonCompletion(revisionInput, getTextProviderConfig(revisionInput), {
+    return runJsonCompletion(revisionInput, getTextProviderConfig(), {
       kind: "revision",
       requestLabel,
       systemPrompt,

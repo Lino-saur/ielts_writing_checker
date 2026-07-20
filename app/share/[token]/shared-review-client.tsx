@@ -312,7 +312,8 @@ export default function SharedReviewClient({ sharedReview }: { sharedReview: Sha
         <div className="sharedReviewIdentity">
           <Link className="sharedReviewBrand" href={`/${locale}`}>
             <span className="sharedReviewBrandMark" aria-hidden="true">W</span>
-            <span>{navbar.brand}</span>
+            <span className="sharedReviewBrandName">{navbar.brand}</span>
+            <span className="sharedReviewBrandCompact">IELTS</span>
           </Link>
           <span className="sharedReviewHeaderDivider" aria-hidden="true" />
           <span className="sharedReviewReportLabel">{copy.reportLabel}</span>

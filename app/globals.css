@@ -6261,6 +6261,10 @@ html[data-theme="dark"] .authSwitchButton {
   text-decoration: none;
 }
 
+.sharedReviewBrandCompact {
+  display: none;
+}
+
 .sharedReviewBrandMark {
   display: grid;
   flex: 0 0 auto;
@@ -6772,10 +6776,48 @@ html[data-theme="dark"] .authSwitchButton {
 }
 
 @media (max-width: 680px) {
-  .historyReportToolbar,
-  .sharedReviewHeader {
+  .historyReportToolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .pageShell.sharedReviewPage {
+    padding: 10px 12px 48px;
+  }
+
+  .sharedReviewHeader {
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+    top: 8px;
+    min-height: 54px;
+    padding: 6px 7px;
+    border-radius: 15px;
+  }
+
+  .sharedReviewIdentity {
+    flex: 0 1 auto;
+    gap: 7px;
+  }
+
+  .sharedReviewBrand {
+    gap: 7px;
+    font-size: 0.78rem;
+  }
+
+  .sharedReviewBrandMark {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-size: 0.78rem;
+  }
+
+  .sharedReviewBrandName {
+    display: none;
+  }
+
+  .sharedReviewBrandCompact {
+    display: inline;
   }
 
   .historyReportToolbar .uiButton,
@@ -6784,9 +6826,10 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .sharedReviewHeaderActions {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    justify-content: stretch;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    margin-left: auto;
   }
 
   .sharedReviewBadge {
@@ -6795,6 +6838,19 @@ html[data-theme="dark"] .authSwitchButton {
 
   .sharedReviewCheckerCta {
     justify-content: center;
+    min-height: 38px;
+    padding-inline: 12px;
+    font-size: 0.78rem;
+  }
+
+  .sharedReviewCheckerCta span {
+    display: none;
+  }
+
+  .sharedReviewLanguage {
+    min-height: 38px;
+    padding-inline: 10px;
+    font-size: 0.75rem;
   }
 
   .sharedReviewHeaderDivider,
@@ -6832,12 +6888,16 @@ html[data-theme="dark"] .authSwitchButton {
   }
 
   .sharedReviewNav a {
-    display: grid;
-    justify-items: center;
+    display: flex;
+    justify-content: center;
     min-width: 0;
-    gap: 6px;
-    padding: 9px 5px;
+    gap: 0;
+    padding: 10px 5px;
     text-align: center;
+  }
+
+  .sharedReviewNav a span {
+    display: none;
   }
 
   .sharedReviewCta {
@@ -12672,7 +12732,7 @@ html[data-theme="dark"] .globalLoadingAnimation {
   align-items: center;
   gap: 22px;
   padding: 16px 18px;
-  border-bottom: 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .checkerReportPaper .resultScore,
