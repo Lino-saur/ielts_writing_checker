@@ -7,7 +7,7 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 15;
+const CURRENT_SCHEMA_VERSION = 18;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
@@ -590,10 +590,12 @@ export async function ensureDatabase() {
         id, code, name, energy_amount, bonus_energy_amount, price_cents, currency, status, sort_order, created_at, updated_at
       )
       VALUES
-        ('prod_energy_30', 'energy_30', '30 Energy', 30, 0, 990, 'USD', 'active', 10, NOW(), NOW()),
-        ('prod_energy_80', 'energy_80', '80 Energy', 80, 10, 2490, 'USD', 'active', 20, NOW(), NOW()),
-        ('prod_energy_200', 'energy_200', '200 Energy', 200, 40, 5990, 'USD', 'active', 30, NOW(), NOW())
-      ON CONFLICT (code) DO NOTHING;
+        ('prod_energy_30', 'energy_30', '30 Magic Ink', 30, 0, 990, 'USD', 'active', 10, NOW(), NOW()),
+        ('prod_energy_80', 'energy_80', '80 Magic Ink', 80, 10, 2490, 'USD', 'active', 20, NOW(), NOW()),
+        ('prod_energy_200', 'energy_200', '200 Magic Ink', 200, 40, 5990, 'USD', 'active', 30, NOW(), NOW())
+      ON CONFLICT (code) DO UPDATE
+      SET name = EXCLUDED.name,
+          updated_at = NOW();
     `);
       await db.query(
         `INSERT INTO schema_migrations (version, applied_at)
@@ -1145,6 +1147,158 @@ export async function ensureDatabase() {
         await db.query(
           `INSERT INTO schema_migrations (version, applied_at)
            VALUES (15, NOW())`
+        );
+      }
+      if (appliedVersion < 16) {
+        await db.query(`
+          ALTER TABLE recharge_products
+          ADD COLUMN IF NOT EXISTS list_price_cents INTEGER;
+        `);
+        await db.query(`ALTER TABLE recharge_products ADD COLUMN IF NOT EXISTS unlimited_days INTEGER;`);
+        await db.query(`ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS unlimited_days INTEGER;`);
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS unlimited_review_passes (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            order_id TEXT NOT NULL UNIQUE REFERENCES recharge_orders(id) ON DELETE CASCADE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS unlimited_review_passes_user_expiry_idx
+          ON unlimited_review_passes (user_id, expires_at DESC);
+        `);
+        await db.query(`
+          UPDATE recharge_products
+          SET status = 'inactive', updated_at = NOW()
+          WHERE code IN ('energy_30', 'energy_80', 'energy_200');
+        `);
+        await db.query(`
+          INSERT INTO recharge_products (
+            id, code, name, energy_amount, bonus_energy_amount, price_cents, currency,
+            status, sort_order, list_price_cents, unlimited_days, created_at, updated_at
+          )
+          VALUES
+            ('prod_energy_3_v2', 'energy_3', '3 Magic Ink', 3, 0, 990, 'CNY', 'active', 10, 1290, NULL, NOW(), NOW()),
+            ('prod_energy_10_v2', 'energy_10', '10 Magic Ink', 10, 0, 2990, 'CNY', 'active', 20, 3990, NULL, NOW(), NOW()),
+            ('prod_energy_30_v2', 'energy_30_v2', '30 Magic Ink', 30, 0, 7990, 'CNY', 'active', 30, 9900, NULL, NOW(), NOW()),
+            ('prod_energy_100_v2', 'energy_100', '100 Magic Ink', 100, 0, 19900, 'CNY', 'active', 40, 29900, NULL, NOW(), NOW()),
+            ('prod_unlimited_30d', 'unlimited_30d', 'Unlimited Monthly Pass', 0, 0, 8800, 'CNY', 'active', 50, 12900, 30, NOW(), NOW()),
+            ('prod_unlimited_90d', 'unlimited_90d', 'Unlimited Quarterly Pass', 0, 0, 22800, 'CNY', 'active', 60, 32900, 90, NOW(), NOW()),
+            ('prod_unlimited_365d', 'unlimited_365d', 'Unlimited Annual Pass', 0, 0, 68800, 'CNY', 'active', 70, 99900, 365, NOW(), NOW())
+          ON CONFLICT (code) DO UPDATE
+          SET name = EXCLUDED.name,
+              energy_amount = EXCLUDED.energy_amount,
+              bonus_energy_amount = EXCLUDED.bonus_energy_amount,
+              price_cents = EXCLUDED.price_cents,
+              currency = EXCLUDED.currency,
+              status = EXCLUDED.status,
+              sort_order = EXCLUDED.sort_order,
+              list_price_cents = EXCLUDED.list_price_cents,
+              unlimited_days = EXCLUDED.unlimited_days,
+              updated_at = NOW();
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (16, NOW())`
+        );
+      }
+      if (appliedVersion < 17) {
+        await db.query(`
+          ALTER TABLE recharge_products
+          ADD COLUMN IF NOT EXISTS list_price_cents INTEGER;
+        `);
+        await db.query(`
+          ALTER TABLE recharge_products
+          ADD COLUMN IF NOT EXISTS unlimited_days INTEGER;
+        `);
+        await db.query(`
+          ALTER TABLE recharge_orders
+          ADD COLUMN IF NOT EXISTS unlimited_days INTEGER;
+        `);
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS unlimited_review_passes (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            order_id TEXT NOT NULL UNIQUE REFERENCES recharge_orders(id) ON DELETE CASCADE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS unlimited_review_passes_user_expiry_idx
+          ON unlimited_review_passes (user_id, expires_at DESC);
+        `);
+        await db.query(`
+          UPDATE recharge_products
+          SET status = 'inactive', updated_at = NOW()
+          WHERE code IN ('energy_30', 'energy_80', 'energy_200');
+        `);
+        await db.query(`
+          INSERT INTO recharge_products (
+            id, code, name, energy_amount, bonus_energy_amount, price_cents, currency,
+            status, sort_order, list_price_cents, unlimited_days, created_at, updated_at
+          )
+          VALUES
+            ('prod_energy_3_v2', 'energy_3', '3 Magic Ink', 3, 0, 990, 'CNY', 'active', 10, 1290, NULL, NOW(), NOW()),
+            ('prod_energy_10_v2', 'energy_10', '10 Magic Ink', 10, 0, 2990, 'CNY', 'active', 20, 3990, NULL, NOW(), NOW()),
+            ('prod_energy_30_v2', 'energy_30_v2', '30 Magic Ink', 30, 0, 7990, 'CNY', 'active', 30, 9900, NULL, NOW(), NOW()),
+            ('prod_energy_100_v2', 'energy_100', '100 Magic Ink', 100, 0, 19900, 'CNY', 'active', 40, 29900, NULL, NOW(), NOW()),
+            ('prod_unlimited_30d', 'unlimited_30d', 'Unlimited Monthly Pass', 0, 0, 8800, 'CNY', 'active', 50, 12900, 30, NOW(), NOW()),
+            ('prod_unlimited_90d', 'unlimited_90d', 'Unlimited Quarterly Pass', 0, 0, 22800, 'CNY', 'active', 60, 32900, 90, NOW(), NOW()),
+            ('prod_unlimited_365d', 'unlimited_365d', 'Unlimited Annual Pass', 0, 0, 68800, 'CNY', 'active', 70, 99900, 365, NOW(), NOW())
+          ON CONFLICT (code) DO UPDATE
+          SET name = EXCLUDED.name,
+              energy_amount = EXCLUDED.energy_amount,
+              bonus_energy_amount = EXCLUDED.bonus_energy_amount,
+              price_cents = EXCLUDED.price_cents,
+              currency = EXCLUDED.currency,
+              status = EXCLUDED.status,
+              sort_order = EXCLUDED.sort_order,
+              list_price_cents = EXCLUDED.list_price_cents,
+              unlimited_days = EXCLUDED.unlimited_days,
+              updated_at = NOW();
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (17, NOW())`
+        );
+      }
+      if (appliedVersion < 18) {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS order_support_requests (
+            id TEXT PRIMARY KEY,
+            order_id TEXT NOT NULL REFERENCES recharge_orders(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK (kind IN ('inquiry', 'refund')),
+            status TEXT NOT NULL CHECK (status IN ('open', 'reviewing', 'approved', 'rejected', 'refunded')),
+            reason TEXT NOT NULL,
+            details TEXT NOT NULL DEFAULT '',
+            requested_refund_cents INTEGER,
+            approved_refund_cents INTEGER,
+            admin_note TEXT,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            resolved_at TIMESTAMPTZ
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS order_support_requests_user_created_idx
+          ON order_support_requests (user_id, created_at DESC);
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS order_support_requests_status_created_idx
+          ON order_support_requests (status, created_at ASC);
+        `);
+        await db.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS order_support_requests_open_refund_idx
+          ON order_support_requests (order_id)
+          WHERE kind = 'refund' AND status IN ('open', 'reviewing', 'approved');
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (18, NOW())`
         );
       }
       await db.query("COMMIT");

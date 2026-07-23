@@ -182,10 +182,10 @@ export function EnergyGrantClient() {
     <div className={styles.wrap}>
       <Surface className={styles.hero}>
         <div>
-          <p className={styles.eyebrow}>Internal Ops</p>
-          <h1 className={styles.title}>Grant energy manually</h1>
+          <p className={styles.eyebrow}>内部运营工具</p>
+          <h1 className={styles.title}>手动发放墨水</h1>
           <p className={styles.body}>
-            Use this only for support, migration, refunds, or internal testing. Input expects the Better Auth user id.
+            用于客服补偿、数据迁移、退款处理或内部测试。发放前请确认用户信息和数量。
           </p>
         </div>
       </Surface>
@@ -193,14 +193,14 @@ export function EnergyGrantClient() {
       <Surface as="form" className={styles.panel} onSubmit={handleSearch}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2 className={styles.sectionTitle}>Find user by email</h2>
-            <p className={styles.sectionBody}>Search Better Auth users, then tap a row to fill the user id.</p>
+            <h2 className={styles.sectionTitle}>按邮箱查找用户</h2>
+            <p className={styles.sectionBody}>搜索用户后，点击结果即可自动填写用户 ID。</p>
           </div>
         </div>
 
         <div className={styles.searchRow}>
           <label className={styles.field}>
-            <span>Email</span>
+            <span>邮箱</span>
             <input
               value={searchEmail}
               onChange={(event) => setSearchEmail(event.target.value)}
@@ -211,7 +211,7 @@ export function EnergyGrantClient() {
 
           <div className={styles.searchAction}>
             <ActionButton type="submit" variant="secondary" disabled={searching}>
-              {searching ? "Searching..." : "Search User"}
+              {searching ? "搜索中…" : "搜索用户"}
             </ActionButton>
           </div>
         </div>
@@ -228,12 +228,12 @@ export function EnergyGrantClient() {
                 onClick={() => setUserId(item.id)}
               >
                 <strong>{item.email || item.id}</strong>
-                <span>{item.name || "Unnamed user"}</span>
+                <span>{item.name || "未设置昵称"}</span>
                 <span>{item.id}</span>
               </button>
             ))
           ) : (
-            <div className={styles.emptyState}>No user results yet.</div>
+            <div className={styles.emptyState}>请输入邮箱搜索用户。</div>
           )}
         </div>
       </Surface>
@@ -241,25 +241,25 @@ export function EnergyGrantClient() {
       <Surface as="form" className={styles.panel} onSubmit={handleSubmit}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2 className={styles.sectionTitle}>Grant energy</h2>
-            <p className={styles.sectionBody}>Manual support tool for credits, migration, refunds, and QA.</p>
+            <h2 className={styles.sectionTitle}>发放墨水</h2>
+            <p className={styles.sectionBody}>请填写用户 ID、发放数量和操作原因。</p>
           </div>
         </div>
 
         <div className={styles.grid}>
           <label className={styles.field}>
-            <span>User ID</span>
+            <span>用户 ID</span>
             <input
               value={userId}
               onChange={(event) => setUserId(event.target.value)}
-              placeholder="auth user id"
+              placeholder="用户 ID"
               autoComplete="off"
               required
             />
           </label>
 
           <label className={styles.field}>
-            <span>Amount</span>
+            <span>发放数量</span>
             <input
               type="number"
               min="1"
@@ -272,11 +272,11 @@ export function EnergyGrantClient() {
         </div>
 
         <label className={styles.field}>
-          <span>Reason</span>
+          <span>操作原因</span>
           <input
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="support_case_123"
+            placeholder="例如：客服补偿、退款处理"
             maxLength={120}
           />
         </label>
@@ -285,17 +285,17 @@ export function EnergyGrantClient() {
 
         {result ? (
           <div className={styles.success}>
-            <strong>Grant applied.</strong>
-            <span>User: {result.userId}</span>
-            <span>Balance: {result.energy.balance}</span>
-            <span>Total recharged: {result.energy.totalRecharged}</span>
-            <span>Updated: {new Date(result.energy.updatedAt).toLocaleString()}</span>
+            <strong>墨水发放成功</strong>
+            <span>用户：{result.userId}</span>
+            <span>当前墨水：{result.energy.balance}</span>
+            <span>累计充值：{result.energy.totalRecharged}</span>
+            <span>更新时间：{new Date(result.energy.updatedAt).toLocaleString("zh-CN")}</span>
           </div>
         ) : null}
 
         <div className={styles.actions}>
           <ActionButton type="submit" variant="primary" disabled={submitting}>
-            {submitting ? "Granting..." : "Grant Energy"}
+            {submitting ? "发放中…" : "确认发放"}
           </ActionButton>
         </div>
       </Surface>
@@ -303,8 +303,8 @@ export function EnergyGrantClient() {
       <Surface className={styles.panel}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2 className={styles.sectionTitle}>Recent admin grants</h2>
-            <p className={styles.sectionBody}>Latest manual energy operations from admin users.</p>
+            <h2 className={styles.sectionTitle}>最近发放记录</h2>
+            <p className={styles.sectionBody}>最近由后台人工完成的墨水操作。</p>
           </div>
         </div>
 
@@ -312,7 +312,7 @@ export function EnergyGrantClient() {
 
         <div className={styles.resultList}>
           {loadingRecent ? (
-            <div className={styles.emptyState}>Loading recent grants...</div>
+            <div className={styles.emptyState}>正在加载发放记录…</div>
           ) : recentGrants.length ? (
             recentGrants.map((item) => (
               <button
@@ -322,15 +322,15 @@ export function EnergyGrantClient() {
                 onClick={() => setUserId(item.userId)}
               >
                 <strong>{item.userEmail || item.userId}</strong>
-                <span>{item.userName || "Unknown user"}</span>
+                <span>{item.userName || "未知用户"}</span>
                 <span>
-                  +{item.amount} energy, balance {item.balanceAfter}
+                  +{item.amount} 瓶墨水，余额 {item.balanceAfter}
                 </span>
-                <span>{new Date(item.createdAt).toLocaleString()}</span>
+                <span>{new Date(item.createdAt).toLocaleString("zh-CN")}</span>
               </button>
             ))
           ) : (
-            <div className={styles.emptyState}>No admin grants yet.</div>
+            <div className={styles.emptyState}>暂无人工发放记录。</div>
           )}
         </div>
       </Surface>

@@ -85,7 +85,6 @@ export default function AssignmentsPageClient() {
         copy={navbar}
         taskMenuMode="all"
         energyBalance={sessionContext.energy?.balance ?? null}
-        energyLabel={locale === "zh-CN" ? "能量" : "Energy"}
         authRequest={authRequest}
       />
 
@@ -108,7 +107,6 @@ export default function AssignmentsPageClient() {
         <section className="assignmentsWrap">
           <Surface className="assignmentsHero">
             <div>
-              <Pill>{locale === "zh-CN" ? "Teacher Assignments" : "Assignments"}</Pill>
               <h1>{t.title}</h1>
               <p>{t.body}</p>
             </div>

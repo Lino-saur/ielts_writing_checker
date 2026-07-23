@@ -41,7 +41,7 @@ function ImportanceStars({ importance }: { importance: HistoricalImportance }) {
   return (
     <span
       className={styles.importanceStars}
-      aria-label={`Importance: ${importance} out of 5 stars`}
+      aria-label={`重要程度：5 星中的 ${importance} 星`}
       title={`${importance} / 5`}
     >
       <span className={styles.importanceStarsFilled} aria-hidden="true">
@@ -194,7 +194,7 @@ export function HistoricalPracticeAdminClient() {
           importance: payload.question.importance,
         prompt: payload.question.prompt
       });
-      setSuccess(editingId ? "Question updated." : "Question created.");
+      setSuccess(editingId ? "题目已更新。" : "题目已创建。");
       await loadQuestions(editingId ? data?.page ?? 1 : 1);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "REQUEST_FAILED");
@@ -207,60 +207,59 @@ export function HistoricalPracticeAdminClient() {
     <div className={styles.wrap}>
       <Surface className={styles.hero}>
         <div>
-          <p className={styles.eyebrow}>Content Management</p>
-          <h1 className={styles.title}>Historical writing questions</h1>
+          <p className={styles.eyebrow}>内容管理</p>
+          <h1 className={styles.title}>历史写作题库</h1>
           <p className={styles.body}>
-            Search the Task 2 archive, correct existing records, or add a newly collected
-            question. Changes are immediately available in the public practice library.
+            搜索和维护历史写作题目，新增或修改后会立即同步到用户端练习题库。
           </p>
         </div>
         <ActionButton variant="primary" onClick={beginCreate}>
-          Add question
+          新增题目
         </ActionButton>
       </Surface>
 
       <form className={styles.filters} onSubmit={handleSearch}>
         <label className={styles.field}>
-          <span>Search</span>
+          <span>搜索</span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Prompt, category or ID"
+            placeholder="搜索题目、分类或 ID"
           />
         </label>
         <label className={styles.field}>
-          <span>Year</span>
+          <span>年份</span>
           <select value={year} onChange={(event) => setYear(event.target.value)}>
-            <option value="">All years</option>
+            <option value="">全部年份</option>
             {data?.years.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
         </label>
         <label className={styles.field}>
-          <span>Type</span>
+          <span>类型</span>
           <select value={type} onChange={(event) => setType(event.target.value)}>
-            <option value="">All types</option>
+            <option value="">全部类型</option>
             {data?.types.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
         </label>
-        <ActionButton type="submit">Apply filters</ActionButton>
+        <ActionButton type="submit">应用筛选</ActionButton>
       </form>
 
       <div className={styles.workspace}>
         <Surface className={styles.listPanel}>
           <div className={styles.sectionHeader}>
             <div>
-              <h2>Question library</h2>
-              <p>{data ? `${data.total} matching records` : "Loading records…"}</p>
+              <h2>题库列表</h2>
+              <p>{data ? `共找到 ${data.total} 条记录` : "正在加载记录…"}</p>
             </div>
-            {data ? <span className={styles.pageMeta}>Page {data.page} / {data.totalPages}</span> : null}
+            {data ? <span className={styles.pageMeta}>第 {data.page} / {data.totalPages} 页</span> : null}
           </div>
 
           {loading ? (
-            <div className={styles.emptyState}>Loading questions…</div>
+            <div className={styles.emptyState}>正在加载题目…</div>
           ) : data?.items.length ? (
             <div className={styles.questionList}>
               {data.items.map((question) => (
@@ -287,7 +286,7 @@ export function HistoricalPracticeAdminClient() {
               ))}
             </div>
           ) : (
-            <div className={styles.emptyState}>No questions match these filters.</div>
+            <div className={styles.emptyState}>当前筛选条件下没有题目。</div>
           )}
 
           {data && data.totalPages > 1 ? (
@@ -296,13 +295,13 @@ export function HistoricalPracticeAdminClient() {
                 disabled={loading || data.page <= 1}
                 onClick={() => void loadQuestions(data.page - 1)}
               >
-                Previous
+                上一页
               </ActionButton>
               <ActionButton
                 disabled={loading || data.page >= data.totalPages}
                 onClick={() => void loadQuestions(data.page + 1)}
               >
-                Next
+                下一页
               </ActionButton>
             </div>
           ) : null}
@@ -311,15 +310,15 @@ export function HistoricalPracticeAdminClient() {
         <Surface as="form" className={styles.editor} onSubmit={handleSave}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.editorEyebrow}>{editingId ? "Edit record" : "New record"}</p>
-              <h2>{editingId ? "Update question" : "Add historical question"}</h2>
+              <p className={styles.editorEyebrow}>{editingId ? "编辑记录" : "新建记录"}</p>
+              <h2>{editingId ? "更新题目" : "新增历史题目"}</h2>
             </div>
             {editingId ? <span className={styles.idBadge}>{editingId}</span> : null}
           </div>
 
           <div className={styles.formGrid}>
             <label className={styles.field}>
-              <span>Task</span>
+              <span>任务类型</span>
               <select
                 value={form.taskType}
                 onChange={(event) =>
@@ -334,7 +333,7 @@ export function HistoricalPracticeAdminClient() {
               </select>
             </label>
             <label className={styles.field}>
-              <span>Exam date</span>
+              <span>考试日期</span>
               <input
                 type="date"
                 required
@@ -343,7 +342,7 @@ export function HistoricalPracticeAdminClient() {
               />
             </label>
             <label className={styles.field}>
-              <span>Importance</span>
+              <span>重要程度</span>
               <select
                 value={form.importance}
                 onChange={(event) =>
@@ -361,7 +360,7 @@ export function HistoricalPracticeAdminClient() {
               </select>
             </label>
             {form.taskType === "task2" ? <label className={styles.field}>
-              <span>Question type</span>
+              <span>题目类型</span>
               <select
                 required
                 value={form.type}
@@ -380,7 +379,7 @@ export function HistoricalPracticeAdminClient() {
           </div>
 
           <label className={styles.field}>
-            <span>Category</span>
+            <span>主题分类</span>
             <input
               required
               maxLength={80}
@@ -388,12 +387,12 @@ export function HistoricalPracticeAdminClient() {
               onChange={(event) =>
                 setForm((current) => ({ ...current, category: event.target.value }))
               }
-              placeholder="e.g. 教育 / 科技 / 社会"
+              placeholder="例如：教育 / 科技 / 社会"
             />
           </label>
 
           <label className={styles.field}>
-            <span>Question prompt</span>
+            <span>完整题目</span>
             <textarea
               required
               minLength={10}
@@ -402,7 +401,7 @@ export function HistoricalPracticeAdminClient() {
               onChange={(event) =>
                 setForm((current) => ({ ...current, prompt: event.target.value }))
               }
-              placeholder={`Enter the complete ${form.taskType === "task1" ? "Task 1" : "Task 2"} prompt`}
+              placeholder={`输入完整的 ${form.taskType === "task1" ? "Task 1" : "Task 2"} 题目`}
             />
             <small>{form.prompt.length} / 5000</small>
           </label>
@@ -412,9 +411,9 @@ export function HistoricalPracticeAdminClient() {
 
           <div className={styles.editorActions}>
             <ActionButton type="submit" variant="primary" disabled={saving}>
-              {saving ? "Saving…" : editingId ? "Save changes" : "Create question"}
+              {saving ? "保存中…" : editingId ? "保存修改" : "创建题目"}
             </ActionButton>
-            {editingId ? <ActionButton onClick={beginCreate}>Cancel editing</ActionButton> : null}
+            {editingId ? <ActionButton onClick={beginCreate}>取消编辑</ActionButton> : null}
           </div>
         </Surface>
       </div>

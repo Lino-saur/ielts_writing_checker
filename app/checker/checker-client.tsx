@@ -8,6 +8,8 @@ import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
 import { ActionButton, ActionLink, Alert, Pill, Surface } from "@/components/ui-kit";
 import { TeachingRuleReferences } from "@/components/teaching-rule-references";
+import { LingMascot } from "@/components/ling-mascot";
+import { LingPet } from "@/components/ling-pet";
 import type {
   AiProvider,
   FeedbackPayload,
@@ -206,6 +208,10 @@ function getReviewStageLabel(
   return labels[stage];
 }
 
+function getReviewPetState(stage: WritingReviewProgressStage) {
+  return stage === "queued" || stage === "preparing" ? "waiting" : "running";
+}
+
 function CheckerPageContent() {
   const { sessionContext, sessionResolved, refreshSessionContext: refreshAuthSessionContext } = useAuthSession();
   const reviseWorkspaceRef = useRef<HTMLElement | null>(null);
@@ -299,6 +305,7 @@ function CheckerPageContent() {
   const wordCountProgress = Math.min(100, Math.round((wordCount / minimumWordCount) * 100));
   const wordCountTone = remainingWordCount > 0 ? "low" : "ready";
   const promptEditLabel = promptEditing ? t.doneEditing : t.editPrompt;
+  const showReviewFailurePet = error === t.aiReviewFailedAlert || error === t.genericError;
   const examMinutesLeft = Math.max(0, Math.ceil(examSecondsRemaining / 60));
   const currentRevisionStage = useMemo(
     () =>
@@ -1524,6 +1531,7 @@ function CheckerPageContent() {
           <Surface className="authDialog confirmDialog" onClick={(event) => event.stopPropagation()}>
             <div className="authDialogHeader confirmDialogHeader">
               <div className="authCardIntro confirmDialogIntro">
+                <LingPet state="waiting" size="small" loading="eager" className="confirmDialogPet" />
                 <div>
                   <h2>{t.confirmReviewTitle}</h2>
                   <p className="authHint">{t.confirmReviewBody}</p>
@@ -1573,7 +1581,6 @@ function CheckerPageContent() {
           copy={navbar}
           taskMenuMode="all"
           energyBalance={energy?.balance ?? null}
-          energyLabel={t.energy}
           authRequest={authRequest}
           authHint={t.authDialogHint}
           onSessionUpdated={handleSessionUpdated}
@@ -1604,22 +1611,7 @@ function CheckerPageContent() {
                 </span>
               </div>
             </div>
-          ) : (
-            <div className="checkerTaskContext" aria-label={t.taskContextLabel}>
-              <Pill>{isTask1 ? navbar.task1 : navbar.task2}</Pill>
-              <div>
-                <strong>{t.taskContextLabel}</strong>
-                <span>{isTask1 ? t.task1ContextBody : t.task2ContextBody}</span>
-              </div>
-              <button
-                type="button"
-                className="checkerModeToggle"
-                onClick={toggleComputerExamMode}
-              >
-                {t.computerExamMode}
-              </button>
-            </div>
-          )}
+          ) : null}
 
           {computerExamMode ? (
             <div className="computerExamTitle">
@@ -1636,7 +1628,7 @@ function CheckerPageContent() {
           <div className="checkerField checkerPromptBlock">
             {!computerExamMode ? (
               <div className="checkerPromptHeader">
-                <span>{t.prompt}</span>
+                <span>{isTask1 ? navbar.task1 : navbar.task2}</span>
                 <div className="checkerPromptControls">
                   {!isLibraryQuestion ? (
                     <>
@@ -1653,6 +1645,13 @@ function CheckerPageContent() {
                       </button>
                     </>
                   ) : null}
+                  <button
+                    type="button"
+                    className="checkerPromptEditButton"
+                    onClick={toggleComputerExamMode}
+                  >
+                    {t.computerExamMode}
+                  </button>
                 </div>
               </div>
             ) : null}
@@ -1683,13 +1682,7 @@ function CheckerPageContent() {
 
           {isTask1 ? (
             <div className="checkerField checkerUploadBlock">
-              {!computerExamMode ? (
-                <div className="checkerPromptHeader">
-                  <span>{t.task1ImageLabel}</span>
-                </div>
-              ) : null}
               <div className="checkerPromptBody checkerUploadBody">
-                {!isLibraryQuestion && !computerExamMode ? <p className="checkerUploadHint">{t.task1ImageHint}</p> : null}
                 {isLibraryQuestion || computerExamMode ? (
                   <div className={`checkerUploadDropzone is-readonly${taskImage ? " has-preview" : ""}`}>
                     {taskImage ? (
@@ -1730,12 +1723,23 @@ function CheckerPageContent() {
                       {/* The source is a local blob or authenticated endpoint, so it must bypass Next's server image optimizer. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={taskImage.previewUrl} alt={t.task1ImageLabel} className="checkerUploadPreviewImage" />
+                      <span className="checkerUploadReplace">{t.task1ImageReplace}</span>
                     </>
                   ) : (
                     <>
-                      <span className="checkerUploadDropIcon" aria-hidden="true" />
-                      <strong>{t.task1ImageDropTitle}</strong>
-                      <span className="checkerUploadDropBody">{t.task1ImageDropBody}</span>
+                      <span className="checkerUploadDropIcon" aria-hidden="true">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/app-icons/image.svg" alt="" />
+                      </span>
+                      <span className="checkerUploadDropCopy">
+                        <strong>{t.task1ImageDropTitle}</strong>
+                        <span className="checkerUploadDropBody">{t.task1ImageDropBody}</span>
+                      </span>
+                      <span className="checkerUploadAction">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/app-icons/upload.svg" alt="" className="checkerUploadActionIcon" aria-hidden="true" />
+                        {t.task1ImageAction}
+                      </span>
                     </>
                   )}
                   </label>
@@ -1760,35 +1764,60 @@ function CheckerPageContent() {
                   ) : null}
                 </div>
                 <div className="checkerTargetBandControl">
-                <label className="checkerInlineSelect">
+                <div className="checkerInlineSelect">
                   <span>{t.targetBand}</span>
-                  <select
-                    value={targetBand}
-                    aria-describedby="target-band-hint"
-                    onChange={(event) => {
-                      setTargetBand(Number(event.target.value) as TargetBand);
-                      markDraftDirty();
-                    }}
-                  >
-                    <option value={5}>5.0</option>
-                    <option value={5.5}>5.5</option>
-                    <option value={6}>6.0</option>
-                    <option value={6.5}>6.5</option>
-                    <option value={7}>7.0</option>
-                    <option value={7.5}>7.5</option>
-                    <option value={8}>8.0</option>
-                  </select>
-                </label>
-                <span id="target-band-hint" className="checkerTargetBandHint">
-                  {t.targetBandHint}
-                </span>
+                  <label className="checkerTargetBandSelectWrap">
+                    <select
+                      value={targetBand}
+                      aria-label={t.targetBand}
+                      onChange={(event) => {
+                        setTargetBand(Number(event.target.value) as TargetBand);
+                        markDraftDirty();
+                      }}
+                    >
+                      <option value={5}>5.0</option>
+                      <option value={5.5}>5.5</option>
+                      <option value={6}>6.0</option>
+                      <option value={6.5}>6.5</option>
+                      <option value={7}>7.0</option>
+                      <option value={7.5}>7.5</option>
+                      <option value={8}>8.0</option>
+                    </select>
+                    <svg viewBox="0 0 12 8" aria-hidden="true" focusable="false">
+                      <path d="m1 1.25 5 5 5-5" />
+                    </svg>
+                  </label>
+                  <details className="checkerTargetBandHelp">
+                    <summary aria-label={t.targetBandHelp}>?</summary>
+                    <span className="checkerTargetBandPopover" role="tooltip">
+                      {t.targetBandHint}
+                    </span>
+                  </details>
+                </div>
                 </div>
               </div>
             ) : null}
 
             {error && errorSource !== "auth" ? (
-              <Alert tone="error" aria-live="polite">
-                {error}
+              <Alert
+                tone="error"
+                className={showReviewFailurePet ? "checkerPetError" : undefined}
+                aria-live="polite"
+              >
+                {showReviewFailurePet ? (
+                  <div className="checkerErrorWithPet">
+                    <LingPet
+                      state="failed"
+                      size="small"
+                      loop={false}
+                      loading="eager"
+                      className="checkerErrorPet"
+                    />
+                    <span>{error}</span>
+                  </div>
+                ) : (
+                  error
+                )}
               </Alert>
             ) : null}
 
@@ -1847,20 +1876,28 @@ function CheckerPageContent() {
             </div>
             {loading && activeReviewProgress ? (
               <div className="reviewProgressPanel" role="status" aria-live="polite">
-                <div className="reviewProgressHeader">
-                  <div>
-                    <strong>{t.reviewProgressTitle}</strong>
-                    <span>{getReviewStageLabel(activeReviewProgress.progressStage, t)}</span>
-                  </div>
-                  <b>{activeReviewProgress.progressPercent}%</b>
-                </div>
-                <progress
-                  className="reviewProgressBar"
-                  max={100}
-                  value={activeReviewProgress.progressPercent}
-                  aria-label={t.reviewProgressTitle}
+                <LingPet
+                  state={getReviewPetState(activeReviewProgress.progressStage)}
+                  size="large"
+                  loading="eager"
+                  className="reviewProgressPet"
                 />
-                <p>{t.reviewProgressBackgroundHint}</p>
+                <div className="reviewProgressContent">
+                  <div className="reviewProgressHeader">
+                    <div>
+                      <strong>{t.reviewProgressTitle}</strong>
+                      <span>{getReviewStageLabel(activeReviewProgress.progressStage, t)}</span>
+                    </div>
+                    <b>{activeReviewProgress.progressPercent}%</b>
+                  </div>
+                  <progress
+                    className="reviewProgressBar"
+                    max={100}
+                    value={activeReviewProgress.progressPercent}
+                    aria-label={t.reviewProgressTitle}
+                  />
+                  <p>{t.reviewProgressBackgroundHint}</p>
+                </div>
               </div>
             ) : null}
           </div>
@@ -2078,21 +2115,26 @@ function CheckerPageContent() {
                     itemsLabel={t.feedbackItemsUnit}
                     defaultExpanded
                   >
-                    <ul>
-                      {result.priorityFixes.map((item) => (
-                        <li key={item.title}>
-                          <strong>{item.title}:</strong> {item.detail}
-                          <TeachingRuleReferences
-                            references={item.ruleReferences}
-                            label={t.ruleBasis}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                    <button type="button" className="feedbackNextAction" onClick={openRevisionFromFeedback}>
-                      {t.startRevisionFromFeedback}
-                      <span aria-hidden="true">→</span>
-                    </button>
+                    <div className="priorityRewriteGuide">
+                      <LingMascot state="rewrite" size="medium" motion className="priorityRewriteMascot" />
+                      <div className="priorityRewriteContent">
+                        <ul>
+                          {result.priorityFixes.map((item) => (
+                            <li key={item.title}>
+                              <strong>{item.title}:</strong> {item.detail}
+                              <TeachingRuleReferences
+                                references={item.ruleReferences}
+                                label={t.ruleBasis}
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                        <button type="button" className="feedbackNextAction" onClick={openRevisionFromFeedback}>
+                          {t.startRevisionFromFeedback}
+                          <span aria-hidden="true">→</span>
+                        </button>
+                      </div>
+                    </div>
                   </FeedbackDisclosure>
 
                   <FeedbackDisclosure

@@ -12,14 +12,14 @@ export default function AdminError({
   return (
     <div className={styles.wrap}>
       <section className={styles.card}>
-        <p className={styles.eyebrow}>Admin route error</p>
-        <h1 className={styles.title}>The admin workspace failed to load.</h1>
+        <p className={styles.eyebrow}>后台页面异常</p>
+        <h1 className={styles.title}>后台暂时无法加载</h1>
         <p className={styles.body}>
-          {error.message || "An unexpected error interrupted this admin route."}
+          {error.message || "页面加载过程中出现了意外错误。"}
         </p>
         <div className={styles.actions}>
           <button type="button" className={styles.button} onClick={reset}>
-            Try again
+            重试
           </button>
         </div>
       </section>

@@ -60,18 +60,18 @@ const EMPTY_FORM: FormState = {
 };
 
 const CATEGORY_LABELS: Record<TeachingRuleCategory, string> = {
-  scoring: "Scoring",
-  grammar: "Grammar",
-  structure: "Structure",
-  argumentation: "Argumentation",
-  expression: "Expression",
-  framework: "Writing framework"
+  scoring: "评分标准",
+  grammar: "语法",
+  structure: "文章结构",
+  argumentation: "论证",
+  expression: "语言表达",
+  framework: "写作框架"
 };
 
 const STATUS_LABELS: Record<TeachingRuleStatus, string> = {
-  draft: "Draft",
-  published: "Published",
-  archived: "Archived"
+  draft: "草稿",
+  published: "已发布",
+  archived: "已归档"
 };
 
 const TASK_LABELS: Record<TeachingRuleTaskType, string> = {
@@ -81,9 +81,9 @@ const TASK_LABELS: Record<TeachingRuleTaskType, string> = {
 };
 
 const ORIGIN_LABELS: Record<TeachingRuleOrigin, string> = {
-  ielts_official: "IELTS official",
-  courseware: "Courseware",
-  system: "System"
+  ielts_official: "IELTS 官方",
+  courseware: "课程资料",
+  system: "系统规则"
 };
 
 function parseCommaList(value: string) {
@@ -268,7 +268,7 @@ export function TeachingRulesAdminClient() {
     setSuccess(null);
     try {
       const rule = await saveCurrentRule();
-      setSuccess(rule.version > 0 ? "Changes saved as draft. Publish again when ready." : "Draft saved.");
+      setSuccess(rule.version > 0 ? "修改已保存为草稿，请确认后重新发布。" : "草稿已保存。");
       await loadRules(data?.page ?? 1);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "REQUEST_FAILED");
@@ -279,7 +279,7 @@ export function TeachingRulesAdminClient() {
 
   async function handleRuleAction(action: "publish" | "archive") {
     if (saving) return;
-    if (action === "archive" && !window.confirm("Archive this teaching rule?")) return;
+    if (action === "archive" && !window.confirm("确定归档这条教学规则吗？")) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -288,7 +288,7 @@ export function TeachingRulesAdminClient() {
       if (action === "publish" && (!ruleId || dirty)) {
         ruleId = (await saveCurrentRule()).id;
       }
-      if (!ruleId) throw new Error("SAVE_RULE_FIRST");
+      if (!ruleId) throw new Error("请先保存规则");
       const response = await fetch("/api/admin/teaching-rules", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -297,7 +297,7 @@ export function TeachingRulesAdminClient() {
       const payload = (await response.json()) as { rule?: TeachingRule; error?: string };
       if (!response.ok || !payload.rule) throw new Error(getErrorMessage(payload));
       beginEdit(payload.rule);
-      setSuccess(action === "publish" ? `Published as version ${payload.rule.version}.` : "Rule archived.");
+      setSuccess(action === "publish" ? `已发布为第 ${payload.rule.version} 版。` : "规则已归档。");
       await loadRules(data?.page ?? 1);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "REQUEST_FAILED");
@@ -317,76 +317,75 @@ export function TeachingRulesAdminClient() {
     <div className={styles.wrap}>
       <Surface className={styles.hero}>
         <div>
-          <p className={styles.eyebrow}>Knowledge Operations</p>
-          <h1 className={styles.title}>Teaching rules</h1>
+          <p className={styles.eyebrow}>教学知识管理</p>
+          <h1 className={styles.title}>教学规则</h1>
           <p className={styles.body}>
-            Turn courseware principles into structured, searchable rules. Only explicitly
-            published versions will be eligible for future review workflows.
+            将课程内容整理为结构化、可检索的规则。只有明确发布的版本才会用于批改流程。
           </p>
         </div>
-        <ActionButton variant="primary" onClick={beginCreate}>Add rule</ActionButton>
+        <ActionButton variant="primary" onClick={beginCreate}>新增规则</ActionButton>
       </Surface>
 
       <form className={styles.filters} onSubmit={handleSearch}>
         <label className={styles.field}>
-          <span>Search</span>
+          <span>搜索</span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Name, principle, source or tag"
+            placeholder="搜索名称、原则、来源或标签"
           />
         </label>
         <label className={styles.field}>
-          <span>Task</span>
+          <span>任务</span>
           <select value={taskType} onChange={(event) => setTaskType(event.target.value)}>
-            <option value="">All tasks</option>
+            <option value="">全部任务</option>
             {(["all", "task1", "task2"] as TeachingRuleTaskType[]).map((option) => (
               <option key={option} value={option}>{TASK_LABELS[option]}</option>
             ))}
           </select>
         </label>
         <label className={styles.field}>
-          <span>Category</span>
+          <span>分类</span>
           <select value={category} onChange={(event) => setCategory(event.target.value)}>
-            <option value="">All categories</option>
+            <option value="">全部分类</option>
             {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
         </label>
         <label className={styles.field}>
-          <span>Source</span>
+          <span>来源</span>
           <select value={origin} onChange={(event) => setOrigin(event.target.value)}>
-            <option value="">All sources</option>
+            <option value="">全部来源</option>
             {Object.entries(ORIGIN_LABELS).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
         </label>
         <label className={styles.field}>
-          <span>Status</span>
+          <span>状态</span>
           <select value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option value="">All statuses</option>
+            <option value="">全部状态</option>
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
         </label>
-        <ActionButton type="submit">Apply</ActionButton>
+        <ActionButton type="submit">应用筛选</ActionButton>
       </form>
 
       <div className={styles.workspace}>
         <Surface className={styles.listPanel}>
           <div className={styles.sectionHeader}>
             <div>
-              <h2>Rule library</h2>
-              <p>{data ? `${data.total} matching rules` : "Loading rules…"}</p>
+              <h2>规则库</h2>
+              <p>{data ? `共找到 ${data.total} 条规则` : "正在加载规则…"}</p>
             </div>
-            {data ? <span className={styles.pageMeta}>Page {data.page} / {data.totalPages}</span> : null}
+            {data ? <span className={styles.pageMeta}>第 {data.page} / {data.totalPages} 页</span> : null}
           </div>
 
           {loading ? (
-            <div className={styles.emptyState}>Loading rules…</div>
+            <div className={styles.emptyState}>正在加载规则…</div>
           ) : data?.items.length ? (
             <div className={styles.ruleList}>
               {data.items.map((rule) => (
@@ -403,7 +402,7 @@ export function TeachingRulesAdminClient() {
                     </span>
                   </span>
                   <span className={styles.cardMeta}>
-                    {TASK_LABELS[rule.taskType]} · {ORIGIN_LABELS[rule.origin]} · {CATEGORY_LABELS[rule.category]} · Priority {rule.priority}
+                    {TASK_LABELS[rule.taskType]} · {ORIGIN_LABELS[rule.origin]} · {CATEGORY_LABELS[rule.category]} · 优先级 {rule.priority}
                   </span>
                   <span className={styles.principlePreview}>{rule.principle}</span>
                   {rule.tags.length ? (
@@ -415,16 +414,16 @@ export function TeachingRulesAdminClient() {
               ))}
             </div>
           ) : (
-            <div className={styles.emptyState}>No rules match these filters.</div>
+            <div className={styles.emptyState}>当前筛选条件下没有规则。</div>
           )}
 
           {data && data.totalPages > 1 ? (
             <div className={styles.pagination}>
               <ActionButton disabled={loading || data.page <= 1} onClick={() => void loadRules(data.page - 1)}>
-                Previous
+                上一页
               </ActionButton>
               <ActionButton disabled={loading || data.page >= data.totalPages} onClick={() => void loadRules(data.page + 1)}>
-                Next
+                下一页
               </ActionButton>
             </div>
           ) : null}
@@ -433,8 +432,8 @@ export function TeachingRulesAdminClient() {
         <Surface as="form" className={styles.editor} onSubmit={handleSave}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.editorEyebrow}>{editingId ? "Edit rule" : "New rule"}</p>
-              <h2>{editingId ? form.name || "Untitled rule" : "Create teaching rule"}</h2>
+              <p className={styles.editorEyebrow}>{editingId ? "编辑规则" : "新建规则"}</p>
+              <h2>{editingId ? form.name || "未命名规则" : "创建教学规则"}</h2>
             </div>
             {editingId ? (
               <span className={styles.versionBadge}>
@@ -445,18 +444,18 @@ export function TeachingRulesAdminClient() {
 
           <div className={styles.formGrid}>
             <label className={`${styles.field} ${styles.spanTwo}`}>
-              <span>Rule name</span>
+              <span>规则名称</span>
               <input
                 required
                 minLength={2}
                 maxLength={160}
                 value={form.name}
                 onChange={(event) => updateForm({ name: event.target.value })}
-                placeholder="e.g. Opinion essay introduction must state a clear position"
+                placeholder="例如：观点类作文开头必须明确表明立场"
               />
             </label>
             <label className={styles.field}>
-              <span>Task scope</span>
+              <span>适用任务</span>
               <select
                 value={form.taskType}
                 onChange={(event) => updateForm({ taskType: event.target.value as TeachingRuleTaskType })}
@@ -467,7 +466,7 @@ export function TeachingRulesAdminClient() {
               </select>
             </label>
             <label className={styles.field}>
-              <span>Rule category</span>
+              <span>规则分类</span>
               <select
                 value={form.category}
                 onChange={(event) => updateForm({ category: event.target.value as TeachingRuleCategory })}
@@ -478,7 +477,7 @@ export function TeachingRulesAdminClient() {
               </select>
             </label>
             <label className={styles.field}>
-              <span>Rule source</span>
+              <span>规则来源</span>
               <select
                 value={form.origin}
                 onChange={(event) => updateForm({ origin: event.target.value as TeachingRuleOrigin })}
@@ -489,18 +488,18 @@ export function TeachingRulesAdminClient() {
               </select>
             </label>
             <label className={styles.field}>
-              <span>Severity</span>
+              <span>严重程度</span>
               <select
                 value={form.severity}
                 onChange={(event) => updateForm({ severity: event.target.value as TeachingRuleSeverity })}
               >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="low">低</option>
+                <option value="medium">中</option>
+                <option value="high">高</option>
               </select>
             </label>
             <label className={styles.field}>
-              <span>Priority (0–100)</span>
+              <span>优先级（0–100）</span>
               <input
                 type="number"
                 min={0}
@@ -511,7 +510,7 @@ export function TeachingRulesAdminClient() {
               />
             </label>
             <label className={styles.field}>
-              <span>Applicable question types</span>
+              <span>适用题型</span>
               <input
                 value={form.questionTypesText}
                 onChange={(event) => updateForm({ questionTypesText: event.target.value })}
@@ -519,65 +518,65 @@ export function TeachingRulesAdminClient() {
               />
             </label>
             <label className={styles.field}>
-              <span>Retrieval tags</span>
+              <span>检索标签</span>
               <input
                 value={form.tagsText}
                 onChange={(event) => updateForm({ tagsText: event.target.value })}
-                placeholder="introduction, thesis, position"
+                placeholder="开头段, 论点, 立场"
               />
             </label>
           </div>
 
           <label className={styles.field}>
-            <span>Teaching principle</span>
+            <span>教学原则</span>
             <textarea
               required
               minLength={10}
               maxLength={12000}
               value={form.principle}
               onChange={(event) => updateForm({ principle: event.target.value })}
-              placeholder="State the principle in a way that can be applied during review."
+              placeholder="用可以直接指导批改的方式描述这条原则。"
             />
           </label>
 
           <div className={styles.exampleGrid}>
             <label className={styles.field}>
-              <span>Positive example</span>
+              <span>正面示例</span>
               <textarea
                 value={form.positiveExample}
                 onChange={(event) => updateForm({ positiveExample: event.target.value })}
-                placeholder="A correct application of this principle"
+                placeholder="正确应用该原则的示例"
               />
             </label>
             <label className={styles.field}>
-              <span>Negative example</span>
+              <span>反面示例</span>
               <textarea
                 value={form.negativeExample}
                 onChange={(event) => updateForm({ negativeExample: event.target.value })}
-                placeholder="A common mistake or counterexample"
+                placeholder="常见错误或反例"
               />
             </label>
           </div>
 
           <div className={styles.sourceGrid}>
             <label className={styles.field}>
-              <span>Source courseware</span>
+              <span>来源课程</span>
               <input
                 value={form.sourceTitle}
                 onChange={(event) => updateForm({ sourceTitle: event.target.value })}
-                placeholder="Course or lesson title"
+                placeholder="课程或课件名称"
               />
             </label>
             <label className={styles.field}>
-              <span>Chapter / lesson</span>
+              <span>章节 / 课次</span>
               <input
                 value={form.sourceSection}
                 onChange={(event) => updateForm({ sourceSection: event.target.value })}
-                placeholder="Lesson 3 · Introductions"
+                placeholder="第 3 课 · 开头段"
               />
             </label>
             <label className={styles.field}>
-              <span>Knowledge point code</span>
+              <span>知识点编号</span>
               <input
                 value={form.knowledgePointCode}
                 onChange={(event) => updateForm({ knowledgePointCode: event.target.value })}
@@ -585,18 +584,18 @@ export function TeachingRulesAdminClient() {
               />
             </label>
             <label className={styles.field}>
-              <span>Page / section</span>
+              <span>页码 / 小节</span>
               <input
                 value={form.sourcePage}
                 onChange={(event) => updateForm({ sourcePage: event.target.value })}
-                placeholder="Page 12 / Lesson 3"
+                placeholder="第 12 页 / 第 3 课"
               />
             </label>
           </div>
 
           {editingStatus === "published" && dirty ? (
             <div className={styles.warning}>
-              Saving changes will return this rule to draft. Review it before publishing again.
+              保存修改后，该规则会恢复为草稿状态，需要确认后重新发布。
             </div>
           ) : null}
           {error ? <div className={styles.error} role="alert">{error}</div> : null}
@@ -604,19 +603,19 @@ export function TeachingRulesAdminClient() {
 
           <div className={styles.editorActions}>
             <ActionButton type="submit" variant="primary" disabled={saving}>
-              {saving ? "Saving…" : editingId ? "Save draft" : "Create draft"}
+              {saving ? "保存中…" : editingId ? "保存草稿" : "创建草稿"}
             </ActionButton>
             {editingStatus !== "archived" ? (
               <ActionButton type="button" disabled={saving} onClick={() => void handleRuleAction("publish")}>
-                Publish
+                发布
               </ActionButton>
             ) : null}
             {editingId && editingStatus !== "archived" ? (
               <ActionButton type="button" disabled={saving} onClick={() => void handleRuleAction("archive")}>
-                Archive
+                归档
               </ActionButton>
             ) : null}
-            {editingId ? <ActionButton type="button" onClick={beginCreate}>Cancel editing</ActionButton> : null}
+            {editingId ? <ActionButton type="button" onClick={beginCreate}>取消编辑</ActionButton> : null}
           </div>
         </Surface>
       </div>

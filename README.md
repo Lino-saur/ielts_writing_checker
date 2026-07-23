@@ -1,6 +1,6 @@
 # IELTS Writing Checker
 
-AI-powered IELTS writing checker for Task 1 and Task 2 with rubric-based scoring, inline revisions, user-bound energy, and Better Auth sessions.
+AI-powered IELTS writing checker for Task 1 and Task 2 with rubric-based scoring, inline revisions, user-bound Magic Ink credits, and Better Auth sessions.
 
 ## What It Does
 
@@ -14,7 +14,7 @@ AI-powered IELTS writing checker for Task 1 and Task 2 with rubric-based scoring
 - Shows strengths, highlighted sentences, priority fixes, and inline revisions.
 - Saves a per-user review history with the original prompt, essay, and Task 1 image.
 - Uploads Task 1 images directly from the browser to object storage using a short-lived signed URL.
-- Binds review energy to a Better Auth user session.
+- Binds review Magic Ink to a Better Auth user session.
 - Keeps signed-in sessions in a persistent auth cookie for up to 30 days unless the user signs out.
 - Uses `Qianwen` for Task 1 image understanding and Task 1/Task 2 scoring and revision feedback.
 
@@ -135,7 +135,7 @@ Recommended production setup:
 
 ### `POST /api/check`
 
-Runs a full review and consumes one unit of energy.
+Runs a full review and consumes one bottle of Magic Ink.
 Send a stable `Idempotency-Key` header (16-128 letters, numbers, `_` or `-`) for each logical review attempt.
 The same key can safely replay a completed response, but cannot be reused with a different payload.
 
@@ -151,7 +151,8 @@ Request body:
 
 ### `GET /api/energy`
 
-Returns the current user session's energy balance and review cost.
+Returns the current user session's Magic Ink balance and review cost. The
+`/api/energy` route name remains stable for backward compatibility.
 
 ### `GET /api/reviews`
 
@@ -252,7 +253,7 @@ Accepts provider webhooks.
 
 ## Notes
 
-- Review energy is tied to the signed-in Better Auth user.
+- Review Magic Ink is tied to the signed-in Better Auth user.
 - PostgreSQL is required for deployment. Local file-based SQLite is no longer used.
 - Neon(DB), Vercel(Deploy) and Spaceship(Domain)
 - The object storage bucket must allow browser `PUT` from your app origin with `Content-Type` in allowed headers.

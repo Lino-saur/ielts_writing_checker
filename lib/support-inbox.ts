@@ -36,6 +36,12 @@ type ParsedAddress = {
   name: string | null;
 };
 
+const EMAIL_RECEIVED_EVENT = "email.received";
+const VERIFICATION_EMAIL_SUBJECT = "Verify your email for IELTS Writing Checker";
+const NORMALIZED_VERIFICATION_EMAIL_SUBJECT = VERIFICATION_EMAIL_SUBJECT.toLowerCase();
+
+export type SupportInboundIgnoreReason = "non_inbound_event" | "verification_email";
+
 function mapSupportInboxRow(row: SupportInboxRow): SupportInboxEntry {
   return {
     id: row.id,
@@ -138,9 +144,35 @@ function extractEmailPayload(rawPayload: Record<string, unknown>) {
   };
 }
 
-export async function ingestSupportInbound(rawPayload: Record<string, unknown>) {
-  await ensureDatabase();
+export function getSupportInboundIgnoreReason(
+  rawPayload: Record<string, unknown>
+): SupportInboundIgnoreReason | null {
+  const eventType = getString(rawPayload.type).toLowerCase();
 
+  // Resend can send delivery, sent and received events to the same webhook.
+  // Only the received event represents a message sent to the support inbox.
+  if (eventType && eventType !== EMAIL_RECEIVED_EVENT) {
+    return "non_inbound_event";
+  }
+
+  const subject = extractEmailPayload(rawPayload).subject.trim().toLowerCase();
+  if (subject === NORMALIZED_VERIFICATION_EMAIL_SUBJECT) {
+    return "verification_email";
+  }
+
+  return null;
+}
+
+export async function ingestSupportInbound(rawPayload: Record<string, unknown>) {
+  const ignoreReason = getSupportInboundIgnoreReason(rawPayload);
+  if (ignoreReason) {
+    return {
+      ignored: true,
+      reason: ignoreReason
+    };
+  }
+
+  await ensureDatabase();
   const parsed = extractEmailPayload(rawPayload);
   const now = new Date().toISOString();
   const entryId = randomUUID();
@@ -213,8 +245,22 @@ export async function ingestSupportInbound(rawPayload: Record<string, unknown>) 
 export async function listSupportInbox(filters: SupportInboxFilters = {}) {
   await ensureDatabase();
 
-  const where: string[] = [];
-  const params: Array<string | number> = [];
+  // Keep verification messages that were stored before event filtering was
+  // introduced out of both the list and its headline statistics.
+  const params: Array<string | number> = [NORMALIZED_VERIFICATION_EMAIL_SUBJECT];
+  const where: string[] = [`LOWER(BTRIM(subject)) <> $1`];
+  const internalSenderEmails = [
+    process.env.SUPPORT_EMAIL_FROM,
+    process.env.AUTH_EMAIL_FROM,
+    process.env.RESEND_FROM_EMAIL
+  ]
+    .map((value) => parseAddress(value).email?.toLowerCase())
+    .filter((value): value is string => Boolean(value));
+
+  for (const senderEmail of new Set(internalSenderEmails)) {
+    params.push(senderEmail);
+    where.push(`LOWER(BTRIM(from_email)) <> $${params.length}`);
+  }
 
   if (filters.status && filters.status !== "all") {
     params.push(filters.status);

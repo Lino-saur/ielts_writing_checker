@@ -326,6 +326,42 @@ function applyTemplate(template: string, values: Record<string, string | number>
   }, template);
 }
 
+export function buildGrammarConsolidationInstruction(
+  locale: ReturnType<typeof getLocale>,
+  proposedEdits: Array<{
+    original: string;
+    corrected: string;
+    category?: string;
+    reason: string;
+    ruleReferences?: Array<{ id: string; version?: number }>;
+  }>
+) {
+  const proposals = proposedEdits.map((edit) => ({
+    original: edit.original,
+    replacement: edit.corrected,
+    category: edit.category ?? "other",
+    reason: edit.reason,
+    ruleIds: edit.ruleReferences?.map((rule) => `${rule.id}@v${rule.version ?? 1}`) ?? []
+  }));
+  const instruction = locale === "zh-CN"
+    ? `独立语法合并复核：把下方“第一轮候选修改”视为未经验证的建议，而不是正确答案。重新逐句检查 Input data 中的完整原文，并返回一份直接锚定原文的完整语法修改列表。
+- 只保留确有必要且 replacement 正确的候选修改；删除误报。
+- 候选 replacement 本身错误时，不得保留该错误修改；应基于原文输出正确修改，或在原文正确时完全省略。
+- 补充第一轮遗漏的明确语法或机械错误。
+- 不得把数据准确性、内容完整性或可选风格改写当作语法修改。
+- 判断主谓一致时必须找出当前分句真正的语法主语及其中心词，不能采用距离动词最近的名词。例如 manufacturing 表示一个行业/活动时用单数（manufacturing was），the number of jobs 的中心词 number 也是单数，而存在句 there be 要与后置名词短语一致（there were 16 million jobs）。
+- 返回前逐项验证：原文是否真的错误、replacement 是否能放回完整句子、是否遗漏了其他明确错误。`
+    : `Independent grammar consolidation pass: Treat the “first-pass candidate edits” below as unverified suggestions, not as correct answers. Re-read every sentence in the complete original Essay from Input data and return one consolidated grammar edit list anchored directly to that original essay.
+- Retain only necessary candidates whose replacements are correct; remove false positives.
+- If a candidate replacement is itself wrong, do not preserve it. Return the correct edit against the original wording, or omit it entirely when the original is correct.
+- Add clear grammar or mechanics errors missed by the first pass.
+- Do not treat data accuracy, content completeness, or optional stylistic rewriting as grammar.
+- For subject-verb agreement, identify the true grammatical subject and its head in the current clause; never use the noun nearest the verb as a shortcut. For example, manufacturing is singular when it denotes an industry or activity (manufacturing was), the head of the number of jobs is the singular number, while existential there be agrees with its postposed noun phrase (there were 16 million jobs).
+- Before returning, verify for every edit that the original is genuinely wrong, the replacement works in the full sentence, and no other clear error was missed.`;
+
+  return `${instruction}\n\nFirst-pass candidate edits (untrusted JSON):\n${JSON.stringify(proposals)}`;
+}
+
 function resolveTaskAnalysisContext(input: CheckInput, context: EvaluationTaskContext | undefined, locale: ReturnType<typeof getLocale>) {
   const isChinese = locale === "zh-CN";
   if (input.taskType === "task2") {

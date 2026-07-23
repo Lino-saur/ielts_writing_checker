@@ -252,8 +252,10 @@ export type FeedbackStatus = "new" | "reviewing" | "closed";
 export type SupportInboxStatus = "new" | "reviewing" | "closed";
 export type AdminUserStatus = "active" | "disabled";
 export type RechargeProvider = "manual" | "wechat" | "alipay";
-export type RechargeOrderStatus = "pending" | "paid" | "failed" | "cancelled";
-export type RechargePaymentMode = "redirect" | "qr_code" | "sdk" | "pending";
+export type RechargeOrderStatus = "pending" | "paid" | "failed" | "cancelled" | "refunded";
+export type OrderSupportKind = "inquiry" | "refund";
+export type OrderSupportStatus = "open" | "reviewing" | "approved" | "rejected" | "refunded";
+export type RechargePaymentMode = "redirect" | "qr_code" | "sdk" | "pending" | "simulated";
 export type PracticeQuestionSource = "cambridge_ielts";
 export type PracticeQuestionModule = "academic" | "general_training";
 export type PracticeQuestionContentStatus = "placeholder" | "complete";
@@ -332,6 +334,8 @@ export type RechargeProduct = {
   energyAmount: number;
   bonusEnergyAmount: number;
   priceCents: number;
+  listPriceCents: number;
+  unlimitedDays: number | null;
   currency: string;
   status: "active" | "inactive";
   sortOrder: number;
@@ -352,10 +356,27 @@ export type RechargeOrder = {
   energyAmount: number;
   bonusEnergyAmount: number;
   totalEnergyAmount: number;
+  unlimitedDays: number | null;
   providerOrderId: string | null;
   paidAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type OrderSupportRequest = {
+  id: string;
+  orderId: string;
+  userId: string;
+  kind: OrderSupportKind;
+  status: OrderSupportStatus;
+  reason: string;
+  details: string;
+  requestedRefundCents: number | null;
+  approvedRefundCents: number | null;
+  adminNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
 };
 
 export type WritingAssignmentStudent = {

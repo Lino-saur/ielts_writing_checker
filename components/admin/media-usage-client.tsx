@@ -148,7 +148,7 @@ export function MediaUsageClient() {
             }
           : current
       );
-      setSuccess("Quota settings updated.");
+      setSuccess("额度设置已更新。");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "REQUEST_FAILED");
     } finally {
@@ -160,11 +160,10 @@ export function MediaUsageClient() {
     <div className={styles.wrap}>
       <Surface className={styles.hero}>
         <div>
-          <p className={styles.eyebrow}>Internal Ops</p>
-          <h1 className={styles.title}>Manage media quota</h1>
+          <p className={styles.eyebrow}>内部运营工具</p>
+          <h1 className={styles.title}>媒体额度管理</h1>
           <p className={styles.body}>
-            Control monthly image upload and delivery budget for Task 1 review assets. Uploads are blocked before new
-            presigned URLs are issued. History image reads are blocked at the app proxy when download quota is reached.
+            管理 Task 1 图片每月上传与下载额度。达到限制后，系统将停止签发新的上传地址或读取历史图片。
           </p>
         </div>
       </Surface>
@@ -172,48 +171,48 @@ export function MediaUsageClient() {
       <Surface className={styles.panel}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2 className={styles.sectionTitle}>Current month</h2>
-            <p className={styles.sectionBody}>Track storage-related traffic that the app has accepted this month.</p>
+            <h2 className={styles.sectionTitle}>本月使用情况</h2>
+            <p className={styles.sectionBody}>查看本月图片上传、下载流量和请求次数。</p>
           </div>
         </div>
 
         {loading ? (
-          <div className={styles.emptyState}>Loading usage metrics...</div>
+          <div className={styles.emptyState}>正在加载用量数据…</div>
         ) : dashboard ? (
           <div className={styles.resultList}>
             <div className={styles.resultCard}>
               <strong>{dashboard.currentMonth.monthKey}</strong>
-              <span>Uploads: {formatBytes(dashboard.currentMonth.uploadBytes)}</span>
-              <span>Downloads: {formatBytes(dashboard.currentMonth.downloadBytes)}</span>
-              <span>Upload count: {dashboard.currentMonth.uploadCount}</span>
-              <span>Download count: {dashboard.currentMonth.downloadCount}</span>
+              <span>上传流量：{formatBytes(dashboard.currentMonth.uploadBytes)}</span>
+              <span>下载流量：{formatBytes(dashboard.currentMonth.downloadBytes)}</span>
+              <span>上传次数：{dashboard.currentMonth.uploadCount}</span>
+              <span>下载次数：{dashboard.currentMonth.downloadCount}</span>
             </div>
           </div>
         ) : (
-          <div className={styles.emptyState}>No usage data yet.</div>
+          <div className={styles.emptyState}>暂无用量数据。</div>
         )}
       </Surface>
 
       <Surface as="form" className={styles.panel} onSubmit={handleSubmit}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2 className={styles.sectionTitle}>Quota policy</h2>
-            <p className={styles.sectionBody}>Leave a field empty to disable that limit.</p>
+            <h2 className={styles.sectionTitle}>额度策略</h2>
+            <p className={styles.sectionBody}>输入框留空表示不限制该项额度。</p>
           </div>
         </div>
 
         <div className={styles.grid}>
           <label className={styles.field}>
-            <span>Monthly upload limit (GB)</span>
-            <input value={uploadLimitGb} onChange={(event) => setUploadLimitGb(event.target.value)} placeholder="e.g. 10" />
+            <span>每月上传上限（GB）</span>
+            <input value={uploadLimitGb} onChange={(event) => setUploadLimitGb(event.target.value)} placeholder="例如：10" />
           </label>
 
           <label className={styles.field}>
-            <span>Monthly download limit (GB)</span>
+            <span>每月下载上限（GB）</span>
             <input
               value={downloadLimitGb}
               onChange={(event) => setDownloadLimitGb(event.target.value)}
-              placeholder="e.g. 50"
+              placeholder="例如：50"
             />
           </label>
         </div>
@@ -221,7 +220,7 @@ export function MediaUsageClient() {
         <label className={styles.field}>
           <span>
             <input type="checkbox" checked={hardBlockUploads} onChange={(event) => setHardBlockUploads(event.target.checked)} />{" "}
-            Hard block all new uploads
+            停止所有新图片上传
           </span>
         </label>
 
@@ -232,7 +231,7 @@ export function MediaUsageClient() {
               checked={hardBlockDownloads}
               onChange={(event) => setHardBlockDownloads(event.target.checked)}
             />{" "}
-            Hard block all image reads
+            停止所有图片读取
           </span>
         </label>
 
@@ -241,7 +240,7 @@ export function MediaUsageClient() {
 
         <div className={styles.actions}>
           <ActionButton type="submit" variant="primary" disabled={saving}>
-            {saving ? "Saving..." : "Save quota settings"}
+            {saving ? "保存中…" : "保存额度设置"}
           </ActionButton>
         </div>
       </Surface>
@@ -249,8 +248,8 @@ export function MediaUsageClient() {
       <Surface className={styles.panel}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2 className={styles.sectionTitle}>Recent months</h2>
-            <p className={styles.sectionBody}>Quick visibility into storage-heavy months.</p>
+            <h2 className={styles.sectionTitle}>历史月份</h2>
+            <p className={styles.sectionBody}>查看近期各月媒体用量。</p>
           </div>
         </div>
 
@@ -259,15 +258,15 @@ export function MediaUsageClient() {
             dashboard.recentMonths.map((item) => (
               <div key={item.monthKey} className={styles.resultCard}>
                 <strong>{item.monthKey}</strong>
-                <span>Uploads: {formatBytes(item.uploadBytes)}</span>
-                <span>Downloads: {formatBytes(item.downloadBytes)}</span>
+                <span>上传流量：{formatBytes(item.uploadBytes)}</span>
+                <span>下载流量：{formatBytes(item.downloadBytes)}</span>
                 <span>
-                  Requests: {item.uploadCount} upload / {item.downloadCount} download
+                  请求次数：上传 {item.uploadCount} 次 / 下载 {item.downloadCount} 次
                 </span>
               </div>
             ))
           ) : (
-            <div className={styles.emptyState}>No prior month data yet.</div>
+            <div className={styles.emptyState}>暂无历史月份数据。</div>
           )}
         </div>
       </Surface>

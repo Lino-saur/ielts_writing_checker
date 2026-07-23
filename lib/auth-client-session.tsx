@@ -18,6 +18,7 @@ type EnergyPayload = {
     totalConsumed: number;
     totalRecharged: number;
     updatedAt: string;
+    unlimitedUntil?: string | null;
   };
   cost?: number;
 };

@@ -77,7 +77,7 @@ export function FeedbackInboxClient({ filters }: FeedbackInboxClientProps) {
   if (loading) {
     return (
       <section className={styles.panel}>
-        <div className={styles.empty}>Loading feedback inbox...</div>
+        <div className={styles.empty}>正在加载用户反馈…</div>
       </section>
     );
   }
@@ -85,7 +85,7 @@ export function FeedbackInboxClient({ filters }: FeedbackInboxClientProps) {
   if (error || !data) {
     return (
       <section className={styles.panel}>
-        <div className={styles.empty}>Failed to load feedback inbox.</div>
+        <div className={styles.empty}>用户反馈加载失败。</div>
       </section>
     );
   }

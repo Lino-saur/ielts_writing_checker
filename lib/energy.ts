@@ -7,6 +7,7 @@ const DEFAULT_ENERGY_BALANCE = 20;
 
 export type EnergyState = {
   balance: number;
+  unlimitedUntil: string | null;
   totalConsumed: number;
   totalRecharged: number;
   updatedAt: string;
@@ -23,6 +24,7 @@ function createDefaultEnergyState(): EnergyState {
   const now = new Date().toISOString();
   return {
     balance: DEFAULT_ENERGY_BALANCE,
+    unlimitedUntil: null,
     totalConsumed: 0,
     totalRecharged: DEFAULT_ENERGY_BALANCE,
     updatedAt: now
@@ -32,9 +34,24 @@ function createDefaultEnergyState(): EnergyState {
 function mapEnergyRow(row: EnergyRow): EnergyState {
   return {
     balance: Number(row.balance),
+    unlimitedUntil: null,
     totalConsumed: Number(row.total_consumed),
     totalRecharged: Number(row.total_recharged),
     updatedAt: new Date(row.updated_at).toISOString()
+  };
+}
+
+async function addUnlimitedEntitlement(state: EnergyState, userId: string): Promise<EnergyState> {
+  const result = await db.query<{ unlimited_until: Date | string | null }>(
+    `SELECT MAX(expires_at) AS unlimited_until
+     FROM unlimited_review_passes
+     WHERE user_id = $1 AND expires_at > NOW()`,
+    [userId]
+  );
+  const expiry = result.rows[0]?.unlimited_until;
+  return {
+    ...state,
+    unlimitedUntil: expiry ? new Date(expiry).toISOString() : null
   };
 }
 
@@ -109,7 +126,7 @@ async function lockEnergyAccount(client: PoolClient, userId: string) {
 }
 
 export async function getEnergyState(userId: string): Promise<EnergyState> {
-  return ensureEnergyAccount(userId);
+  return addUnlimitedEntitlement(await ensureEnergyAccount(userId), userId);
 }
 
 export async function consumeEnergy(userId: string, amount = REVIEW_ENERGY_COST): Promise<EnergyState> {
@@ -141,13 +158,23 @@ export async function consumeEnergyInTransaction(
 ) {
   const state = mapEnergyRow(await lockEnergyAccount(client, userId));
 
-  if (state.balance < amount) {
+  const passResult = await client.query<{ unlimited_until: Date | string | null }>(
+    `SELECT MAX(expires_at) AS unlimited_until
+     FROM unlimited_review_passes
+     WHERE user_id = $1 AND expires_at > NOW()`,
+    [userId]
+  );
+  const unlimitedUntil = passResult.rows[0]?.unlimited_until;
+  const hasUnlimitedPass = Boolean(unlimitedUntil);
+
+  if (!hasUnlimitedPass && state.balance < amount) {
     throw new Error("INSUFFICIENT_ENERGY");
   }
 
   const updatedAt = new Date().toISOString();
   const nextState: EnergyState = {
-    balance: state.balance - amount,
+    balance: hasUnlimitedPass ? state.balance : state.balance - amount,
+    unlimitedUntil: unlimitedUntil ? new Date(unlimitedUntil).toISOString() : null,
     totalConsumed: state.totalConsumed + amount,
     totalRecharged: state.totalRecharged,
     updatedAt
@@ -170,7 +197,7 @@ export async function consumeEnergyInTransaction(
       amount,
       nextState.balance,
       options?.orderId || null,
-      options?.source || "review",
+      hasUnlimitedPass ? `${options?.source || "review"}:unlimited` : options?.source || "review",
       updatedAt
     ]
   );
@@ -189,9 +216,19 @@ export async function refundReviewEnergyInTransaction(
   }
 
   const state = mapEnergyRow(await lockEnergyAccount(client, userId));
+  const consumption = await client.query<{ source: string | null }>(
+    `SELECT source
+     FROM energy_transactions
+     WHERE order_id = $1 AND user_id = $2 AND type = 'consume'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [requestId, userId]
+  );
+  const wasUnlimited = consumption.rows[0]?.source?.endsWith(":unlimited") ?? false;
   const updatedAt = new Date().toISOString();
   const nextState: EnergyState = {
-    balance: state.balance + amount,
+    balance: state.balance + (wasUnlimited ? 0 : amount),
+    unlimitedUntil: state.unlimitedUntil,
     totalConsumed: Math.max(0, state.totalConsumed - amount),
     totalRecharged: state.totalRecharged,
     updatedAt
@@ -207,7 +244,7 @@ export async function refundReviewEnergyInTransaction(
   await client.query(
     `INSERT INTO energy_transactions (id, user_id, type, amount, balance_after, order_id, source, created_at)
      VALUES ($1, $2, 'refund', $3, $4, $5, 'review_refund', $6)`,
-    [randomUUID(), userId, amount, nextState.balance, requestId, updatedAt]
+    [randomUUID(), userId, wasUnlimited ? 0 : amount, nextState.balance, requestId, updatedAt]
   );
 
   return nextState;
@@ -276,6 +313,7 @@ export async function grantEnergy(
     const updatedAt = new Date().toISOString();
     const nextState: EnergyState = {
       balance: state.balance + amount,
+      unlimitedUntil: state.unlimitedUntil,
       totalConsumed: state.totalConsumed,
       totalRecharged: state.totalRecharged + amount,
       updatedAt

@@ -66,42 +66,41 @@ export function AdminLoginForm({ mode, userEmail }: AdminLoginFormProps) {
     <main className={styles.page}>
       <div className={styles.frame}>
         <section className={styles.hero}>
-          <p className={styles.heroEyebrow}>Hyper-inspired admin access</p>
-          <h1 className={styles.heroTitle}>Admin login is a separate front door from the public product.</h1>
+          <p className={styles.heroEyebrow}>内部运营入口</p>
+          <h1 className={styles.heroTitle}>独立、安全的运营管理后台</h1>
           <p className={styles.heroBody}>
-            This workspace is isolated for operations, feedback triage and future internal tooling. It uses a dedicated
-            entry surface so the later split into a standalone admin app stays cheap.
+            集中处理用户反馈、客服工单、内容维护和日常运营操作，与用户端产品保持隔离。
           </p>
 
           <div className={styles.heroGrid}>
             <article className={styles.heroCard}>
-              <span>Scope</span>
-              <strong>Internal only</strong>
-              <p>Feedback, moderation, operations and model-quality workflows stay out of the public product shell.</p>
+              <span>使用范围</span>
+              <strong>仅限内部人员</strong>
+              <p>用户反馈、内容审核、运营和质量管理均在后台独立完成。</p>
             </article>
             <article className={styles.heroCard}>
-              <span>Direction</span>
-              <strong>Split-ready</strong>
-              <p>Admin routing, UI and API boundaries are already being isolated for a later `apps/admin` split.</p>
+              <span>权限控制</span>
+              <strong>账号白名单</strong>
+              <p>只有加入后台权限表的账号才能进入运营工作区。</p>
             </article>
           </div>
         </section>
 
         <section className={styles.auth}>
           <div className={styles.authHeader}>
-            <span>{mode === "forbidden" ? "Admin access blocked" : "Admin sign in"}</span>
-            <h1>{mode === "forbidden" ? "This account is signed in, but not allowed here." : "Sign in to the admin workspace."}</h1>
+            <span>{mode === "forbidden" ? "后台访问受限" : "后台登录"}</span>
+            <h1>{mode === "forbidden" ? "当前账号没有后台权限" : "登录运营管理后台"}</h1>
             <p>
               {mode === "forbidden"
-                ? "Use an account that exists in admin_users, or sign out and switch accounts."
-                : "Use a permitted account. The admin workspace checks the same auth system, but against a dedicated admin_users table."}
+                ? "请使用已加入 admin_users 权限表的账号，或者退出后切换账号。"
+                : "请使用已获得后台权限的账号登录。"}
             </p>
           </div>
 
           {mode === "login" ? (
             <form className={styles.form} onSubmit={handleLogin}>
               <label className={styles.field}>
-                <span>Email</span>
+                <span>邮箱</span>
                 <div className={styles.inputWrap}>
                   <input
                     type="email"
@@ -114,7 +113,7 @@ export function AdminLoginForm({ mode, userEmail }: AdminLoginFormProps) {
               </label>
 
               <label className={styles.field}>
-                <span>Password</span>
+                <span>密码</span>
                 <div className={styles.inputWrap}>
                   <input
                     type="password"
@@ -129,24 +128,24 @@ export function AdminLoginForm({ mode, userEmail }: AdminLoginFormProps) {
               {error ? <p className={styles.error}>{error}</p> : null}
 
               <button type="submit" className={styles.submit} disabled={submitting}>
-                {submitting ? "Signing in..." : "Continue to admin"}
+                {submitting ? "登录中…" : "进入后台"}
               </button>
             </form>
           ) : (
             <>
               <div className={styles.info}>
-                <strong>Current account</strong>
-                <p>{userEmail || "Signed in without a recognized admin identity."}</p>
+                <strong>当前账号</strong>
+                <p>{userEmail || "当前登录账号无法识别。"}</p>
               </div>
 
               {error ? <p className={styles.error}>{error}</p> : null}
 
               <div className={styles.actions}>
                 <button type="button" className={styles.ghostButtonPlain} onClick={() => void handleSignOut()} disabled={submitting}>
-                  {submitting ? "Signing out..." : "Sign out and switch account"}
+                  {submitting ? "退出中…" : "退出并切换账号"}
                 </button>
                 <Link href="/" className={styles.linkButton}>
-                  Back to public site
+                  返回网站首页
                 </Link>
               </div>
             </>
@@ -155,16 +154,16 @@ export function AdminLoginForm({ mode, userEmail }: AdminLoginFormProps) {
           {mode === "login" ? (
             <>
               <div className={styles.info}>
-                <strong>Admin allow list</strong>
-                <p>Access is granted through the `admin_users` table. Public users should never land directly inside the admin dashboard.</p>
+                <strong>后台账号白名单</strong>
+                <p>访问权限由 <code>admin_users</code> 表控制，普通用户无法进入后台。</p>
               </div>
 
               <div className={styles.actions}>
                 <Link href="/" className={styles.linkButton}>
-                  Back to public site
+                  返回网站首页
                 </Link>
                 <Link href="/checker" className={styles.ghostButton}>
-                  Open checker
+                  打开作文批改
                 </Link>
               </div>
             </>

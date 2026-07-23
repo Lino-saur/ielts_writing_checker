@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-import { buildRevisionPrompt, buildScorePrompt, loadBasePrompt } from "./prompts";
+import {
+  buildGrammarConsolidationInstruction,
+  buildRevisionPrompt,
+  buildScorePrompt,
+  loadBasePrompt
+} from "./prompts";
 import {
   enforceRevisionRuleReferences,
   hydrateTeachingRuleReferences
@@ -1002,7 +1007,7 @@ export async function buildAiRevisionFeedback(
     prompt: string,
     rules: typeof grammarPrompt.rules,
     stage: "grammar" | "optimization",
-    requestLabel: "grammar" | "optimization" | "final_audit" | "final_verification" | "quality_repair"
+    requestLabel: "grammar" | "grammar_review" | "optimization" | "final_audit" | "final_verification" | "quality_repair"
   ) {
     return runJsonCompletion(revisionInput, getTextProviderConfig(), {
       kind: "revision",
@@ -1011,15 +1016,40 @@ export async function buildAiRevisionFeedback(
       prompt,
       parse: (text, providerName) => parseRevisionJsonResponse(text, revisionInput, providerName, rules, stage),
       jsonSchema: getRevisionResponseJsonSchema(stage),
-      maxTokens: requestLabel === "grammar" ? 8000 : 3200,
-      timeoutProfile: requestLabel === "grammar" ? "long-text" : "text"
+      maxTokens: requestLabel === "grammar" || requestLabel === "grammar_review" ? 8000 : 3200,
+      timeoutProfile: requestLabel === "grammar" || requestLabel === "grammar_review" ? "long-text" : "text"
     });
   }
 
-  const grammarRevision = enforceRevisionRuleReferences(
+  const grammarProposal = enforceRevisionRuleReferences(
     await runRevisionPass(input, grammarPrompt.prompt, grammarPrompt.rules, "grammar", "grammar"),
     grammarPrompt.rules
   );
+  let grammarRevision = grammarProposal;
+  try {
+    const consolidationInstruction = buildGrammarConsolidationInstruction(
+      getLocale(input.locale),
+      grammarProposal.correctionNotes
+    );
+    grammarRevision = enforceRevisionRuleReferences(
+      await runRevisionPass(
+        input,
+        `${grammarPrompt.prompt}\n\n${consolidationInstruction}`,
+        grammarPrompt.rules,
+        "grammar",
+        "grammar_review"
+      ),
+      grammarPrompt.rules
+    );
+  } catch (grammarReviewError) {
+    console.warn("[IELTS_CHECK][GRAMMAR_CONSOLIDATION_FALLBACK]", {
+      taskType: input.taskType,
+      locale: getLocale(input.locale),
+      errorType: grammarReviewError instanceof Error ? grammarReviewError.name : typeof grammarReviewError,
+      errorMessage: grammarReviewError instanceof Error ? grammarReviewError.message : String(grammarReviewError),
+      fallback: "first_pass"
+    });
+  }
   await onProgress?.(45, "checking_grammar");
   const grammarCleanEssay = materializeAnnotatedEssay(grammarRevision.annotatedEssay);
   const optimizationInput: CheckInput = {

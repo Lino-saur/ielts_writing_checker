@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Ling signature crest inverse V1.2</title>
+  <defs>
+    <mask id="ling-crest-cutouts-v12-inverse">
+      <rect width="64" height="64" fill="white"/>
+      <path d="M20.5 47C21.5 33 25 18.5 34.5 10" fill="none" stroke="black" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M25.2 24.6L31.4 21.8M23.5 31.5L29.4 28.7" fill="none" stroke="black" stroke-width="1.45" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <path d="M20 51C17 37 18 21 27 11C34 3 44 4 48 9C51 14 49 20 45 21C42 22 39 20 39 17C39 15 41 14 44 15C45 11 42 8 38 9C34 10 31 13 29 17L38 16L30 21L37 21L28 26L35 27L26 32L33 34C30 41 25 47 20 51Z" fill="#F7F6EF" mask="url(#ling-crest-cutouts-v12-inverse)"/>
+  <g fill="#86B9D8">
+    <path d="M20.2 48C17.8 47.1 16.1 45.2 15.7 43.2C18 44 19.6 45.5 20.6 47.1Z"/>
+    <path d="M18.7 51C16.9 50.5 15.7 49.4 15.3 48C17 48.3 18.4 49.1 19.1 50.3Z"/>
+    <circle cx="16.1" cy="53" r="0.85"/>
+  </g>
+</svg>

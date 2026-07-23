@@ -3,10 +3,10 @@ import { AdminShell } from "@/components/admin/admin-shell";
 
 export const metadata: Metadata = {
   title: {
-    default: "Admin | IELTS Writing Checker",
-    template: "%s | Admin | IELTS Writing Checker"
+    default: "运营后台 | IELTS Writing Checker",
+    template: "%s | 运营后台 | IELTS Writing Checker"
   },
-  description: "Internal admin workspace for IELTS Writing Checker."
+  description: "IELTS Writing Checker 内部运营管理后台。"
 };
 
 export default function AdminLayout({

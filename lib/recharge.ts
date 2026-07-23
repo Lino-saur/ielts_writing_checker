@@ -15,6 +15,8 @@ type RechargeProductRow = {
   energy_amount: number;
   bonus_energy_amount: number;
   price_cents: number;
+  list_price_cents: number | null;
+  unlimited_days: number | null;
   currency: string;
   status: "active" | "inactive";
   sort_order: number;
@@ -35,6 +37,7 @@ type RechargeOrderRow = {
   energy_amount: number;
   bonus_energy_amount: number;
   total_energy_amount: number;
+  unlimited_days: number | null;
   provider_order_id: string | null;
   paid_at: Date | string | null;
   created_at: Date | string;
@@ -62,6 +65,8 @@ function mapRechargeProduct(row: RechargeProductRow): RechargeProduct {
     energyAmount: Number(row.energy_amount),
     bonusEnergyAmount: Number(row.bonus_energy_amount),
     priceCents: Number(row.price_cents),
+    listPriceCents: Number(row.list_price_cents ?? row.price_cents),
+    unlimitedDays: row.unlimited_days === null ? null : Number(row.unlimited_days),
     currency: row.currency,
     status: row.status,
     sortOrder: Number(row.sort_order),
@@ -84,6 +89,7 @@ function mapRechargeOrder(row: RechargeOrderRow): RechargeOrder {
     energyAmount: Number(row.energy_amount),
     bonusEnergyAmount: Number(row.bonus_energy_amount),
     totalEnergyAmount: Number(row.total_energy_amount),
+    unlimitedDays: row.unlimited_days === null ? null : Number(row.unlimited_days),
     providerOrderId: row.provider_order_id,
     paidAt: row.paid_at ? new Date(row.paid_at).toISOString() : null,
     createdAt: new Date(row.created_at).toISOString(),
@@ -95,7 +101,7 @@ async function getRechargeProductByCode(code: string) {
   await ensureDatabase();
 
   const result = await db.query<RechargeProductRow>(
-    `SELECT id, code, name, energy_amount, bonus_energy_amount, price_cents, currency, status, sort_order, created_at, updated_at
+    `SELECT id, code, name, energy_amount, bonus_energy_amount, price_cents, list_price_cents, currency, unlimited_days, status, sort_order, created_at, updated_at
      FROM recharge_products
      WHERE code = $1
      LIMIT 1`,
@@ -110,7 +116,7 @@ async function getRechargeOrderByWhere(whereSql: string, params: Array<string | 
 
   const result = await db.query<RechargeOrderRow>(
     `SELECT id, user_id, product_id, product_code, product_name, provider, status, amount_cents, currency,
-            energy_amount, bonus_energy_amount, total_energy_amount, provider_order_id, paid_at, created_at, updated_at
+            energy_amount, bonus_energy_amount, total_energy_amount, unlimited_days, provider_order_id, paid_at, created_at, updated_at
      FROM recharge_orders
      WHERE ${whereSql}
      LIMIT 1`,
@@ -134,7 +140,7 @@ export async function listRechargeProducts() {
   await ensureDatabase();
 
   const result = await db.query<RechargeProductRow>(
-    `SELECT id, code, name, energy_amount, bonus_energy_amount, price_cents, currency, status, sort_order, created_at, updated_at
+    `SELECT id, code, name, energy_amount, bonus_energy_amount, price_cents, list_price_cents, currency, unlimited_days, status, sort_order, created_at, updated_at
      FROM recharge_products
      WHERE status = 'active'
      ORDER BY sort_order ASC, created_at ASC`
@@ -187,7 +193,7 @@ export async function setRechargeOrderProviderOrderId(orderId: string, providerO
      WHERE id = $1
        AND status = 'pending'
      RETURNING id, user_id, product_id, product_code, product_name, provider, status, amount_cents, currency,
-               energy_amount, bonus_energy_amount, total_energy_amount, provider_order_id, paid_at, created_at, updated_at`,
+               energy_amount, bonus_energy_amount, total_energy_amount, unlimited_days, provider_order_id, paid_at, created_at, updated_at`,
     [orderId, providerOrderId, updatedAt]
   );
 
@@ -212,10 +218,10 @@ export async function createRechargeOrder(input: {
   await db.query(
     `INSERT INTO recharge_orders (
       id, user_id, product_id, product_code, product_name, provider, status,
-      amount_cents, currency, energy_amount, bonus_energy_amount, total_energy_amount,
+      amount_cents, currency, energy_amount, bonus_energy_amount, total_energy_amount, unlimited_days,
       provider_order_id, paid_at, created_at, updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, NULL, NULL, $12, $12)`,
+    VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11, $12, NULL, NULL, $13, $13)`,
     [
       orderId,
       input.userId,
@@ -228,6 +234,7 @@ export async function createRechargeOrder(input: {
       product.energyAmount,
       product.bonusEnergyAmount,
       product.energyAmount + product.bonusEnergyAmount,
+      product.unlimitedDays,
       now
     ]
   );
@@ -253,7 +260,7 @@ export async function listRechargeOrdersForUser(userId: string) {
 
   const result = await db.query<RechargeOrderRow>(
     `SELECT id, user_id, product_id, product_code, product_name, provider, status, amount_cents, currency,
-            energy_amount, bonus_energy_amount, total_energy_amount, provider_order_id, paid_at, created_at, updated_at
+            energy_amount, bonus_energy_amount, total_energy_amount, unlimited_days, provider_order_id, paid_at, created_at, updated_at
      FROM recharge_orders
      WHERE user_id = $1
      ORDER BY created_at DESC`,
@@ -292,7 +299,7 @@ export async function settleRechargeOrder(input: {
 
     const orderResult = await client.query<RechargeOrderRow>(
       `SELECT id, user_id, product_id, product_code, product_name, provider, status, amount_cents, currency,
-              energy_amount, bonus_energy_amount, total_energy_amount, provider_order_id, paid_at, created_at, updated_at
+              energy_amount, bonus_energy_amount, total_energy_amount, unlimited_days, provider_order_id, paid_at, created_at, updated_at
        FROM recharge_orders
        WHERE ${whereSql}
        FOR UPDATE`,
@@ -351,9 +358,32 @@ export async function settleRechargeOrder(input: {
       }
 
       const account = accountResult.rows[0];
-      const nextBalance = Number(account.balance) + Number(current.total_energy_amount);
+      const isUnlimitedPass = Number(current.unlimited_days) > 0;
+      const nextBalance = Number(account.balance) + (isUnlimitedPass ? 0 : Number(current.total_energy_amount));
       const nextTotalRecharged = Number(account.total_recharged) + Number(current.total_energy_amount);
       const settledAt = new Date().toISOString();
+
+      if (isUnlimitedPass) {
+        const activePass = await client.query<{ expires_at: Date | string }>(
+          `SELECT expires_at
+           FROM unlimited_review_passes
+           WHERE user_id = $1 AND expires_at > NOW()
+           ORDER BY expires_at DESC
+           LIMIT 1
+           FOR UPDATE`,
+          [current.user_id]
+        );
+        const startsAt = activePass.rows[0]
+          ? new Date(activePass.rows[0].expires_at).getTime()
+          : Date.now();
+        const expiresAt = new Date(startsAt + Number(current.unlimited_days) * 86_400_000).toISOString();
+        await client.query(
+          `INSERT INTO unlimited_review_passes (id, user_id, order_id, expires_at, created_at)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (order_id) DO NOTHING`,
+          [randomUUID(), current.user_id, current.id, expiresAt, settledAt]
+        );
+      }
 
       await client.query(
         `UPDATE energy_accounts
@@ -424,7 +454,7 @@ export async function markRechargeOrderFailed(orderId: string) {
      WHERE id = $1
        AND status = 'pending'
      RETURNING id, user_id, product_id, product_code, product_name, provider, status, amount_cents, currency,
-               energy_amount, bonus_energy_amount, total_energy_amount, provider_order_id, paid_at, created_at, updated_at`,
+               energy_amount, bonus_energy_amount, total_energy_amount, unlimited_days, provider_order_id, paid_at, created_at, updated_at`,
     [orderId, updatedAt]
   );
 
@@ -441,7 +471,7 @@ export async function cancelRechargeOrder(orderId: string) {
      WHERE id = $1
        AND status = 'pending'
      RETURNING id, user_id, product_id, product_code, product_name, provider, status, amount_cents, currency,
-               energy_amount, bonus_energy_amount, total_energy_amount, provider_order_id, paid_at, created_at, updated_at`,
+               energy_amount, bonus_energy_amount, total_energy_amount, unlimited_days, provider_order_id, paid_at, created_at, updated_at`,
     [orderId, updatedAt]
   );
 

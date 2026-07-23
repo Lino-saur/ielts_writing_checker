@@ -188,7 +188,6 @@ export default function AssignmentDetailClient({ assignmentId }: { assignmentId:
         copy={navbar}
         taskMenuMode="all"
         energyBalance={sessionContext.energy?.balance ?? null}
-        energyLabel={locale === "zh-CN" ? "能量" : "Energy"}
         authRequest={authRequest}
       />
 
@@ -261,7 +260,6 @@ export default function AssignmentDetailClient({ assignmentId }: { assignmentId:
                   <section className="checkerField checkerPromptBlock assignmentInstructionsBlock">
                     <div className="checkerPromptHeader">
                       <span>{t.instructions}</span>
-                      <span className="assignmentReadonlyBadge">{t.readonly}</span>
                     </div>
                     <div className="checkerPromptBody">
                       <p className="checkerPromptText">{assignment.instructions}</p>
@@ -270,10 +268,6 @@ export default function AssignmentDetailClient({ assignmentId }: { assignmentId:
                 ) : null}
 
                 <section className="checkerField checkerPromptBlock">
-                  <div className="checkerPromptHeader">
-                    <span>{t.prompt}</span>
-                    <span className="assignmentReadonlyBadge">{t.readonly}</span>
-                  </div>
                   <div className="checkerPromptBody">
                     <p className="checkerPromptText">{assignment.prompt}</p>
                   </div>
@@ -281,10 +275,6 @@ export default function AssignmentDetailClient({ assignmentId }: { assignmentId:
 
                 {assignment.taskType === "task1" ? (
                   <section className="checkerField checkerUploadBlock">
-                    <div className="checkerPromptHeader">
-                      <span>Task 1 Image</span>
-                      <span className="assignmentReadonlyBadge">{t.readonly}</span>
-                    </div>
                     <div className="checkerPromptBody checkerUploadBody">
                       <div className={`checkerUploadDropzone is-readonly${assignment.image ? " has-preview" : ""}`}>
                         {assignment.image ? (

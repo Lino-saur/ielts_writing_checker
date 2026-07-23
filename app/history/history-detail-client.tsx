@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { LoadingLottie } from "@/components/loading-lottie";
-import { ActionButton, Pill, Surface } from "@/components/ui-kit";
+import { LingMascot } from "@/components/ling-mascot";
+import { ActionButton, Surface } from "@/components/ui-kit";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
@@ -26,6 +27,26 @@ type ShareState = {
   token: string | null;
   createdAt: string | null;
 };
+
+function countImprovedCriteria(
+  current: NonNullable<WritingReviewDetail["result"]>,
+  previous: NonNullable<WritingReviewDetail["result"]>
+) {
+  const currentScores = [
+    current.bandBreakdown.taskAchievement.score,
+    current.bandBreakdown.coherenceAndCohesion.score,
+    current.bandBreakdown.lexicalResource.score,
+    current.bandBreakdown.grammaticalRangeAndAccuracy.score
+  ];
+  const previousScores = [
+    previous.bandBreakdown.taskAchievement.score,
+    previous.bandBreakdown.coherenceAndCohesion.score,
+    previous.bandBreakdown.lexicalResource.score,
+    previous.bandBreakdown.grammaticalRangeAndAccuracy.score
+  ];
+
+  return currentScores.filter((score, index) => score > previousScores[index]).length;
+}
 
 export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageClientProps) {
   const { sessionContext, sessionResolved } = useAuthSession();
@@ -53,6 +74,20 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
   const firstReview = thread?.items[0] ?? null;
   const latestReview = thread?.items[thread.items.length - 1] ?? null;
   const selectedReview = thread?.items.find((item) => item.id === selectedReviewId) ?? latestReview;
+  const selectedReviewIndex = selectedReview
+    ? thread?.items.findIndex((item) => item.id === selectedReview.id) ?? -1
+    : -1;
+  const previousReview = selectedReviewIndex > 0 ? thread?.items[selectedReviewIndex - 1] ?? null : null;
+  const progressSummary =
+    selectedReview?.status === "completed" &&
+    selectedReview.result &&
+    previousReview?.status === "completed" &&
+    previousReview.result
+      ? {
+          bandDelta: selectedReview.result.estimatedBand - previousReview.result.estimatedBand,
+          improvedCriteria: countImprovedCriteria(selectedReview.result, previousReview.result)
+        }
+      : null;
   const editingBaseReview = thread?.items.find((item) => item.id === editingBaseReviewId) ?? null;
   const draftWordCount = draftEssay.trim() ? draftEssay.trim().split(/\s+/).length : 0;
   const draftMinimumWords = editingBaseReview?.taskType === "task1" ? 150 : 250;
@@ -274,7 +309,6 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
         copy={navbar}
         taskMenuMode="all"
         energyBalance={energy?.balance ?? null}
-        energyLabel={t.energy}
         authRequest={authRequest}
       />
 
@@ -304,23 +338,17 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
 
           {!loadingDetail && firstReview && selectedReview ? (
             <Surface as="section" className="checkerWorkbench historySourceWorkbench">
-              <div className="checkerTaskContext" aria-label={t.taskContextLabel}>
-                <Pill>{firstReview.taskType === "task1" ? navbar.task1 : navbar.task2}</Pill>
-                <div>
-                  <strong>{t.taskContextLabel}</strong>
-                  <span>{firstReview.taskType === "task1" ? t.task1ContextBody : t.task2ContextBody}</span>
-                </div>
-                <span className="checkerModeToggle historyReadOnlyBadge">{t.historyReadOnly}</span>
-              </div>
               <div className="checkerInputWorkspace">
                 <div className="checkerQuestionColumn">
                   <div className="checkerField checkerPromptBlock">
-                    <div className="checkerPromptHeader"><span>{t.prompt}</span></div>
+                    <div className="checkerPromptHeader">
+                      <span>{firstReview.taskType === "task1" ? navbar.task1 : navbar.task2}</span>
+                      <span className="historyReadOnlyBadge">{t.historyReadOnly}</span>
+                    </div>
                     <div className="checkerPromptBody"><p className="checkerPromptText">{firstReview.prompt}</p></div>
                   </div>
                   {firstReview.taskType === "task1" ? (
                     <div className="checkerField checkerUploadBlock">
-                      <div className="checkerPromptHeader"><span>{t.task1ImageLabel}</span></div>
                       <div className="checkerPromptBody checkerUploadBody">
                         <div className={`checkerUploadDropzone is-readonly${firstReview.image ? " has-preview" : ""}`}>
                           {firstReview.image ? (
@@ -473,6 +501,39 @@ export default function HistoryDetailPageClient({ reviewId }: HistoryDetailPageC
 
               {selectedReview.status === "completed" && selectedReview.result ? (
                 <Surface as="section" className="checkerReportShell is-revealed historySelectedReport">
+                  {progressSummary ? (
+                    <div className="historyProgressSummary">
+                      <LingMascot
+                        key={`progress-${selectedReview.id}`}
+                        state="progress"
+                        size="medium"
+                        motion
+                        className="historyProgressMascot"
+                      />
+                      <div className="historyProgressCopy">
+                        <p className="sectionLabel">{t.progressSummaryEyebrow}</p>
+                        <h2>{t.progressSummaryTitle}</h2>
+                        <div className="historyProgressMetrics">
+                          <span>
+                            {progressSummary.bandDelta === 0
+                              ? t.progressSummaryBandSteady
+                              : t.progressSummaryBandDelta.replace(
+                                  "{delta}",
+                                  `${progressSummary.bandDelta > 0 ? "+" : ""}${progressSummary.bandDelta.toFixed(1)}`
+                                )}
+                          </span>
+                          <span>
+                            {progressSummary.improvedCriteria > 0
+                              ? t.progressSummaryCriteriaGain.replace(
+                                  "{count}",
+                                  String(progressSummary.improvedCriteria)
+                                )
+                              : t.progressSummaryNextStep}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="historyReportToolbar">
                     <div>
                       <p className="sectionLabel">{t.historyResultTitle}</p>

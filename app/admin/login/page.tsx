@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth-session";
 import { requireAdminSession } from "@/lib/admin/auth";
 
 export const metadata = {
-  title: "Admin Login"
+  title: "后台登录"
 };
 
 export default async function AdminLoginPage() {

@@ -244,7 +244,7 @@ export default function SharedReviewClient({ sharedReview }: { sharedReview: Sha
         title: "IELTS 写作批改报告",
         prompt: "写作题目",
         essay: "原始作文",
-        imageNotice: "Task 1 原始图片未包含在公开分享中。",
+        taskImage: "Task 1 原始图片",
         language: "EN",
         overview: "总览",
         grammar: "修改",
@@ -273,7 +273,7 @@ export default function SharedReviewClient({ sharedReview }: { sharedReview: Sha
         title: "IELTS Writing Review",
         prompt: "Writing prompt",
         essay: "Original essay",
-        imageNotice: "The original Task 1 image is not included in this public share.",
+        taskImage: "Original Task 1 image",
         language: "中文",
         overview: "Overview",
         grammar: "Corrections",
@@ -349,9 +349,15 @@ export default function SharedReviewClient({ sharedReview }: { sharedReview: Sha
 
         <Surface as="section" className="sharedReviewSource">
           <div className="sharedReviewPromptBlock">
-            <p className="sectionLabel">{copy.prompt}</p>
+            <p className="sectionLabel">{detail.taskType === "task1" ? navbar.task1 : navbar.task2}</p>
             <p>{detail.prompt}</p>
-            {detail.taskType === "task1" ? <small>{copy.imageNotice}</small> : null}
+            {detail.taskType === "task1" && detail.image ? (
+              <figure className="sharedReviewTaskImage">
+                {/* The source image has unknown dimensions and must bypass Next's persistent image cache after share revocation. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={detail.image.url} alt={detail.image.name} />
+              </figure>
+            ) : null}
           </div>
           <div className="sharedReviewEssayBlock">
             <p className="sectionLabel">{copy.essay}</p>

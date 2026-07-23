@@ -9,7 +9,7 @@ import {
 } from "@/lib/auth-client-session";
 import type { NavbarMessages } from "@/lib/i18n/messages";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
-import type { FeedbackKind, Locale } from "@/lib/types";
+import type { FeedbackKind, Locale, RechargeOrder, RechargeProduct } from "@/lib/types";
 
 type AppNavbarProps = {
   locale: Locale;
@@ -18,7 +18,6 @@ type AppNavbarProps = {
   onSessionUpdated?: () => Promise<void> | void;
   taskMenuMode?: "all" | "task2Only";
   energyBalance?: number | null;
-  energyLabel?: string;
   authRequest?: {
     mode: AuthMode;
     id: number;
@@ -40,13 +39,12 @@ async function getAuthClient() {
   return authClient;
 }
 
-function formatUser(user: ClientSessionContext["user"], copy: NavbarMessages) {
+function formatUser(user: ClientSessionContext["user"]) {
   if (!user) {
-    return `${copy.userLabel}: --`;
+    return "--";
   }
 
-  const identity = user.name?.trim() || user.email?.trim() || copy.userLabel;
-  return `${copy.userLabel}: ${identity}`;
+  return user.name?.trim() || user.email?.trim() || "--";
 }
 
 function normalizeAuthError(error: AuthErrorLike | null | undefined, fallback: string) {
@@ -77,7 +75,6 @@ export function AppNavbar({
   onSessionUpdated,
   taskMenuMode = "all",
   energyBalance = null,
-  energyLabel,
   authRequest = null,
   authHint,
   onTaskNavigate
@@ -86,6 +83,7 @@ export function AppNavbar({
   const themeSwitchId = useId();
   const taskMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signIn");
@@ -108,6 +106,7 @@ export function AppNavbar({
   const [activeTask, setActiveTask] = useState<string | null>(null);
   const [taskMenuOpen, setTaskMenuOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [signInPasswordVisible, setSignInPasswordVisible] = useState(false);
   const [signUpPasswordVisible, setSignUpPasswordVisible] = useState(false);
@@ -118,7 +117,9 @@ export function AppNavbar({
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [rechargeDialogOpen, setRechargeDialogOpen] = useState(false);
-  const [rechargeContact, setRechargeContact] = useState("");
+  const [rechargeProducts, setRechargeProducts] = useState<RechargeProduct[]>([]);
+  const [selectedRechargeCode, setSelectedRechargeCode] = useState("");
+  const [rechargeLoading, setRechargeLoading] = useState(false);
   const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
   const [rechargeSubmitted, setRechargeSubmitted] = useState(false);
   const [rechargeError, setRechargeError] = useState<string | null>(null);
@@ -130,6 +131,7 @@ export function AppNavbar({
   const historyHref = useMemo(() => `/${locale}/history`, [locale]);
   const practiceHref = useMemo(() => `/${locale}/practice`, [locale]);
   const assignmentsHref = useMemo(() => `/${locale}/assignments`, [locale]);
+  const ordersHref = useMemo(() => `/${locale}/orders`, [locale]);
   const taskMenuLabel = activeTask === "task1" ? copy.task1 : activeTask === "task2" ? copy.task2 : copy.writingTasks;
   const actionMenuLabel = copy.actionGroup;
   const actionMenuOpenLabel = copy.openActionMenu;
@@ -140,6 +142,19 @@ export function AppNavbar({
   const authSwitchAction = authMode === "signIn" ? copy.createOne : copy.backToSignIn;
   const currentUser = sessionContext.user;
   const effectiveEnergyBalance = energyBalance ?? sessionContext.energy?.balance ?? null;
+  const hasUnlimitedReviews = Boolean(
+    sessionContext.energy?.unlimitedUntil && new Date(sessionContext.energy.unlimitedUntil).getTime() > Date.now()
+  );
+  const unlimitedReviewsExpiry = hasUnlimitedReviews && sessionContext.energy?.unlimitedUntil
+    ? new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(new Date(sessionContext.energy.unlimitedUntil))
+    : null;
+  const energyLabel = copy.energyLabel;
   const themeLabel = copy.themeLabel;
   const appearanceLabel = copy.appearanceLabel;
   const normalizedSignInEmail = normalizeEmailIdentity(signInEmail);
@@ -194,6 +209,7 @@ export function AppNavbar({
     if (authDialogOpen || feedbackDialogOpen || rechargeDialogOpen || deleteDialogOpen) {
       setTaskMenuOpen(false);
       setActionMenuOpen(false);
+      setAccountMenuOpen(false);
       setMoreMenuOpen(false);
     }
   }, [authDialogOpen, feedbackDialogOpen, rechargeDialogOpen, deleteDialogOpen]);
@@ -226,6 +242,10 @@ export function AppNavbar({
 
       if (!actionMenuRef.current?.contains(event.target as Node)) {
         setActionMenuOpen(false);
+      }
+
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
       }
 
       if (!moreMenuRef.current?.contains(event.target as Node)) {
@@ -280,6 +300,23 @@ export function AppNavbar({
     setDeletePassword("");
     setDeleteError(null);
     setDeleteDialogOpen(true);
+  }
+
+  function openRechargeDialog() {
+    setRechargeError(null);
+    setRechargeSubmitted(false);
+    setRechargeDialogOpen(true);
+    setRechargeLoading(true);
+    void fetch("/api/recharge/products", { cache: "no-store" })
+      .then(async (response) => {
+        const data = (await response.json()) as { items?: RechargeProduct[]; error?: string };
+        if (!response.ok) throw new Error(data.error || copy.genericError);
+        const items = data.items ?? [];
+        setRechargeProducts(items);
+        setSelectedRechargeCode((current) => current || items[0]?.code || "");
+      })
+      .catch((error) => setRechargeError(error instanceof Error ? error.message : copy.genericError))
+      .finally(() => setRechargeLoading(false));
   }
 
   function getVerificationCallbackUrl() {
@@ -537,7 +574,7 @@ export function AppNavbar({
   async function handleRechargeSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!rechargeContact.trim() || rechargeSubmitting || rechargeSubmitted) {
+    if (!selectedRechargeCode || rechargeSubmitting || rechargeSubmitted) {
       return;
     }
 
@@ -545,33 +582,33 @@ export function AppNavbar({
     setRechargeError(null);
 
     try {
-      const response = await fetch("/api/feedback", {
+      const response = await fetch("/api/recharge/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          kind: "feature_request",
-          category: "recharge_waitlist",
-          helpful: null,
-          comment: rechargeContact.trim(),
-          context: {
-            source: "recharge_waitlist",
-            uid: currentUser?.id ?? null
-          },
-          page: typeof window !== "undefined" ? window.location.pathname : "/"
+          productCode: selectedRechargeCode,
+          provider: "wechat"
         })
       });
 
-      const data = (await response.json()) as { error?: string; rewardGranted?: boolean };
+      const data = (await response.json()) as { error?: string; order?: RechargeOrder };
 
       if (!response.ok) {
         throw new Error(data.error || copy.genericError);
       }
 
+      if (!data.order || data.order.status !== "paid") {
+        throw new Error(data.error || copy.genericError);
+      }
+
       setRechargeSubmitted(true);
-      setRechargeContact("");
-      setRechargeToast(data.rewardGranted ? copy.rechargeRewardToastGranted : copy.rechargeRewardToastAlreadyClaimed);
+      setRechargeToast(
+        data.order.unlimitedDays
+          ? copy.rechargePassSuccess.replace("{days}", String(data.order.unlimitedDays))
+          : copy.rechargeSuccess.replace("{amount}", String(data.order.totalEnergyAmount))
+      );
       await refreshSession();
     } catch (error) {
       setRechargeError(error instanceof Error ? error.message : copy.genericError);
@@ -585,7 +622,7 @@ export function AppNavbar({
       <Surface as="header" className="aroundNavbar">
         <Link className="aroundNavBrand" href={homeHref}>
           <span className="aroundBrandIcon" aria-hidden="true">
-            W
+            <span className="aroundBrandIconImage" />
           </span>
           <span className="aroundBrandFull">{copy.brand}</span>
           <span className="aroundBrandCompact">IELTS</span>
@@ -603,7 +640,12 @@ export function AppNavbar({
                 className={`aroundTaskMenuButton${taskMenuOpen ? " is-open" : ""}`}
                 aria-haspopup="menu"
                 aria-expanded={taskMenuOpen}
-                onClick={() => setTaskMenuOpen((value) => !value)}
+                onClick={() => {
+                  setActionMenuOpen(false);
+                  setAccountMenuOpen(false);
+                  setMoreMenuOpen(false);
+                  setTaskMenuOpen((value) => !value);
+                }}
               >
                 <span>{taskMenuLabel}</span>
                 <i className={`ai-chevron-${taskMenuOpen ? "up" : "down"}`} aria-hidden="true" />
@@ -652,6 +694,7 @@ export function AppNavbar({
             aria-label={actionMenuOpen ? actionMenuCloseLabel : actionMenuOpenLabel}
             onClick={() => {
               setTaskMenuOpen(false);
+              setAccountMenuOpen(false);
               setMoreMenuOpen(false);
               setActionMenuOpen((value) => !value);
             }}
@@ -675,16 +718,121 @@ export function AppNavbar({
 
         <div className="aroundNavControls">
           <div className="aroundAuthArea">
-            <div className="aroundAccountCluster">
-              {currentUser ? <Pill className="aroundUserChip aroundUserBadge">{formatUser(currentUser, copy)}</Pill> : null}
-              {currentUser && energyLabel ? (
-                <Pill className="aroundUserChip aroundEnergyBadge">
-                  <span className="aroundEnergyIcon" aria-hidden="true" />
-                  <span className="srOnly">{energyLabel}</span>
-                  <span>{effectiveEnergyBalance ?? "--"}</span>
-                </Pill>
-              ) : null}
-            </div>
+            {currentUser ? (
+              <div className="aroundAccountMenu" ref={accountMenuRef}>
+                <button
+                  type="button"
+                  className={`aroundAccountCluster aroundAccountTrigger${accountMenuOpen ? " is-open" : ""}`}
+                  aria-haspopup="menu"
+                  aria-expanded={accountMenuOpen}
+                  aria-controls="app-navbar-account-menu"
+                  aria-label={copy.accountLabel}
+                  onClick={() => {
+                    setTaskMenuOpen(false);
+                    setActionMenuOpen(false);
+                    setMoreMenuOpen(false);
+                    setAccountMenuOpen((value) => !value);
+                  }}
+                >
+                  <span className="aroundUserBadge" title={formatUser(currentUser)}>
+                    {formatUser(currentUser)}
+                  </span>
+                  {energyLabel ? (
+                    <>
+                      <span className="aroundAccountDivider" aria-hidden="true" />
+                      <span className="aroundEnergyBadge">
+                        <span className="aroundEnergyIcon" aria-hidden="true" />
+                        <span className="srOnly">{energyLabel}</span>
+                        <span>{hasUnlimitedReviews ? "∞" : effectiveEnergyBalance ?? "--"}</span>
+                      </span>
+                    </>
+                  ) : null}
+                  <i className={`aroundAccountChevron ai-chevron-${accountMenuOpen ? "up" : "down"}`} aria-hidden="true" />
+                </button>
+
+                <div
+                  id="app-navbar-account-menu"
+                  className={`aroundUtilityDropdown aroundAccountDropdown${accountMenuOpen ? " is-open" : ""}`}
+                  role="menu"
+                >
+                  <div className="aroundAccountDropdownHeader">
+                    <span className="aroundAccountAvatar" aria-hidden="true">
+                      <i className="ai-user" />
+                    </span>
+                    <span className="aroundAccountIdentity">
+                      <strong>{formatUser(currentUser)}</strong>
+                      {currentUser.name?.trim() && currentUser.email?.trim() ? <small>{currentUser.email}</small> : null}
+                    </span>
+                  </div>
+                  <div className="aroundAccountPrimaryActions" role="none">
+                    {energyLabel ? (
+                      <button
+                        type="button"
+                        className="aroundAccountEnergyRow"
+                        role="menuitem"
+                        onClick={() => {
+                          setAccountMenuOpen(false);
+                          openRechargeDialog();
+                        }}
+                      >
+                        <span className="aroundAccountMenuIcon aroundAccountEnergyIcon" aria-hidden="true">
+                          <span className="aroundEnergyIcon" />
+                        </span>
+                        <span className="aroundAccountMenuCopy">
+                          <strong>{energyLabel}</strong>
+                          <small>{copy.rechargeEntry}</small>
+                        </span>
+                        <span className="aroundAccountEnergyValue">
+                          {hasUnlimitedReviews ? "∞" : effectiveEnergyBalance ?? "--"}
+                        </span>
+                        <i className="ai-chevron-right aroundAccountRowChevron" aria-hidden="true" />
+                      </button>
+                    ) : null}
+                    <Link
+                      href={ordersHref}
+                      className="aroundAccountOrderRow"
+                      role="menuitem"
+                      onClick={() => setAccountMenuOpen(false)}
+                    >
+                      <span className="aroundAccountMenuIcon" aria-hidden="true">
+                        <i className="ai-file" />
+                      </span>
+                      <span className="aroundAccountMenuCopy">
+                        <strong>{copy.ordersEntry}</strong>
+                        <small>{copy.ordersMenuHint}</small>
+                      </span>
+                      <i className="ai-chevron-right aroundAccountRowChevron" aria-hidden="true" />
+                    </Link>
+                  </div>
+                  <div className="aroundAccountSecondaryActions" role="none">
+                    <button
+                      type="button"
+                      className="aroundAccountSecondaryButton"
+                      role="menuitem"
+                      onClick={async () => {
+                        setAccountMenuOpen(false);
+                        await handleSignOut();
+                      }}
+                    >
+                      <i className="ai-logout" aria-hidden="true" />
+                      <span>{copy.authSignOut}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="aroundAccountSecondaryButton aroundMenuActionDanger"
+                      role="menuitem"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        openDeleteDialog();
+                      }}
+                    >
+                      <i className="ai-trash" aria-hidden="true" />
+                      <span>{copy.authDeleteAccount}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {!sessionResolved ? (
               <ActionButton className="aroundPrimaryAction" disabled aria-busy="true">
@@ -700,17 +848,7 @@ export function AppNavbar({
               >
                 {copy.login}
               </ActionButton>
-            ) : (
-              <ActionButton
-                className="ghostAction aroundSignOutAction"
-                onClick={async () => {
-                  setMoreMenuOpen(false);
-                  await handleSignOut();
-                }}
-              >
-                {copy.authSignOut}
-              </ActionButton>
-            )}
+            ) : null}
           </div>
 
           <div className="aroundUtilityMenu" ref={moreMenuRef}>
@@ -723,6 +861,7 @@ export function AppNavbar({
             onClick={() => {
               setTaskMenuOpen(false);
               setActionMenuOpen(false);
+              setAccountMenuOpen(false);
               setMoreMenuOpen((value) => !value);
             }}
           >
@@ -753,30 +892,6 @@ export function AppNavbar({
                 <span>{copy.assignmentsEntry}</span>
               </Link>
             </div>
-            {currentUser ? (
-              <div className="aroundMenuSection aroundMobileAccountSection aroundSettingsAccount">
-                <div className="aroundMenuSectionLabel">{copy.accountLabel}</div>
-                <div className="aroundMobileAccountSummary">
-                  <span>{formatUser(currentUser, copy)}</span>
-                  {energyLabel ? (
-                    <strong>
-                      {energyLabel}: {effectiveEnergyBalance ?? "--"}
-                    </strong>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  className="aroundMenuActionButton"
-                  onClick={async () => {
-                    setMoreMenuOpen(false);
-                    await handleSignOut();
-                  }}
-                >
-                  <i className="ai-logout" aria-hidden="true" />
-                  <span>{copy.authSignOut}</span>
-                </button>
-              </div>
-            ) : null}
             <div className="aroundMenuSection aroundLanguageSection">
               <div className="aroundMenuSectionLabel">{copy.languageLabel}</div>
               <div className="aroundSegmentedControl">
@@ -816,23 +931,6 @@ export function AppNavbar({
                 <span>{copy.feedbackEntry}</span>
               </button>
             </div>
-
-            {currentUser ? (
-              <div className="aroundMenuSection aroundDangerSection">
-                <div className="aroundMenuSectionLabel">{copy.dangerLabel}</div>
-                <button
-                  type="button"
-                  className="aroundMenuActionButton aroundMenuActionDanger"
-                  onClick={() => {
-                    setMoreMenuOpen(false);
-                    openDeleteDialog();
-                  }}
-                >
-                  <i className="ai-trash" aria-hidden="true" />
-                  <span>{copy.authDeleteAccount}</span>
-                </button>
-              </div>
-            ) : null}
 
             <div className="aroundMenuSection aroundAppearanceSection">
               <div className="aroundMenuRow">
@@ -1182,26 +1280,79 @@ export function AppNavbar({
 
             <section className="authCardInner">
               <form className="authForm" onSubmit={handleRechargeSubmit}>
-                <div className="rechargeRewardAlert uiAlert" data-tone="success" role="note">
-                  <strong>+10</strong>
-                  <span>{copy.rechargeRewardAlert}</span>
+                <div className="rechargeEntitlementSummary" aria-label={copy.rechargeCurrentBenefits}>
+                  <div className="rechargeEntitlementItem">
+                    <span>{copy.rechargeCurrentBalance}</span>
+                    <strong>
+                      <span className="aroundEnergyIcon" aria-hidden="true" />
+                      {effectiveEnergyBalance ?? "--"}
+                    </strong>
+                  </div>
+                  <div className="rechargeEntitlementDivider" aria-hidden="true" />
+                  <div className="rechargeEntitlementItem">
+                    <span>{copy.rechargeUnlimitedStatus}</span>
+                    <strong className={hasUnlimitedReviews ? "is-active" : undefined}>
+                      {unlimitedReviewsExpiry
+                        ? copy.rechargeUnlimitedUntil.replace("{date}", unlimitedReviewsExpiry)
+                        : copy.rechargeNoActivePass}
+                    </strong>
+                  </div>
                 </div>
 
                 <p className="authHint">{copy.rechargeMessage}</p>
 
-                <label className="authField">
-                  <span>{copy.rechargeContactLabel}</span>
-                  <textarea
-                    className="feedbackDialogTextarea"
-                    value={rechargeContact}
-                    onChange={(event) => setRechargeContact(event.target.value)}
-                    rows={4}
-                    maxLength={500}
-                    placeholder={copy.rechargeContactPlaceholder}
-                    disabled={rechargeSubmitting || rechargeSubmitted}
-                    required
-                  />
-                </label>
+                {rechargeLoading ? <p className="authHint">{copy.rechargeLoading}</p> : null}
+                <div className="rechargeProductList" role="radiogroup" aria-label={copy.rechargePlanLabel}>
+                  {rechargeProducts.map((product) => {
+                    const total = product.energyAmount + product.bonusEnergyAmount;
+                    const selected = selectedRechargeCode === product.code;
+                    const planName = product.unlimitedDays
+                      ? product.unlimitedDays >= 365
+                        ? copy.rechargeAnnual
+                        : product.unlimitedDays >= 90
+                          ? copy.rechargeQuarterly
+                          : copy.rechargeMonthly
+                      : `${total} ${copy.rechargeReviews}`;
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        className={`rechargeProductCard${selected ? " is-selected" : ""}`}
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setSelectedRechargeCode(product.code)}
+                        disabled={rechargeSubmitting || rechargeSubmitted}
+                      >
+                        <span className="rechargeProductName">{planName}</span>
+                        <span className="rechargeProductPrice">
+                          {product.listPriceCents > product.priceCents ? (
+                            <del>
+                              {new Intl.NumberFormat(locale === "zh-CN" ? "zh-CN" : "en", {
+                                style: "currency",
+                                currency: product.currency,
+                                maximumFractionDigits: 1
+                              }).format(product.listPriceCents / 100)}
+                            </del>
+                          ) : null}
+                          <strong>
+                          {new Intl.NumberFormat(locale === "zh-CN" ? "zh-CN" : "en", {
+                            style: "currency",
+                            currency: product.currency,
+                            maximumFractionDigits: 1
+                          }).format(product.priceCents / 100)}
+                          </strong>
+                        </span>
+                        <span className="rechargeProductMeta">
+                          {product.unlimitedDays
+                            ? `${copy.rechargeUnlimited} · ${product.unlimitedDays} ${copy.rechargeDays}`
+                            : `${total} ${copy.rechargeReviews} · ${copy.rechargeNeverExpires}`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="rechargeSimulationNote">{copy.rechargeSimulationNote}</p>
 
                 {rechargeError ? <p className="errorBox">{rechargeError}</p> : null}
                 {rechargeSubmitted ? <Pill>{copy.rechargeSubmitted}</Pill> : null}
@@ -1210,7 +1361,7 @@ export function AppNavbar({
                   type="submit"
                   variant="primary"
                   fullWidth
-                  disabled={!rechargeContact.trim() || rechargeSubmitting || rechargeSubmitted}
+                  disabled={!selectedRechargeCode || rechargeLoading || rechargeSubmitting || rechargeSubmitted}
                 >
                   {rechargeSubmitting ? copy.submitting : rechargeSubmitted ? copy.rechargeSubmitted : copy.rechargeSubmit}
                 </ActionButton>

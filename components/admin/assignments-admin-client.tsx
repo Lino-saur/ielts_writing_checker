@@ -60,7 +60,7 @@ const QUICK_FEEDBACK = [
 
 function formatDate(value: string | null) {
   if (!value) {
-    return "No due date";
+    return "无截止时间";
   }
   return new Intl.DateTimeFormat("zh-CN", {
     dateStyle: "medium",
@@ -650,7 +650,7 @@ export function AssignmentsAdminClient() {
     <main className={styles.page}>
       <section className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>Teaching Workspace</p>
+          <p className={styles.eyebrow}>教学工作台</p>
           <h1>作文作业</h1>
           <p>给学生布置 Task 1 / Task 2 作文，查看提交，并写入老师反馈。</p>
         </div>

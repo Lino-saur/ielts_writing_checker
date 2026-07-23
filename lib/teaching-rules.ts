@@ -88,8 +88,7 @@ function isStageApplicable(rule: PublishedRuleRow, stage: RuleStage) {
   if (stage === "grammar") {
     return (
       rule.rule_category === "grammar" ||
-      tags.includes("stage:grammar") ||
-      (tags.includes("revision") && !tags.includes("stage:optimization"))
+      tags.includes("stage:grammar")
     );
   }
   return rule.rule_category !== "grammar" && !tags.includes("stage:grammar");
@@ -181,8 +180,7 @@ export async function buildApplicableTeachingRulesContext(
   } else if (stage === "grammar") {
     conditions.push(
       `(rule_category = 'grammar'
-        OR tags_json ? 'stage:grammar'
-        OR (tags_json ? 'revision' AND NOT (tags_json ? 'stage:optimization')))`
+        OR tags_json ? 'stage:grammar')`
     );
   } else {
     conditions.push(`rule_category <> 'grammar' AND NOT (tags_json ? 'stage:grammar')`);

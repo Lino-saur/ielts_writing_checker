@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { db, ensureDatabase } from "./db";
+import { getReviewImageObject } from "./object-storage";
 import type { Locale, WritingCheckResult, WritingReviewDetail } from "./types";
 
 type ShareRow = {
@@ -22,6 +23,9 @@ type SharedReviewRow = ShareRow & {
   target_band: number | string;
   estimated_band: number | string;
   word_count: number;
+  image_object_key: string | null;
+  image_name: string | null;
+  image_mime_type: string | null;
   review_created_at: Date | string;
   review_updated_at: Date | string;
 };
@@ -37,6 +41,8 @@ export type SharedWritingReview = {
   sharedAt: string;
   detail: Omit<WritingReviewDetail, "userId" | "result"> & { result: WritingCheckResult };
 };
+
+const SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 function mapShareState(row?: ShareRow): ReviewShareState {
   return {
@@ -103,7 +109,7 @@ export async function revokeReviewShare(userId: string, reviewId: string) {
 }
 
 export async function getSharedWritingReview(token: string): Promise<SharedWritingReview | null> {
-  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  if (!SHARE_TOKEN_PATTERN.test(token)) return null;
   await ensureDatabase();
   const result = await db.query<SharedReviewRow>(
     `SELECT
@@ -111,6 +117,7 @@ export async function getSharedWritingReview(token: string): Promise<SharedWriti
        shares.revoked_at, shares.created_at, shares.updated_at,
        reviews.task_type, reviews.prompt_text, reviews.essay_text, reviews.result_json,
        reviews.provider_used, reviews.target_band, reviews.estimated_band, reviews.word_count,
+       reviews.image_object_key, reviews.image_name, reviews.image_mime_type,
        reviews.created_at AS review_created_at, reviews.updated_at AS review_updated_at
      FROM writing_review_shares shares
      INNER JOIN writing_reviews reviews ON reviews.id = shares.review_id
@@ -143,9 +150,44 @@ export async function getSharedWritingReview(token: string): Promise<SharedWriti
       errorCode: null,
       parentReviewId: null,
       acceptedRevisionIds: [],
-      image: null,
+      image:
+        row.task_type === "task1" && row.image_object_key && row.image_name && row.image_mime_type
+          ? {
+              name: row.image_name,
+              mimeType: row.image_mime_type,
+              url: `/api/share/${encodeURIComponent(row.token)}/image`
+            }
+          : null,
       createdAt: new Date(row.review_created_at).toISOString(),
       updatedAt: new Date(row.review_updated_at).toISOString()
     }
+  };
+}
+
+export async function getSharedWritingReviewImage(token: string) {
+  if (!SHARE_TOKEN_PATTERN.test(token)) return null;
+  await ensureDatabase();
+
+  const result = await db.query<Pick<SharedReviewRow, "image_object_key" | "image_mime_type">>(
+    `SELECT reviews.image_object_key, reviews.image_mime_type
+     FROM writing_review_shares shares
+     INNER JOIN writing_reviews reviews ON reviews.id = shares.review_id
+     WHERE shares.token = $1
+       AND shares.revoked_at IS NULL
+       AND reviews.status = 'completed'
+       AND reviews.result_json IS NOT NULL
+       AND reviews.task_type = 'task1'
+       AND reviews.image_object_key IS NOT NULL
+       AND reviews.image_mime_type IS NOT NULL
+     LIMIT 1`,
+    [token]
+  );
+  const row = result.rows[0];
+  if (!row?.image_object_key || !row.image_mime_type) return null;
+
+  const response = await getReviewImageObject(row.image_object_key);
+  return {
+    body: response.body,
+    mimeType: row.image_mime_type
   };
 }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
 import { LoadingLottie } from "@/components/loading-lottie";
+import { LingMascot } from "@/components/ling-mascot";
 import { ActionButton, ActionLink, Pill, Surface } from "@/components/ui-kit";
 import { useAuthSession } from "@/lib/auth-client-session";
 import { getMessages } from "@/lib/i18n/messages";
@@ -156,7 +157,6 @@ export default function HistoryPageClient() {
         copy={navbar}
         taskMenuMode="all"
         energyBalance={energy?.balance ?? null}
-        energyLabel={t.energy}
         authRequest={authRequest}
       />
 
@@ -226,18 +226,16 @@ export default function HistoryPageClient() {
                 </div>
               </div>
 
-              <div className="historyListHeader">
-                <h2>{t.historyListTitle}</h2>
-                <span>{describeTaskFilter(taskFilter, navbar, t.historyTaskFilterAll)}</span>
-              </div>
-
               {loadingList ? <LoadingLottie label={t.historyLoading} showLabel={false} /> : null}
               {error && !loadingList ? <p className="errorBox">{error}</p> : null}
               {!loadingList && !items.length ? (
                 <div className="historyEmptyPanel">
-                  <h3>{t.historyEmptyTitle}</h3>
-                  <p>{t.historyEmptyBody}</p>
-                  <ActionLink href={checkerHref}>{t.historyBackToChecker}</ActionLink>
+                  <LingMascot state="empty" size="large" className="historyEmptyMascot" />
+                  <div className="historyEmptyCopy">
+                    <h3>{t.historyEmptyTitle}</h3>
+                    <p>{t.historyEmptyBody}</p>
+                    <ActionLink href={checkerHref}>{t.historyBackToChecker}</ActionLink>
+                  </div>
                 </div>
               ) : null}
 

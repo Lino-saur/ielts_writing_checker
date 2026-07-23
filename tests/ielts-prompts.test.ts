@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getPromptBundle, loadBasePrompt } from "../lib/ielts/prompts";
+import {
+  buildGrammarConsolidationInstruction,
+  getPromptBundle,
+  loadBasePrompt
+} from "../lib/ielts/prompts";
 
 function placeholders(template: string) {
   return [...template.matchAll(/{{([A-Za-z0-9]+)}}/g)].map((match) => match[1]).sort();
@@ -27,5 +31,24 @@ describe("IELTS localized prompts", () => {
 
     expect(placeholders(chinese.score)).toEqual(placeholders(english.score));
     expect(placeholders(chinese.revision)).toEqual(placeholders(english.revision));
+  });
+
+  it("requires grammar consolidation to reject false positives and find omissions", () => {
+    const instruction = buildGrammarConsolidationInstruction("en", [
+      {
+        original: "was",
+        corrected: "were",
+        category: "subject_verb_agreement",
+        reason: "The nearby noun is plural.",
+        ruleReferences: [{ id: "grammar", version: 1 }]
+      }
+    ]);
+
+    expect(instruction).toContain("unverified suggestions");
+    expect(instruction).toContain("remove false positives");
+    expect(instruction).toContain("Add clear grammar or mechanics errors missed by the first pass");
+    expect(instruction).toContain("manufacturing was");
+    expect(instruction).toContain("there were 16 million jobs");
+    expect(instruction).toContain('"original":"was"');
   });
 });

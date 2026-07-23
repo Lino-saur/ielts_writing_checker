@@ -18,11 +18,13 @@
 
 .ai-arrow-right::before { content: "\f10e"; }
 .ai-chevron-down::before { content: "\f13f"; }
+.ai-chevron-right::before { content: "\f141"; }
 .ai-chevron-up::before { content: "\f142"; }
 .ai-circle-check::before { content: "\f14e"; }
 .ai-clipboard::before { content: "\f155"; }
 .ai-cross::before { content: "\f167"; }
 .ai-edit::before { content: "\f17e"; }
+.ai-file::before { content: "\f18c"; }
 .ai-hide::before { content: "\f1a5"; }
 .ai-layer::before { content: "\f1b0"; }
 .ai-layout-column::before { content: "\f1b1"; }

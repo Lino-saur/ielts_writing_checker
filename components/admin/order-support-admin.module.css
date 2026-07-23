@@ -1,0 +1,24 @@
+.page { display: grid; gap: 18px; padding: 28px; color: #18212f; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.header span { color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
+.header h1 { margin: 5px 0 0; font-size: 30px; }
+.header p { margin: 7px 0 0; color: #64748b; }
+.header button, .actions button { padding: 9px 13px; border: 1px solid #d9e0ea; border-radius: 10px; background: white; cursor: pointer; }
+.list { display: grid; gap: 14px; }
+.card { padding: 20px; border: 1px solid #dfe5ed; border-radius: 18px; background: white; box-shadow: 0 8px 24px rgba(15,23,42,.05); }
+.titleRow { display: flex; justify-content: space-between; gap: 16px; }
+.titleRow > div { display: flex; align-items: center; gap: 10px; }
+.titleRow span { padding: 4px 8px; border-radius: 999px; background: #eef2ff; color: #4f46e5; font-size: 12px; }
+.card dl { display: grid; grid-template-columns: 1.4fr 1fr .8fr .8fr; gap: 14px; margin: 16px 0; padding: 14px 0; border-block: 1px solid #edf0f4; }
+.card dt { color: #64748b; font-size: 12px; }
+.card dd { margin: 5px 0 0; overflow-wrap: anywhere; font-size: 13px; }
+.message p, .previousNote { margin: 7px 0 0; color: #475569; line-height: 1.5; }
+.previousNote { padding: 10px; border-radius: 10px; background: #f8fafc; }
+.actions { display: grid; gap: 10px; margin-top: 16px; }
+.actions textarea { min-height: 68px; padding: 10px; border: 1px solid #d9e0ea; border-radius: 10px; resize: vertical; }
+.actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions .primary { border-color: #4f46e5; background: #4f46e5; color: white; }
+.error, .empty { padding: 24px; border: 1px solid #fecaca; border-radius: 14px; background: #fff; color: #b91c1c; text-align: center; }
+.empty { border-color: #dfe5ed; color: #64748b; }
+@media (max-width: 900px) { .card dl { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .page { padding: 18px; } .header { flex-direction: column; } .card dl { grid-template-columns: 1fr; } }

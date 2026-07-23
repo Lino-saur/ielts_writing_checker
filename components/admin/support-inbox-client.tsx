@@ -75,7 +75,7 @@ export function SupportInboxClient({ filters }: SupportInboxClientProps) {
   if (loading) {
     return (
       <section className={styles.panel}>
-        <div className={styles.empty}>Loading support inbox...</div>
+        <div className={styles.empty}>正在加载客服工单…</div>
       </section>
     );
   }
@@ -83,7 +83,7 @@ export function SupportInboxClient({ filters }: SupportInboxClientProps) {
   if (error || !data) {
     return (
       <section className={styles.panel}>
-        <div className={styles.empty}>Failed to load support inbox.</div>
+        <div className={styles.empty}>客服工单加载失败。</div>
       </section>
     );
   }

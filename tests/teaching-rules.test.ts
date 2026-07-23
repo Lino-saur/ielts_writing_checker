@@ -182,6 +182,42 @@ describe("teaching rule management", () => {
     expect(result.correctionNotes[0].ruleReferences?.[0]).toEqual(allowedRule);
   });
 
+  it("does not leak generic or Task 1 content revision rules into grammar", () => {
+    const makeRule = (
+      id: string,
+      category: PublishedRuleRow["rule_category"],
+      tags: string[]
+    ): PublishedRuleRow => ({
+      id,
+      version: 1,
+      task_type: "task1",
+      rule_origin: "system",
+      question_types_json: [],
+      tags_json: tags,
+      rule_category: category,
+      principle: "A sufficiently detailed principle for this test.",
+      severity: "high",
+      priority: 100,
+      source_title: "System",
+      source_section: "Revision",
+      knowledge_point_code: id
+    });
+    const grammarRule = makeRule("grammar", "grammar", ["revision"]);
+    const explicitGrammarRule = makeRule("explicit-grammar", "expression", ["stage:grammar"]);
+    const task1AccuracyRule = makeRule("task1-accuracy", "expression", ["image", "revision"]);
+    const genericRevisionRule = makeRule("generic-revision", "expression", ["revision"]);
+    const rules = [grammarRule, explicitGrammarRule, task1AccuracyRule, genericRevisionRule];
+
+    expect(
+      selectApplicableTeachingRules(rules, { questionTypes: [], tags: [] }, "grammar")
+        .map((rule) => rule.id)
+    ).toEqual(["explicit-grammar", "grammar"]);
+    expect(
+      selectApplicableTeachingRules(rules, { questionTypes: [], tags: [] }, "optimization")
+        .map((rule) => rule.id)
+    ).toEqual(["generic-revision", "task1-accuracy"]);
+  });
+
   it("hydrates scoring citations only from the selected rule snapshot", () => {
     const result = hydrateTeachingRuleReferences(
       {
