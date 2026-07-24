@@ -10110,11 +10110,9 @@ html[data-theme="dark"] .aroundOutlineButton {
 }
 
 .checkerPromptText {
-  display: -webkit-box;
-  overflow: hidden;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  display: block;
+  overflow: visible;
+  white-space: pre-wrap;
 }
 
 .checkerPromptEditButton:disabled {
@@ -11804,30 +11802,19 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
 }
 
 .framerWorkflowMark {
-  display: block;
+  display: grid;
   width: 46px;
   height: 46px;
   flex: 0 0 46px;
+  place-items: center;
+  overflow: hidden;
   border-radius: 15px;
   background-color: #f7f6ef;
-  background-position: center;
-  background-repeat: no-repeat;
   box-shadow: inset 0 0 0 1px rgba(29, 82, 75, 0.1);
 }
 
-.framerWorkflowMark.is-submit {
-  background-image: url("/app-icons/ling-feather-loop.png");
-  background-size: 34px;
-}
-
-.framerWorkflowMark.is-diagnose {
-  background-image: url("/app-icons/magic-ink.png");
-  background-size: 36px;
-}
-
-.framerWorkflowMark.is-rewrite {
-  background-image: url("/app-icons/icon.png");
-  background-size: cover;
+.framerWorkflowMark .lingFeatureIcon {
+  object-fit: contain;
 }
 
 .framerWorkflowGrid article > span {
@@ -11928,6 +11915,12 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
 
 .framerPracticeModuleMark img {
   object-fit: contain;
+}
+
+.lingUiIcon,
+.lingFeatureIcon {
+  display: block;
+  flex: 0 0 auto;
 }
 
 .framerPracticeModule h3 {
@@ -12577,16 +12570,18 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
   height: 34px;
   place-items: center;
   overflow: hidden;
-  border-radius: 10px;
-  background: #f7f6ef;
-  box-shadow: inset 0 0 0 1px rgba(29, 82, 75, 0.12);
+  border-radius: 11px;
+  background: #0d332f;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 5px 14px rgba(13, 51, 47, 0.12);
 }
 
 .aroundBrandIconImage {
   display: block;
-  width: 28px;
-  height: 28px;
-  background: url("/app-icons/ling-feather-loop.png") center / contain no-repeat;
+  width: 34px;
+  height: 34px;
+  background: url("/app-icons/icon.png") center / cover no-repeat;
 }
 
 .aroundTaskMenuButton,

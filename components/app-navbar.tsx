@@ -8,6 +8,7 @@ import {
   useAuthSession
 } from "@/lib/auth-client-session";
 import type { NavbarMessages } from "@/lib/i18n/messages";
+import { LingUiIcon } from "@/components/icons/ling-ui-icon";
 import { ActionButton, Pill, Surface } from "@/components/ui-kit";
 import type { FeedbackKind, Locale, RechargeOrder, RechargeProduct } from "@/lib/types";
 
@@ -656,7 +657,7 @@ export function AppNavbar({
                 }}
               >
                 <span>{taskMenuLabel}</span>
-                <i className={`ai-chevron-${taskMenuOpen ? "up" : "down"}`} aria-hidden="true" />
+                <i aria-hidden="true"><LingUiIcon name={taskMenuOpen ? "chevron-up" : "chevron-down"} size={14} /></i>
               </button>
 
               <div className={`aroundTaskDropdown${taskMenuOpen ? " is-open" : ""}`} role="menu">
@@ -708,7 +709,7 @@ export function AppNavbar({
             }}
           >
             <span>{actionMenuLabel}</span>
-            <i className={`ai-chevron-${actionMenuOpen ? "up" : "down"}`} aria-hidden="true" />
+            <i aria-hidden="true"><LingUiIcon name={actionMenuOpen ? "chevron-up" : "chevron-down"} size={14} /></i>
           </button>
 
           <div className={`aroundTaskDropdown${actionMenuOpen ? " is-open" : ""}`} role="menu">
@@ -755,7 +756,7 @@ export function AppNavbar({
                       </span>
                     </>
                   ) : null}
-                  <i className={`aroundAccountChevron ai-chevron-${accountMenuOpen ? "up" : "down"}`} aria-hidden="true" />
+                  <i className="aroundAccountChevron" aria-hidden="true"><LingUiIcon name={accountMenuOpen ? "chevron-up" : "chevron-down"} size={10} /></i>
                 </button>
 
                 <div
@@ -765,7 +766,7 @@ export function AppNavbar({
                 >
                   <div className="aroundAccountDropdownHeader">
                     <span className="aroundAccountAvatar" aria-hidden="true">
-                      <i className="ai-user" />
+                      <LingUiIcon name="user" size={17} />
                     </span>
                     <span className="aroundAccountIdentity">
                       <strong>{formatUser(currentUser)}</strong>
@@ -793,7 +794,7 @@ export function AppNavbar({
                         <span className="aroundAccountEnergyValue">
                           {hasUnlimitedReviews ? "∞" : effectiveEnergyBalance ?? "--"}
                         </span>
-                        <i className="ai-chevron-right aroundAccountRowChevron" aria-hidden="true" />
+                        <LingUiIcon name="chevron-right" size={12} className="aroundAccountRowChevron" />
                       </button>
                     ) : null}
                     <Link
@@ -803,13 +804,13 @@ export function AppNavbar({
                       onClick={() => setAccountMenuOpen(false)}
                     >
                       <span className="aroundAccountMenuIcon" aria-hidden="true">
-                        <i className="ai-file" />
+                        <LingUiIcon name="file" size={17} />
                       </span>
                       <span className="aroundAccountMenuCopy">
                         <strong>{copy.ordersEntry}</strong>
                         <small>{copy.ordersMenuHint}</small>
                       </span>
-                      <i className="ai-chevron-right aroundAccountRowChevron" aria-hidden="true" />
+                      <LingUiIcon name="chevron-right" size={12} className="aroundAccountRowChevron" />
                     </Link>
                   </div>
                   <div className="aroundAccountSecondaryActions" role="none">
@@ -822,7 +823,7 @@ export function AppNavbar({
                         await handleSignOut();
                       }}
                     >
-                      <i className="ai-logout" aria-hidden="true" />
+                      <LingUiIcon name="logout" size={15} />
                       <span>{copy.authSignOut}</span>
                     </button>
                     <button
@@ -834,7 +835,7 @@ export function AppNavbar({
                         openDeleteDialog();
                       }}
                     >
-                      <i className="ai-trash" aria-hidden="true" />
+                      <LingUiIcon name="trash" size={15} />
                       <span>{copy.authDeleteAccount}</span>
                     </button>
                   </div>
@@ -873,13 +874,13 @@ export function AppNavbar({
               setMoreMenuOpen((value) => !value);
             }}
           >
-            <i className="ai-settings-filled" aria-hidden="true" />
+            <LingUiIcon name="settings" size={18} />
             <span className="aroundSettingsLabel">{locale === "zh-CN" ? "设置" : "Settings"}</span>
           </button>
 
           <div id="app-navbar-menu" className={`aroundUtilityDropdown aroundMoreDropdown${moreMenuOpen ? " is-open" : ""}`} role="menu">
             <div className="aroundSettingsHeader">
-              <span className="aroundSettingsHeaderIcon" aria-hidden="true"><i className="ai-settings-filled" /></span>
+              <span className="aroundSettingsHeaderIcon" aria-hidden="true"><i><LingUiIcon name="settings" size={18} /></i></span>
               <div>
                 <strong>{copy.settingsTitle}</strong>
                 <p>{copy.settingsSubtitle}</p>
@@ -888,15 +889,15 @@ export function AppNavbar({
             <div className="aroundMenuSection aroundMobileMenuSection aroundSettingsNavigation">
               <div className="aroundMenuSectionLabel">{copy.navigationLabel}</div>
               <Link href={practiceHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
-                <i className="ai-open-book" aria-hidden="true" />
+                <i aria-hidden="true"><LingUiIcon name="book" size={18} /></i>
                 <span>{copy.practiceEntry}</span>
               </Link>
               <Link href={historyHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
-                <i className="ai-time" aria-hidden="true" />
+                <i aria-hidden="true"><LingUiIcon name="clock" size={18} /></i>
                 <span>{copy.historyEntry}</span>
               </Link>
               <Link href={assignmentsHref} className="aroundMenuActionLink" role="menuitem" onClick={() => setMoreMenuOpen(false)}>
-                <i className="ai-clipboard" aria-hidden="true" />
+                <i aria-hidden="true"><LingUiIcon name="clipboard" size={18} /></i>
                 <span>{copy.assignmentsEntry}</span>
               </Link>
             </div>
@@ -935,7 +936,7 @@ export function AppNavbar({
                   openFeedbackDialog();
                 }}
               >
-                <i className="ai-message" aria-hidden="true" />
+                <i aria-hidden="true"><LingUiIcon name="message" size={18} /></i>
                 <span>{copy.feedbackEntry}</span>
               </button>
             </div>
@@ -956,10 +957,10 @@ export function AppNavbar({
                     aria-label={theme === "light" ? copy.switchToDarkMode : copy.switchToLightMode}
                   />
                   <label className="form-check-label" htmlFor={themeSwitchId}>
-                    <i className="ai-sun fs-lg" />
+                    <i><LingUiIcon name="sun" size={16} /></i>
                   </label>
                   <label className="form-check-label" htmlFor={themeSwitchId}>
-                    <i className="ai-moon fs-lg" />
+                    <i><LingUiIcon name="moon" size={16} /></i>
                   </label>
                 </div>
               </div>
@@ -994,7 +995,7 @@ export function AppNavbar({
                 <p className="authHint">{authMode === "signIn" ? authHint ?? copy.authHintSignIn : copy.authHintSignUp}</p>
               </div>
               <button type="button" className="authDialogClose" onClick={() => setAuthDialogOpen(false)} disabled={authSubmitting}>
-                <i className="ai-cross" aria-hidden="true" />
+                <i aria-hidden="true"><LingUiIcon name="close" size={18} /></i>
                 <span className="srOnly">{copy.authClose}</span>
               </button>
             </div>
@@ -1005,7 +1006,7 @@ export function AppNavbar({
                   <label className="authField">
                     <span>{copy.authEmail}</span>
                     <div className="authInputWrap">
-                      <i className="ai-mail" aria-hidden="true" />
+                      <i aria-hidden="true"><LingUiIcon name="mail" size={18} /></i>
                       <input
                         type="email"
                         value={signInEmail}
@@ -1019,7 +1020,7 @@ export function AppNavbar({
                   <label className="authField">
                     <span>{copy.authPassword}</span>
                     <div className="authInputWrap authPasswordWrap">
-                      <i className="ai-lock-closed" aria-hidden="true" />
+                      <i aria-hidden="true"><LingUiIcon name="lock" size={18} /></i>
                       <input
                         type={signInPasswordVisible ? "text" : "password"}
                         value={signInPassword}
@@ -1034,7 +1035,7 @@ export function AppNavbar({
                         onClick={() => setSignInPasswordVisible((value) => !value)}
                         aria-label={signInPasswordVisible ? copy.hidePassword : copy.showPassword}
                       >
-                        <i className={signInPasswordVisible ? "ai-hide" : "ai-show"} aria-hidden="true" />
+                        <i aria-hidden="true"><LingUiIcon name={signInPasswordVisible ? "eye-off" : "eye"} size={18} /></i>
                       </button>
                     </div>
                   </label>
@@ -1061,7 +1062,7 @@ export function AppNavbar({
                   <label className="authField">
                     <span>{copy.authName}</span>
                     <div className="authInputWrap">
-                      <i className="ai-user" aria-hidden="true" />
+                      <i aria-hidden="true"><LingUiIcon name="user" size={18} /></i>
                       <input
                         type="text"
                         value={signUpName}
@@ -1076,7 +1077,7 @@ export function AppNavbar({
                   <label className="authField">
                     <span>{copy.authEmail}</span>
                     <div className="authInputWrap">
-                      <i className="ai-mail" aria-hidden="true" />
+                      <i aria-hidden="true"><LingUiIcon name="mail" size={18} /></i>
                       <input
                         type="email"
                         value={signUpEmail}
@@ -1090,7 +1091,7 @@ export function AppNavbar({
                   <label className="authField">
                     <span>{copy.authPassword}</span>
                     <div className="authInputWrap authPasswordWrap">
-                      <i className="ai-lock-closed" aria-hidden="true" />
+                      <i aria-hidden="true"><LingUiIcon name="lock" size={18} /></i>
                       <input
                         type={signUpPasswordVisible ? "text" : "password"}
                         value={signUpPassword}
@@ -1105,7 +1106,7 @@ export function AppNavbar({
                         onClick={() => setSignUpPasswordVisible((value) => !value)}
                         aria-label={signUpPasswordVisible ? copy.hidePassword : copy.showPassword}
                       >
-                        <i className={signUpPasswordVisible ? "ai-hide" : "ai-show"} aria-hidden="true" />
+                        <i aria-hidden="true"><LingUiIcon name={signUpPasswordVisible ? "eye-off" : "eye"} size={18} /></i>
                       </button>
                     </div>
                   </label>
@@ -1181,7 +1182,7 @@ export function AppNavbar({
                 onClick={() => setDeleteDialogOpen(false)}
                 disabled={deleteSubmitting}
               >
-                <i className="ai-cross" aria-hidden="true" />
+                <i aria-hidden="true"><LingUiIcon name="close" size={18} /></i>
                 <span className="srOnly">{copy.authClose}</span>
               </button>
             </div>
@@ -1192,7 +1193,7 @@ export function AppNavbar({
               <label className="authField confirmDeleteField">
                 <span>{copy.authDeleteConfirmLabel}</span>
                 <div className="authInputWrap authPasswordWrap">
-                  <i className="ai-lock-closed" aria-hidden="true" />
+                  <i aria-hidden="true"><LingUiIcon name="lock" size={18} /></i>
                   <input
                     type="password"
                     value={deletePassword}
@@ -1236,7 +1237,7 @@ export function AppNavbar({
                 onClick={() => setFeedbackDialogOpen(false)}
                 disabled={feedbackSubmitting}
               >
-                <i className="ai-cross" aria-hidden="true" />
+                <i aria-hidden="true"><LingUiIcon name="close" size={18} /></i>
                 <span className="srOnly">{copy.authClose}</span>
               </button>
             </div>
@@ -1305,7 +1306,7 @@ export function AppNavbar({
                 onClick={() => setRechargeDialogOpen(false)}
                 disabled={rechargeSubmitting}
               >
-                <i className="ai-cross" aria-hidden="true" />
+                <i aria-hidden="true"><LingUiIcon name="close" size={18} /></i>
                 <span className="srOnly">{copy.authClose}</span>
               </button>
             </div>
@@ -1411,7 +1412,7 @@ export function AppNavbar({
         <div className="rewardToast uiToast" data-tone="success" role="status" aria-live="polite">
           <span>{rechargeToast}</span>
           <button type="button" className="rewardToastClose" onClick={() => setRechargeToast(null)} aria-label={copy.authClose}>
-            <i className="ai-cross" aria-hidden="true" />
+            <i aria-hidden="true"><LingUiIcon name="close" size={16} /></i>
           </button>
         </div>
       ) : null}

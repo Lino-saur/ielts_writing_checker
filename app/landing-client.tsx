@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { AppNavbar } from "@/components/app-navbar";
+import { LingFeatureIcon, type LingFeatureIconName } from "@/components/icons/ling-feature-icon";
+import { LingUiIcon } from "@/components/icons/ling-ui-icon";
 import { LingMascot } from "@/components/ling-mascot";
 import { getMessages } from "@/lib/i18n/messages";
 import { useRouteLocale } from "@/lib/i18n/use-route-locale";
@@ -137,8 +139,14 @@ const copy = {
 } as const;
 
 function Arrow() {
-  return <span aria-hidden="true">↗</span>;
+  return <LingUiIcon name="arrow-up-right" size={16} />;
 }
+
+const workflowIcons: LingFeatureIconName[] = [
+  "workflow-submit",
+  "workflow-diagnose",
+  "workflow-rewrite"
+];
 
 export default function LandingPageClient() {
   const [locale, setLocale] = useRouteLocale();
@@ -241,7 +249,7 @@ export default function LandingPageClient() {
 
       <section className="framerWorkflow framerReveal">
         <header className="framerSectionHeader centered"><p>{t.loopEyebrow}</p><h2>{t.loopTitle}</h2><span>{t.loopBody}</span></header>
-        <div className="framerWorkflowGrid">{t.steps.map(([eyebrow, title, body], index) => <article key={eyebrow}><b className={`framerWorkflowMark is-${["submit", "diagnose", "rewrite"][index]}`} aria-hidden="true" /><span>{eyebrow}</span><h3>{title}</h3><p>{body}</p><i aria-hidden="true">→</i></article>)}</div>
+        <div className="framerWorkflowGrid">{t.steps.map(([eyebrow, title, body], index) => <article key={eyebrow}><b className="framerWorkflowMark" aria-hidden="true"><LingFeatureIcon name={workflowIcons[index]} size={40} /></b><span>{eyebrow}</span><h3>{title}</h3><p>{body}</p><i aria-hidden="true"><LingUiIcon name="arrow-right" size={20} /></i></article>)}</div>
       </section>
 
       <section className="framerPracticeHub framerReveal">
@@ -249,7 +257,7 @@ export default function LandingPageClient() {
         <div className="framerPracticeHubGrid">
           <article className="framerPracticeModule is-historical">
             <div className="framerPracticeModuleHead">
-              <span className="framerPracticeModuleMark"><Image src="/app-icons/ling-feather-loop.png" alt="" width={42} height={42} /></span>
+              <span className="framerPracticeModuleMark"><LingFeatureIcon name="historical-practice" size={42} /></span>
               <p>{t.historicalKicker}</p>
             </div>
             <h3>{t.historicalTitle}</h3>
@@ -267,7 +275,7 @@ export default function LandingPageClient() {
 
           <article className="framerPracticeModule is-library">
             <div className="framerPracticeModuleHead">
-              <span className="framerPracticeModuleMark"><Image src="/app-icons/magic-ink.png" alt="" width={42} height={42} /></span>
+              <span className="framerPracticeModuleMark"><LingFeatureIcon name="practice-library" size={42} /></span>
               <p>{t.libraryKicker}</p>
             </div>
             <h3>{t.libraryTitle}</h3>
@@ -289,7 +297,7 @@ export default function LandingPageClient() {
         <header className="framerSectionHeader"><p>{t.tasksEyebrow}</p><h2>{t.tasksTitle}</h2></header>
         <div className="framerTaskGrid">
           <article className="framerTaskCard">
-            <div className="framerUploadVisual"><div className="framerUploadIcon">↑</div><strong>{t.uploadLabel}</strong><span>PNG · JPG · WEBP</span></div>
+            <div className="framerUploadVisual"><div className="framerUploadIcon"><LingUiIcon name="upload" size={23} /></div><strong>{t.uploadLabel}</strong><span>PNG · JPG · WEBP</span></div>
             <div><h3>{t.task1Title}</h3><strong>{t.task1Subtitle}</strong><p>{t.task1Body}</p></div>
           </article>
           <article className="framerTaskCard alt">
