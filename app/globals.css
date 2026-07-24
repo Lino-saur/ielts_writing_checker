@@ -11423,6 +11423,71 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
   gap: 12px;
 }
 
+.framerLingIntro {
+  display: grid;
+  width: min(100%, 640px);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 12px;
+  border: 1px solid rgba(29, 82, 75, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 16px 40px rgba(17, 17, 17, 0.06);
+  text-align: left;
+}
+
+.framerLingIntro > img {
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(19, 70, 62, 0.12);
+}
+
+.framerLingIntro > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.framerLingIntro strong {
+  color: #18332e;
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.framerLingIntro strong .framerLingName {
+  color: #1f7568;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.framerLingIntro > div > span {
+  color: var(--fl-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.framerLanding .framerLingCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #23796c;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.framerLanding .framerLingCta:hover {
+  transform: translateY(-1px);
+  background: #195f55;
+}
+
 .framerMetrics {
   display: grid;
   width: 100%;
@@ -11727,7 +11792,7 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
 .framerWorkflowGrid article {
   position: relative;
   display: flex;
-  min-height: 214px;
+  min-height: 252px;
   flex-direction: column;
   align-items: flex-start;
   gap: 18px;
@@ -11736,6 +11801,33 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
   border-radius: 24px;
   background: #fff;
   box-shadow: 0 18px 48px rgba(17, 17, 17, 0.07);
+}
+
+.framerWorkflowMark {
+  display: block;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border-radius: 15px;
+  background-color: #f7f6ef;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(29, 82, 75, 0.1);
+}
+
+.framerWorkflowMark.is-submit {
+  background-image: url("/app-icons/ling-feather-loop.png");
+  background-size: 34px;
+}
+
+.framerWorkflowMark.is-diagnose {
+  background-image: url("/app-icons/magic-ink.png");
+  background-size: 36px;
+}
+
+.framerWorkflowMark.is-rewrite {
+  background-image: url("/app-icons/icon.png");
+  background-size: cover;
 }
 
 .framerWorkflowGrid article > span {
@@ -11763,6 +11855,174 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
   color: #bbb;
   font-size: 22px;
   font-style: normal;
+}
+
+.framerPracticeHub {
+  display: flex;
+  width: min(100%, 1120px);
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  margin: 0 auto;
+  padding: 96px 40px;
+}
+
+.framerPracticeHubGrid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.framerPracticeHub > .framerSectionHeader {
+  max-width: 920px;
+}
+
+.framerPracticeHub > .framerSectionHeader h2 {
+  font-size: clamp(34px, 3.2vw, 40px);
+  text-wrap: balance;
+}
+
+.framerPracticeModule {
+  display: flex;
+  min-width: 0;
+  min-height: 500px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 28px;
+  border: 1px solid rgba(29, 82, 75, 0.1);
+  border-radius: 30px;
+  background: #fff;
+  box-shadow: 0 20px 56px rgba(17, 17, 17, 0.06);
+}
+
+.framerPracticeModule.is-library {
+  background: #f1f5f2;
+}
+
+.framerPracticeModuleHead {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.framerPracticeModuleHead > p {
+  color: #477067;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+}
+
+.framerPracticeModuleMark {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #f7f6ef;
+  box-shadow: inset 0 0 0 1px rgba(29, 82, 75, 0.1);
+}
+
+.framerPracticeModuleMark img {
+  object-fit: contain;
+}
+
+.framerPracticeModule h3 {
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.framerPracticeModuleBody {
+  min-height: 48px;
+  color: var(--fl-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.framerPracticeQuestionList {
+  display: grid;
+  width: 100%;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.framerPracticeQuestionList > a,
+.framerPracticeQuestionEmpty {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  padding: 14px 16px;
+  border: 1px solid rgba(29, 82, 75, 0.08);
+  border-radius: 18px;
+  background: rgba(247, 247, 244, 0.92);
+}
+
+.framerPracticeQuestionList > a {
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.framerPracticeQuestionList > a:hover {
+  transform: translateY(-2px);
+  border-color: rgba(35, 121, 108, 0.32);
+  background: #fff;
+}
+
+.framerPracticeQuestionList > a > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #6b6b66;
+  font-size: 11px;
+}
+
+.framerPracticeQuestionList b {
+  color: #23796c;
+  font-size: 11px;
+}
+
+.framerPracticeQuestionList em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.framerPracticeQuestionList strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #232321;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.framerPracticeQuestionEmpty {
+  color: var(--fl-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.framerPracticeModuleCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+  color: #1d685d !important;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.framerPracticeModuleCta:hover {
+  opacity: 0.68;
 }
 
 .framerTasks {
@@ -11944,6 +12204,7 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
 }
 
 .framerFinal {
+  position: relative;
   display: flex;
   width: min(100%, 1120px);
   min-height: 364px;
@@ -11951,11 +12212,26 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
   align-items: center;
   gap: 20px;
   margin: 0 auto;
-  padding: 64px 40px;
+  padding: 64px 190px;
+  overflow: hidden;
   border-radius: 36px;
   background: #111;
   color: #fff;
   text-align: center;
+}
+
+.framerFinal > :not(.framerFinalLing) {
+  position: relative;
+  z-index: 1;
+}
+
+.lingMascot.framerFinalLing {
+  --ling-mascot-height: 228px;
+  position: absolute;
+  z-index: 0;
+  left: 24px;
+  bottom: -22px;
+  width: 180px;
 }
 
 .framerFinal > p {
@@ -12051,8 +12327,22 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
     grid-template-columns: 1fr;
   }
 
+  .framerPracticeHubGrid {
+    grid-template-columns: 1fr;
+  }
+
   .framerWorkflowGrid article {
     min-height: 0;
+  }
+
+  .framerFinal {
+    padding-right: 120px;
+    padding-left: 120px;
+  }
+
+  .lingMascot.framerFinalLing {
+    left: -12px;
+    opacity: 0.58;
   }
 }
 
@@ -12060,6 +12350,7 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
   .framerHero,
   .framerScoreSection,
   .framerWorkflow,
+  .framerPracticeHub,
   .framerTasks,
   .framerArchive,
   .framerFinal {
@@ -12080,6 +12371,17 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
   .framerLead {
     font-size: 17px;
     line-height: 1.7;
+  }
+
+  .framerLingIntro {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .framerLingCta {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    justify-content: center;
   }
 
   .framerActions,
@@ -12132,6 +12434,7 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
   }
 
   .framerTasks,
+  .framerPracticeHub,
   .framerArchive {
     padding-top: 72px;
     padding-bottom: 72px;
@@ -12141,14 +12444,36 @@ html[data-theme="dark"] .authAccountDialog .authSwitchLine {
     padding: 20px;
   }
 
+  .framerPracticeModule {
+    min-height: 0;
+    padding: 22px;
+  }
+
+  .framerPracticeHub > .framerSectionHeader h2 {
+    font-size: 30px;
+    line-height: 1.18;
+  }
+
   .framerTimeline {
     padding: 14px;
   }
 
   .framerFinal {
     padding-top: 58px;
+    padding-right: 22px;
     padding-bottom: 58px;
+    padding-left: 22px;
     border-radius: 28px;
+  }
+
+  .lingMascot.framerFinalLing {
+    --ling-mascot-height: 118px;
+    position: relative;
+    left: auto;
+    bottom: auto;
+    width: 112px;
+    margin: -24px auto -8px;
+    opacity: 1;
   }
 
   .framerFooter {
@@ -13599,6 +13924,7 @@ html[data-theme="dark"] .framerBadge,
 html[data-theme="dark"] .framerMetrics article,
 html[data-theme="dark"] .framerWorkflow,
 html[data-theme="dark"] .framerWorkflowGrid article,
+html[data-theme="dark"] .framerPracticeModule,
 html[data-theme="dark"] .framerTaskCard,
 html[data-theme="dark"] .framerUploadVisual,
 html[data-theme="dark"] .framerRevisionVisual,
@@ -13608,6 +13934,7 @@ html[data-theme="dark"] .framerTimeline {
 }
 
 html[data-theme="dark"] .framerTaskCard.alt,
+html[data-theme="dark"] .framerPracticeModule.is-library,
 html[data-theme="dark"] .framerTimeline article.current,
 html[data-theme="dark"] .framerRevisionVisual > div strong,
 html[data-theme="dark"] .framerRevisionVisual em {
@@ -13616,9 +13943,30 @@ html[data-theme="dark"] .framerRevisionVisual em {
 
 html[data-theme="dark"] .framerLead,
 html[data-theme="dark"] .framerSectionHeader > span,
+html[data-theme="dark"] .framerPracticeModuleBody,
 html[data-theme="dark"] .framerArchiveCopy > span,
 html[data-theme="dark"] .framerTaskCard > div > p,
 html[data-theme="dark"] .framerTimeline article p {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .framerPracticeQuestionList > a,
+html[data-theme="dark"] .framerPracticeQuestionEmpty {
+  border-color: var(--line);
+  background: var(--surface-pill);
+}
+
+html[data-theme="dark"] .framerPracticeQuestionList > a:hover {
+  border-color: #5d958b;
+  background: #30302e;
+}
+
+html[data-theme="dark"] .framerPracticeQuestionList strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .framerPracticeQuestionList > a > span,
+html[data-theme="dark"] .framerPracticeQuestionEmpty {
   color: var(--muted);
 }
 

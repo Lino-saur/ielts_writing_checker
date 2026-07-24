@@ -150,6 +150,6 @@
   "ordersSupportStatus_rejected": "未通过",
   "ordersSupportStatus_refunded": "已退款",
   "rechargeRewardAlert": "首次成功提交补充功能反馈，可额外获赠 10 瓶魔法墨水。每位用户仅限 1 次，欢迎积极反馈。",
-  "rechargeRewardToastGranted": "反馈已提交，Ling 为你添了 10 瓶魔法墨水。",
+  "rechargeRewardToastGranted": "反馈已提交，翎儿为你添了 10 瓶魔法墨水。",
   "rechargeRewardToastAlreadyClaimed": "反馈已提交。你的魔法墨水反馈奖励已领取过，后续上线仍会通知你。"
 }

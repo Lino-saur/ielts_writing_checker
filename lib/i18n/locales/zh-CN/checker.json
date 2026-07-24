@@ -59,7 +59,7 @@
   "energyUnit": "瓶魔法墨水",
   "insufficientEnergy": "魔法墨水不足，暂时无法继续批阅。",
   "confirmReviewTitle": "使用魔法墨水开始批改？",
-  "confirmReviewBody": "Ling 会用掉对应数量的魔法墨水，为这篇作文完成批改。",
+  "confirmReviewBody": "翎儿会用掉对应数量的魔法墨水，为这篇作文完成批改。",
   "confirmReviewConfirm": "确认批改",
   "confirmReviewCancel": "取消",
   "targetChipLabel": "目标",
