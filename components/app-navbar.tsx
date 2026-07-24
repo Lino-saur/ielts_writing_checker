@@ -604,7 +604,11 @@ export function AppNavbar({
       const data = (await response.json()) as { error?: string; order?: RechargeOrder };
 
       if (!response.ok) {
-        throw new Error(data.error || copy.genericError);
+        throw new Error(
+          data.error === "RECHARGE_GIFT_ALREADY_CLAIMED"
+            ? copy.rechargeGiftAlreadyClaimed
+            : data.error || copy.genericError
+        );
       }
 
       if (!data.order || data.order.status !== "paid") {
@@ -612,11 +616,7 @@ export function AppNavbar({
       }
 
       setRechargeSubmitted(true);
-      setRechargeToast(
-        data.order.unlimitedDays
-          ? copy.rechargePassSuccess.replace("{days}", String(data.order.unlimitedDays))
-          : copy.rechargeSuccess.replace("{amount}", String(data.order.totalEnergyAmount))
-      );
+      setRechargeToast(copy.rechargeComingSoon);
       await refreshSession();
     } catch (error) {
       setRechargeError(error instanceof Error ? error.message : copy.genericError);

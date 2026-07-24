@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
 import { apiErrorResponse, enforceRateLimit, readJsonBody } from "@/lib/api-security";
 import { initializeRechargePayment } from "@/lib/payments";
-import { createRechargeOrder, listRechargeOrdersForUser, markRechargeOrderFailed } from "@/lib/recharge";
+import { claimRechargeLaunchGift, createRechargeOrder, listRechargeOrdersForUser, markRechargeOrderFailed } from "@/lib/recharge";
 import type { RechargeProvider } from "@/lib/types";
 
 type CreateOrderBody = {
@@ -46,6 +46,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "PRODUCT_CODE_REQUIRED" }, { status: 400 });
     }
 
+    if (process.env.RECHARGE_ENABLED !== "true") {
+      const order = await claimRechargeLaunchGift({ userId: session.user.id, productCode });
+      return NextResponse.json({
+        order,
+        payment: {
+          provider: "manual",
+          mode: "simulated",
+          redirectUrl: null,
+          qrCodeUrl: null,
+          clientPayload: null,
+          message: "Launch gift claimed."
+        }
+      });
+    }
+
     const order = await createRechargeOrder({
       userId: session.user.id,
       productCode,
@@ -69,12 +84,14 @@ export async function POST(request: Request) {
     const status =
       message === "RECHARGE_PRODUCT_NOT_FOUND"
         ? 404
+        : error instanceof Error && error.message === "RECHARGE_GIFT_ALREADY_CLAIMED"
+          ? 409
         : message === "UNAUTHORIZED"
           ? 401
           : normalized.status;
 
     return NextResponse.json(
-      { error: message },
+      { error: status === 409 ? "RECHARGE_GIFT_ALREADY_CLAIMED" : message },
       { status, headers: normalized.retryAfterSeconds ? { "Retry-After": String(normalized.retryAfterSeconds) } : undefined }
     );
   }

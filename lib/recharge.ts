@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db, ensureDatabase } from "./db";
+import { DEFAULT_ENERGY_BALANCE } from "./energy-config";
 import type {
   RechargeOrder,
   RechargeOrderStatus,
@@ -55,7 +56,6 @@ type EnergyTransactionRow = {
   id: string;
 };
 
-const DEFAULT_ENERGY_BALANCE = 20;
 
 function mapRechargeProduct(row: RechargeProductRow): RechargeProduct {
   return {
@@ -245,6 +245,46 @@ export async function createRechargeOrder(input: {
   }
 
   return created;
+}
+
+export async function claimRechargeLaunchGift(input: { userId: string; productCode: string }) {
+  await ensureDatabase();
+  const lockClient = await db.connect();
+  const lockKey = `recharge-launch-gift:${input.userId}`;
+
+  try {
+    await lockClient.query("SELECT pg_advisory_lock(hashtext($1))", [lockKey]);
+    const existingClaim = await db.query<{ id: string }>(
+      `SELECT id
+       FROM energy_transactions
+       WHERE user_id = $1 AND source = 'recharge:launch_gift'
+       LIMIT 1`,
+      [input.userId]
+    );
+    if (existingClaim.rows[0]) {
+      throw new Error("RECHARGE_GIFT_ALREADY_CLAIMED");
+    }
+
+    const order = await createRechargeOrder({
+      userId: input.userId,
+      productCode: input.productCode,
+      provider: "manual"
+    });
+
+    try {
+      return await settleRechargeOrder({
+        orderId: order.id,
+        providerOrderId: `launch_gift:${input.userId}`,
+        source: "recharge:launch_gift"
+      });
+    } catch (error) {
+      await markRechargeOrderFailed(order.id);
+      throw error;
+    }
+  } finally {
+    await lockClient.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]).catch(() => undefined);
+    lockClient.release();
+  }
 }
 
 export async function getRechargeOrderById(orderId: string) {

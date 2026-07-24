@@ -78,6 +78,8 @@
   "historyEntry": "History",
   "assignmentsEntry": "My assignments",
   "rechargeEntry": "Refill ink",
+  "rechargeComingSoon": "Refills are coming soon. This one's on us!",
+  "rechargeGiftAlreadyClaimed": "The free refill is limited to one per user, and you have already claimed yours.",
   "rechargeTitle": "Refill Magic Ink",
   "rechargeHint": "Choose permanent review credits or a better-value timed pass.",
   "rechargeMessage": "Review packs never expire. Unlimited passes preserve your Magic Ink balance and stack when renewed.",

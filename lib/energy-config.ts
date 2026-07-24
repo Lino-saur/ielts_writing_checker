@@ -1,0 +1,1 @@
+export const DEFAULT_ENERGY_BALANCE = 3;

@@ -78,6 +78,8 @@
   "historyEntry": "历史批改",
   "assignmentsEntry": "我的作业",
   "rechargeEntry": "补充墨水",
+  "rechargeComingSoon": "充值功能开发中，敬请期待，这次免费送你啦～",
+  "rechargeGiftAlreadyClaimed": "每位用户只能免费领取一次，你已经领取过啦～",
   "rechargeTitle": "补充魔法墨水",
   "rechargeHint": "选择永久有效的次数包，或更划算的限时套餐。",
   "rechargeMessage": "次数包永久有效；不限次卡在有效期内不消耗魔法墨水余额，续购会自动顺延。",

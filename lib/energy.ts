@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { db, ensureDatabase } from "./db";
+import { DEFAULT_ENERGY_BALANCE } from "./energy-config";
 
 export const REVIEW_ENERGY_COST = 1;
-const DEFAULT_ENERGY_BALANCE = 20;
 
 export type EnergyState = {
   balance: number;

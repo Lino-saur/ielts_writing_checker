@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { db, ensureDatabase } from "./db";
+import { DEFAULT_ENERGY_BALANCE } from "./energy-config";
 import type { FeedbackEntry, FeedbackPayload, FeedbackStatus } from "./types";
 
 const RECHARGE_WAITLIST_CATEGORY = "recharge_waitlist";
 const RECHARGE_WAITLIST_REWARD = 10;
-const DEFAULT_ENERGY_BALANCE = 20;
+const RECHARGE_WAITLIST_REWARD_ENABLED = process.env.RECHARGE_WAITLIST_REWARD_ENABLED === "true";
 
 type CreateFeedbackInput = FeedbackPayload & {
   userId: string;
@@ -191,7 +192,7 @@ export async function createFeedback(input: CreateFeedbackInput) {
 
     let rewardGranted = false;
 
-    if (category === RECHARGE_WAITLIST_CATEGORY) {
+    if (RECHARGE_WAITLIST_REWARD_ENABLED && category === RECHARGE_WAITLIST_CATEGORY) {
       rewardGranted = await grantRechargeWaitlistReward(client, input.userId, createdAt);
     }
 
