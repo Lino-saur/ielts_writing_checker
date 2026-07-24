@@ -1387,7 +1387,11 @@ export function AppNavbar({
                 <p className="rechargeSimulationNote">{copy.rechargeSimulationNote}</p>
 
                 {rechargeError ? <p className="errorBox">{rechargeError}</p> : null}
-                {rechargeSubmitted ? <Pill>{copy.rechargeSubmitted}</Pill> : null}
+                {rechargeSubmitted ? (
+                  <div className="rechargeRewardAlert" role="status" aria-live="polite">
+                    <span>{copy.rechargeComingSoon}</span>
+                  </div>
+                ) : null}
 
                 <ActionButton
                   type="submit"
