@@ -81,6 +81,7 @@ export function AppNavbar({
 }: AppNavbarProps) {
   const { sessionContext, sessionResolved, refreshSessionContext, setSessionContext } = useAuthSession();
   const themeSwitchId = useId();
+  const signUpConsentId = useId();
   const taskMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +93,7 @@ export function AppNavbar({
   const [signUpName, setSignUpName] = useState("");
   const [signUpEmail, setSignUpEmail] = useState("");
   const [signUpPassword, setSignUpPassword] = useState("");
+  const [signUpLegalAccepted, setSignUpLegalAccepted] = useState(false);
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
@@ -408,6 +410,7 @@ export function AppNavbar({
         setSignInEmail(normalizedEmail);
         setSignInPassword("");
         setSignUpPassword("");
+        setSignUpLegalAccepted(false);
         setSignInPasswordVisible(false);
         setSignUpPasswordVisible(false);
         setAuthNotice(copy.authVerificationPending);
@@ -443,6 +446,11 @@ export function AppNavbar({
   async function handleSignUpSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAuthMode("signUp");
+    if (!signUpLegalAccepted) {
+      setAuthNotice(null);
+      setAuthError(copy.authAgreementRequired);
+      return;
+    }
     await submitAuth("signUp");
   }
 
@@ -1101,6 +1109,30 @@ export function AppNavbar({
                       </button>
                     </div>
                   </label>
+
+                  <div className="authLegalConsent">
+                    <input
+                      id={signUpConsentId}
+                      type="checkbox"
+                      checked={signUpLegalAccepted}
+                      onChange={(event) => {
+                        setSignUpLegalAccepted(event.target.checked);
+                        if (event.target.checked && authError === copy.authAgreementRequired) {
+                          setAuthError(null);
+                        }
+                      }}
+                    />
+                    <p>
+                      <label htmlFor={signUpConsentId}>{copy.authAgreementPrefix}</label>{" "}
+                      <Link href={`/${locale}/terms`} target="_blank" rel="noreferrer">
+                        {copy.authTermsLink}
+                      </Link>
+                      {copy.authAgreementJoiner}
+                      <Link href={`/${locale}/privacy`} target="_blank" rel="noreferrer">
+                        {copy.authPrivacyLink}
+                      </Link>
+                    </p>
+                  </div>
 
                   {authNotice ? <p className="authInfoBox">{authNotice}</p> : null}
                   {authError ? <p className="errorBox">{authError}</p> : null}

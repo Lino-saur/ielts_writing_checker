@@ -251,6 +251,7 @@ export type FeedbackKind = "review" | "product" | "bug" | "feature_request";
 export type FeedbackStatus = "new" | "reviewing" | "closed";
 export type SupportInboxStatus = "new" | "reviewing" | "closed";
 export type AdminUserStatus = "active" | "disabled";
+export type AdminUserRole = "owner" | "operator" | "support" | "finance";
 export type RechargeProvider = "manual" | "wechat" | "alipay";
 export type RechargeOrderStatus = "pending" | "paid" | "failed" | "cancelled" | "refunded";
 export type OrderSupportKind = "inquiry" | "refund";
@@ -323,6 +324,7 @@ export type AdminUserEntry = {
   email: string | null;
   displayName: string | null;
   status: AdminUserStatus;
+  role: AdminUserRole;
   createdAt: string;
   updatedAt: string;
 };

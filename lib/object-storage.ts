@@ -9,7 +9,7 @@ type StorageConfig = {
 };
 
 type SignedRequestInput = {
-  method: "GET" | "PUT";
+  method: "DELETE" | "GET" | "PUT";
   key: string;
   body?: Buffer;
 };
@@ -167,6 +167,23 @@ export async function getReviewImageObject(key: string) {
   }
 
   return response;
+}
+
+export async function deleteReviewImageObject(key: string) {
+  const request = await createStorageRequest({
+    method: "DELETE",
+    key
+  });
+
+  const response = await fetch(request.url, {
+    method: "DELETE",
+    headers: request.headers,
+    cache: "no-store"
+  });
+
+  if (!response.ok && response.status !== 404) {
+    throw new Error(buildResponseErrorText(response.status, await response.text()));
+  }
 }
 
 export function createPresignedReviewImageUploadUrl(input: PresignedPutUrlInput) {

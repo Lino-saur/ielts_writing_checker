@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/admin/auth";
+import { requireAdminRole, requireAdminSession } from "@/lib/admin/auth";
+import { recordAdminAudit } from "@/lib/admin/audit";
+import { readJsonBody } from "@/lib/api-security";
 import { getMediaUsageDashboard, saveMediaUsageSettings } from "@/lib/admin/media-usage";
 
 type RequestBody = {
@@ -35,13 +37,20 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAdminSession();
-    const body = (await request.json()) as RequestBody;
+    const { adminUser } = await requireAdminRole(["operator"]);
+    const body = await readJsonBody<RequestBody>(request, 16 * 1024);
     const settings = await saveMediaUsageSettings({
       uploadLimitBytes: gbToBytes(body.uploadLimitGb),
       downloadLimitBytes: gbToBytes(body.downloadLimitGb),
       hardBlockUploads: Boolean(body.hardBlockUploads),
       hardBlockDownloads: Boolean(body.hardBlockDownloads)
+    });
+    await recordAdminAudit({
+      adminUserId: adminUser.id,
+      action: "media_quota.update",
+      targetType: "media_quota",
+      targetId: "global",
+      detail: settings
     });
 
     return NextResponse.json({ settings });

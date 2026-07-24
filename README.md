@@ -56,7 +56,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 RESEND_API_KEY=your_resend_api_key
 AUTH_EMAIL_FROM=IELTS Writing Checker <no-reply@example.com>
 SUPPORT_EMAIL_FROM=IELTS Writing Checker <support@example.com>
-RESEND_INBOUND_WEBHOOK_SECRET=your_random_webhook_token
+RESEND_WEBHOOK_SECRET=whsec_your_resend_webhook_signing_secret
+LEGAL_OPERATOR_NAME=Your legal entity name
+LEGAL_SUPPORT_EMAIL=support@example.com
+OPS_ALERT_WEBHOOK_URL=https://your-internal-alert-endpoint.example.com
 
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=verify-full
 
@@ -67,11 +70,13 @@ REVIEW_IMAGE_STORAGE_ACCESS_KEY_ID=your_storage_access_key
 REVIEW_IMAGE_STORAGE_SECRET_ACCESS_KEY=your_storage_secret
 ```
 
-For local development against a local Postgres instance, you can also set:
+For local development against a Postgres instance on `localhost`, you can also set:
 
 ```env
 POSTGRES_SSL=false
 ```
+
+This override is ignored for remote databases and in production. Remote connection strings must use `sslmode=verify-full`.
 
 3. Run the application database migrations:
 
@@ -113,7 +118,10 @@ Set these environment variables in Vercel:
 - `RESEND_API_KEY`
 - `AUTH_EMAIL_FROM`
 - `SUPPORT_EMAIL_FROM`
-- `RESEND_INBOUND_WEBHOOK_SECRET`
+- `RESEND_WEBHOOK_SECRET`
+- `LEGAL_OPERATOR_NAME`
+- `LEGAL_SUPPORT_EMAIL`
+- `OPS_ALERT_WEBHOOK_URL` (optional but recommended)
 - `REVIEW_IMAGE_STORAGE_ENDPOINT`
 - `REVIEW_IMAGE_STORAGE_REGION`
 - `REVIEW_IMAGE_STORAGE_BUCKET`
@@ -127,8 +135,8 @@ Recommended production setup:
 - Use `BETTER_AUTH_URL=https://your-app.vercel.app`.
 - Use a Neon connection string with `sslmode=verify-full`.
 - Configure `RESEND_API_KEY` and `AUTH_EMAIL_FROM` so sign-up verification emails can be delivered.
-- Configure `RESEND_INBOUND_WEBHOOK_SECRET` and point your Resend receiving webhook to:
-  `https://your-domain.com/api/resend/inbound?token=YOUR_SECRET`
+- Configure `RESEND_WEBHOOK_SECRET` with the signing secret from the Resend webhook details page and point the receiving webhook to:
+  `https://your-domain.com/api/resend/inbound`
 - Use `/admin/support` to review inbound support emails and send replies from the admin workspace.
 
 ## API

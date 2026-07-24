@@ -23,6 +23,7 @@ import {
   loadTaskImageInputFromObject,
   updateWritingReviewProgress
 } from "@/lib/writing-reviews";
+import { reportOperationalEvent } from "@/lib/observability";
 
 const MAX_CHECK_BODY_BYTES = 64 * 1024;
 const MAX_PROMPT_LENGTH = 10_000;
@@ -308,7 +309,7 @@ export async function POST(request: Request) {
         });
       } catch (backgroundError) {
         const normalized = apiErrorResponse(backgroundError);
-        console.error("[IELTS_CHECK][BACKGROUND_REVIEW_FAILED]", {
+        await reportOperationalEvent("error", "background_review_failed", {
           reviewId: backgroundInput.reviewId,
           errorType: backgroundError instanceof Error ? backgroundError.name : typeof backgroundError,
           errorMessage: backgroundError instanceof Error ? backgroundError.message : String(backgroundError)
@@ -358,7 +359,7 @@ export async function POST(request: Request) {
           normalized.message
         );
       } catch (refundError) {
-        console.error("[IELTS_CHECK][RESERVATION_REFUND_FAILED]", {
+        await reportOperationalEvent("error", "review_reservation_refund_failed", {
           requestId: reservedRequest.requestId,
           error: refundError instanceof Error ? refundError.message : "UNKNOWN_ERROR"
         });

@@ -24,6 +24,11 @@ export type NavbarMessages = Record<string, string> & {
   authPassword: string;
   authSubmitSignIn: string;
   authSubmitSignUp: string;
+  authAgreementPrefix: string;
+  authAgreementJoiner: string;
+  authTermsLink: string;
+  authPrivacyLink: string;
+  authAgreementRequired: string;
   authHintSignIn: string;
   authHintSignUp: string;
   authVerificationPending: string;

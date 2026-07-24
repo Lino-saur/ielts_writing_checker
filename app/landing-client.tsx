@@ -10,7 +10,7 @@ const copy = {
     nav: ["批改", "真题练习", "历史记录"],
     language: "简体中文",
     open: "进入批改器",
-    badge: "内测版本 · Task 1 + Task 2 已支持",
+    badge: "Task 1 + Task 2 已支持",
     hero: "为下一次提分而设计的 IELTS 写作批改器",
     heroBody: "不只是给你一个分数。它把 Band 标准、文中修改、重点修正和历史记录放在同一个学习循环里，帮你直接推进下一稿。",
     tryTask2: "试用 Task 2",
@@ -48,7 +48,7 @@ const copy = {
     archiveCta: "打开历史记录",
     timeline: [["本周第 3 次 Task 2 改写", "Band 6.0 → 6.5，优先补强例证深度"], ["Task 1 图表作文记录", "原图与批改结果一起保存，方便二刷同一题型"], ["重点修正归档", "保留原文、分数与反馈上下文，用于下一轮对比"]],
     finalTitle: "打开批改器，获得更快的修改循环",
-    finalBody: "Band 评分、文中反馈、题型覆盖和历史记录已经在内测版本中可用。",
+    finalBody: "Band 评分、文中反馈、题型覆盖和历史记录已经可以完整使用。",
     start: "开始批改",
     viewTask1: "查看 Task 1"
   },
@@ -56,7 +56,7 @@ const copy = {
     nav: ["Checker", "Practice", "History"],
     language: "English",
     open: "Open checker",
-    badge: "Beta · Task 1 + Task 2 supported",
+    badge: "Task 1 + Task 2 supported",
     hero: "An IELTS writing checker built for your next band improvement",
     heroBody: "More than a score. Band criteria, inline edits, priority fixes, and review history form one learning loop that moves your next draft forward.",
     tryTask2: "Try Task 2",
@@ -94,7 +94,7 @@ const copy = {
     archiveCta: "Open history",
     timeline: [["Third Task 2 rewrite this week", "Band 6.0 → 6.5, with deeper examples next"], ["Task 1 chart essay", "Source image and review stay together"], ["Priority fix archive", "Keep the essay, score, and feedback context"]],
     finalTitle: "Open the checker and build a faster revision loop",
-    finalBody: "Band scoring, inline feedback, task coverage, and review history are available in the beta.",
+    finalBody: "Band scoring, inline feedback, task coverage, and review history are ready to use.",
     start: "Start a review",
     viewTask1: "View Task 1"
   }
@@ -201,7 +201,7 @@ export default function LandingPageClient() {
         <div className="framerActions"><a className="framerButton framerButtonWhite" href={href("/checker")}>{t.start}<Arrow /></a><a className="framerButton framerButtonGhost" href={href("/checker?task=task1")}>{t.viewTask1}</a></div>
       </section>
 
-      <footer className="framerFooter"><span>© 2026 IELTS Writing Checker</span><div><a href={href("/checker?task=task1")}>Task 1</a><a href={href("/checker?task=task2")}>Task 2</a><a href="mailto:support@ielts-writing-checker.com">support@ielts-writing-checker.com</a></div></footer>
+      <footer className="framerFooter"><span>© 2026 IELTS Writing Checker</span><div><a href={href("/privacy")}>{locale === "zh-CN" ? "隐私政策" : "Privacy"}</a><a href={href("/terms")}>{locale === "zh-CN" ? "用户协议" : "Terms"}</a><a href={href("/refund")}>{locale === "zh-CN" ? "退款规则" : "Refunds"}</a><a href="mailto:support@ielts-writing-checker.com">support@ielts-writing-checker.com</a></div></footer>
     </main>
   );
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
+import { apiErrorResponse, enforceRateLimit, readJsonBody } from "@/lib/api-security";
 import { createFeedback } from "@/lib/feedback";
 import type { FeedbackPayload } from "@/lib/types";
 
@@ -73,7 +74,8 @@ function validateFeedbackBody(body: RequestBody) {
 export async function POST(request: Request) {
   try {
     const session = await requireSession();
-    const body = (await request.json()) as RequestBody;
+    await enforceRateLimit({ scope: "feedback-create", subject: session.user.id, limit: 10, windowSeconds: 300 });
+    const body = await readJsonBody<RequestBody>(request, 64 * 1024);
 
     validateFeedbackBody(body);
 
@@ -89,8 +91,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json(saved, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error.";
-    const status = message === "UNAUTHORIZED" ? 401 : message.startsWith("INVALID_") || message === "FEEDBACK_COMMENT_TOO_LONG" ? 400 : 500;
-    return NextResponse.json({ error: message }, { status });
+    const normalized = apiErrorResponse(error);
+    const status = normalized.message.startsWith("INVALID_") || normalized.message === "FEEDBACK_COMMENT_TOO_LONG"
+      ? 400
+      : normalized.status;
+    return NextResponse.json(
+      { error: normalized.message },
+      { status, headers: normalized.retryAfterSeconds ? { "Retry-After": String(normalized.retryAfterSeconds) } : undefined }
+    );
   }
 }

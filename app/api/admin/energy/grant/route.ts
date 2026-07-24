@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/admin/auth";
+import { requireAdminRole } from "@/lib/admin/auth";
+import { recordAdminAudit } from "@/lib/admin/audit";
+import { readJsonBody } from "@/lib/api-security";
 import { grantEnergy } from "@/lib/energy";
 
 type GrantEnergyBody = {
@@ -15,8 +17,8 @@ function normalizeReason(reason?: string) {
 
 export async function POST(request: Request) {
   try {
-    const { adminUser } = await requireAdminSession();
-    const body = (await request.json()) as GrantEnergyBody;
+    const { adminUser } = await requireAdminRole(["finance"]);
+    const body = await readJsonBody<GrantEnergyBody>(request, 16 * 1024);
     const userId = body.userId?.trim();
     const amount = Number(body.amount);
 
@@ -26,6 +28,13 @@ export async function POST(request: Request) {
 
     const energy = await grantEnergy(userId, amount, {
       source: `admin:${adminUser.id}:${normalizeReason(body.reason)}`
+    });
+    await recordAdminAudit({
+      adminUserId: adminUser.id,
+      action: "energy.grant",
+      targetType: "user",
+      targetId: userId,
+      detail: { amount, reason: normalizeReason(body.reason) }
     });
 
     return NextResponse.json({

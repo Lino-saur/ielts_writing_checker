@@ -1,4 +1,5 @@
 import { requireSession } from "@/lib/auth-session";
+import type { AdminUserRole } from "@/lib/types";
 import { findAdminUserBySessionIdentity } from "./users";
 
 export async function requireAdminSession() {
@@ -17,4 +18,12 @@ export async function requireAdminSession() {
     session,
     adminUser
   };
+}
+
+export async function requireAdminRole(allowedRoles: AdminUserRole[]) {
+  const context = await requireAdminSession();
+  if (context.adminUser.role !== "owner" && !allowedRoles.includes(context.adminUser.role)) {
+    throw new Error("FORBIDDEN");
+  }
+  return context;
 }

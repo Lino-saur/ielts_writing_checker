@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
+import { apiErrorResponse, enforceRateLimit, readJsonBody } from "@/lib/api-security";
 import { createOrderSupportRequest, listOrderSupportForUser } from "@/lib/order-support";
 import type { OrderSupportKind } from "@/lib/types";
 
@@ -16,7 +17,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await requireSession();
-    const body = (await request.json()) as { orderId?: string; kind?: OrderSupportKind; reason?: string; details?: string };
+    await enforceRateLimit({ scope: "order-support-create", subject: session.user.id, limit: 5, windowSeconds: 300 });
+    const body = await readJsonBody<{ orderId?: string; kind?: OrderSupportKind; reason?: string; details?: string }>(request, 32 * 1024);
     if (!body.orderId || (body.kind !== "inquiry" && body.kind !== "refund") || !body.reason?.trim()) {
       return NextResponse.json({ error: "INVALID_ORDER_SUPPORT_REQUEST" }, { status: 400 });
     }
@@ -29,8 +31,16 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
-    const status = message === "UNAUTHORIZED" ? 401 : message === "RECHARGE_ORDER_NOT_FOUND" ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+    const normalized = apiErrorResponse(error);
+    const rawMessage = error instanceof Error ? error.message : "UNKNOWN_ERROR";
+    const status = rawMessage === "RECHARGE_ORDER_NOT_FOUND"
+      ? 404
+      : rawMessage === "ORDER_NOT_REFUNDABLE"
+        ? 400
+        : normalized.status;
+    return NextResponse.json(
+      { error: status === 500 ? normalized.message : rawMessage },
+      { status, headers: normalized.retryAfterSeconds ? { "Retry-After": String(normalized.retryAfterSeconds) } : undefined }
+    );
   }
 }

@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/admin/auth";
+import { requireAdminRole } from "@/lib/admin/auth";
+import { recordAdminAudit } from "@/lib/admin/audit";
+import { readJsonBody } from "@/lib/api-security";
 import { replyToSupportInboxEntry } from "@/lib/support-inbox";
 
 export async function POST(request: Request) {
   try {
-    const { adminUser } = await requireAdminSession();
-    const body = (await request.json()) as {
+    const { adminUser } = await requireAdminRole(["support"]);
+    const body = await readJsonBody<{
       entryId?: string;
       message?: string;
-    };
+    }>(request, 64 * 1024);
 
     const entryId = body.entryId?.trim();
     const message = body.message?.trim();
@@ -21,6 +23,13 @@ export async function POST(request: Request) {
       entryId,
       adminUserId: adminUser.id,
       message
+    });
+    await recordAdminAudit({
+      adminUserId: adminUser.id,
+      action: "support.reply",
+      targetType: "support_inbox_entry",
+      targetId: entryId,
+      detail: { messageLength: message.length }
     });
 
     return NextResponse.json(result);

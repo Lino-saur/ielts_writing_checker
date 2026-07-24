@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { reportOperationalEvent } from "./observability";
 
 type GlobalWithDb = typeof globalThis & {
   __ieltsPool?: Pool;
@@ -7,10 +8,30 @@ type GlobalWithDb = typeof globalThis & {
 };
 
 const globalForDb = globalThis as GlobalWithDb;
-const CURRENT_SCHEMA_VERSION = 18;
+const CURRENT_SCHEMA_VERSION = 19;
 
 function getConnectionString() {
   return process.env.DATABASE_URL;
+}
+
+function isLocalDatabase(connectionString: string | undefined) {
+  if (!connectionString) return false;
+  try {
+    const hostname = new URL(connectionString).hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function getDatabaseSsl() {
+  const connectionString = getConnectionString();
+  const allowInsecureLocalConnection =
+    process.env.NODE_ENV !== "production" &&
+    process.env.POSTGRES_SSL === "false" &&
+    isLocalDatabase(connectionString);
+
+  return allowInsecureLocalConnection ? false : { rejectUnauthorized: true };
 }
 
 export const db =
@@ -21,20 +42,14 @@ export const db =
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
     keepAlive: true,
-    ssl:
-      process.env.POSTGRES_SSL === "false"
-        ? false
-        : process.env.NODE_ENV === "production"
-          ? { rejectUnauthorized: false }
-          : false
+    ssl: getDatabaseSsl()
   });
 
 if (!(db as Pool & { __ieltsErrorListenerAttached?: boolean }).__ieltsErrorListenerAttached) {
   db.on("error", (error) => {
-    console.error("[DB][POOL_ERROR]", {
+    void reportOperationalEvent("error", "database_pool_error", {
       name: error.name,
-      message: error.message,
-      stack: error.stack
+      message: error.message
     });
   });
   (db as Pool & { __ieltsErrorListenerAttached?: boolean }).__ieltsErrorListenerAttached = true;
@@ -1299,6 +1314,36 @@ export async function ensureDatabase() {
         await db.query(
           `INSERT INTO schema_migrations (version, applied_at)
            VALUES (18, NOW())`
+        );
+      }
+      if (appliedVersion < 19) {
+        await db.query(`
+          ALTER TABLE admin_users
+          ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'owner'
+          CHECK (role IN ('owner', 'operator', 'support', 'finance'));
+        `);
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS admin_audit_logs (
+            id TEXT PRIMARY KEY,
+            admin_user_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id TEXT,
+            detail_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL
+          );
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS admin_audit_logs_admin_created_idx
+          ON admin_audit_logs (admin_user_id, created_at DESC);
+        `);
+        await db.query(`
+          CREATE INDEX IF NOT EXISTS admin_audit_logs_target_created_idx
+          ON admin_audit_logs (target_type, target_id, created_at DESC);
+        `);
+        await db.query(
+          `INSERT INTO schema_migrations (version, applied_at)
+           VALUES (19, NOW())`
         );
       }
       await db.query("COMMIT");

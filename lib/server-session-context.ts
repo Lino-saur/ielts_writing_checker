@@ -1,6 +1,7 @@
 import { getEnergyState, getReviewEnergyCost } from "@/lib/energy";
 import { getSession } from "@/lib/auth-session";
 import type { ClientSessionContext } from "@/lib/auth-client-session";
+import { reportOperationalEvent } from "@/lib/observability";
 
 export async function getServerSessionContext(): Promise<ClientSessionContext> {
   let session = null;
@@ -8,9 +9,9 @@ export async function getServerSessionContext(): Promise<ClientSessionContext> {
   try {
     session = await getSession();
   } catch (error) {
-    console.error("[SESSION][GET_SERVER_SESSION_CONTEXT_FAILED]", {
+    await reportOperationalEvent("error", "session_context_failed", {
       message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
+      errorType: error instanceof Error ? error.name : typeof error
     });
     return {
       user: null,

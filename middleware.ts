@@ -46,20 +46,18 @@ export function middleware(request: NextRequest) {
 
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length > 0 && isSupportedLocale(segments[0])) {
-    return NextResponse.next();
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-app-locale", segments[0]);
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
-  if (pathname === "/" || pathname === "/checker" || pathname === "/history" || pathname === "/assignments") {
+  if (["/", "/checker", "/history", "/assignments", "/orders", "/privacy", "/terms", "/refund"].includes(pathname)) {
     const locale = detectLocale(request);
     const nextUrl = request.nextUrl.clone();
     nextUrl.pathname =
       pathname === "/"
         ? `/${locale}`
-        : pathname === "/checker"
-          ? `/${locale}/checker`
-          : pathname === "/history"
-            ? `/${locale}/history`
-            : `/${locale}/assignments`;
+        : `/${locale}${pathname}`;
     nextUrl.search = search;
     return NextResponse.redirect(nextUrl);
   }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth-session";
+import { apiErrorResponse, enforceRateLimit, readJsonBody } from "@/lib/api-security";
 import { initializeRechargePayment } from "@/lib/payments";
 import { createRechargeOrder, listRechargeOrdersForUser, markRechargeOrderFailed } from "@/lib/recharge";
 import type { RechargeProvider } from "@/lib/types";
@@ -32,8 +33,13 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await requireSession();
-
-    const body = (await request.json()) as CreateOrderBody;
+    await enforceRateLimit({
+      scope: "recharge-order-create",
+      subject: session.user.id,
+      limit: 10,
+      windowSeconds: 60
+    });
+    const body = await readJsonBody<CreateOrderBody>(request, 16 * 1024);
     const productCode = body.productCode?.trim();
 
     if (!productCode) {
@@ -58,14 +64,18 @@ export async function POST(request: Request) {
       throw error;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error.";
+    const normalized = apiErrorResponse(error);
+    const message = normalized.message;
     const status =
       message === "RECHARGE_PRODUCT_NOT_FOUND"
         ? 404
         : message === "UNAUTHORIZED"
           ? 401
-          : 500;
+          : normalized.status;
 
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json(
+      { error: message },
+      { status, headers: normalized.retryAfterSeconds ? { "Retry-After": String(normalized.retryAfterSeconds) } : undefined }
+    );
   }
 }
