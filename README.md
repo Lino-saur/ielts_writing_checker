@@ -42,9 +42,12 @@ OPENAI_MODEL=gpt-5.4
 OPENAI_REASONING_EFFORT=medium
 
 QIANWEN_API_KEY=your_qianwen_key_here
+# The global pair takes precedence when both regional configurations exist.
+QIANWEN_API_KEY_GLOBAL=your_qianwen_global_key_here
 QIANWEN_MODEL=qwen3.7-plus
 # Optional full chat-completions URL. It must match the API key's Model Studio region.
 QIANWEN_API_ENDPOINT=https://<workspace-id>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions
+QIANWEN_API_ENDPOINT_GLOBAL=https://<workspace-id>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions
 AI_REQUEST_TIMEOUT_MS=45000
 AI_GRAMMAR_REQUEST_TIMEOUT_MS=120000
 AI_VISION_REQUEST_TIMEOUT_MS=120000
@@ -115,7 +118,9 @@ Set these environment variables in Vercel:
 - `BETTER_AUTH_URL`
 - `OPENAI_API_KEY`
 - `QIANWEN_API_KEY`
-- `QIANWEN_API_ENDPOINT` (recommended in production; use the workspace-specific endpoint for the API key's region)
+- `QIANWEN_API_KEY_GLOBAL` (used with `QIANWEN_API_ENDPOINT_GLOBAL` and preferred when configured)
+- `QIANWEN_API_ENDPOINT` (China/Beijing workspace endpoint)
+- `QIANWEN_API_ENDPOINT_GLOBAL` (Singapore/global workspace endpoint; preferred when configured)
 - `NEXT_PUBLIC_APP_URL`
 - `RESEND_API_KEY`
 - `AUTH_EMAIL_FROM`

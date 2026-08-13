@@ -1,5 +1,7 @@
 type ReadinessCheck = { key: string; ready: boolean };
 
+import { getQianwenApiCredentials } from "@/lib/ielts/qianwen-config";
+
 function configured(name: string, minimumLength = 1) {
   return (process.env[name]?.trim().length ?? 0) >= minimumLength;
 }
@@ -31,7 +33,7 @@ export function getProductionReadiness() {
     { key: "public_url", ready: secureUrl("NEXT_PUBLIC_APP_URL") },
     { key: "database", ready: configured("DATABASE_URL") },
     { key: "database_tls", ready: strictDatabaseTls() },
-    { key: "ai_provider", ready: configured("QIANWEN_API_KEY") || configured("DASHSCOPE_API_KEY") },
+    { key: "ai_provider", ready: Boolean(getQianwenApiCredentials().apiKey?.trim()) },
     { key: "email_provider", ready: configured("RESEND_API_KEY") && configured("AUTH_EMAIL_FROM") },
     { key: "email_webhook_signature", ready: configured("RESEND_WEBHOOK_SECRET") },
     {

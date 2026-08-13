@@ -38,6 +38,7 @@ import {
   countWords,
   getLocale
 } from "./shared";
+import { getQianwenApiCredentials } from "./qianwen-config";
 
 type VisionGenerateContentPayload = {
   candidates?: Array<{
@@ -75,12 +76,11 @@ function logAiDebug(event: string, details: Record<string, unknown>) {
 }
 
 function getQianwenConfig(): ProviderConfig {
+  const credentials = getQianwenApiCredentials();
   return {
     name: "qianwen",
-    apiKey: process.env.QIANWEN_API_KEY || process.env.DASHSCOPE_API_KEY,
-    endpoint:
-      process.env.QIANWEN_API_ENDPOINT?.trim() ||
-      "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+    apiKey: credentials.apiKey,
+    endpoint: credentials.endpoint,
     model: process.env.QIANWEN_MODEL || "qwen3.7-plus",
     extraBody: {
       enable_thinking: false,
@@ -690,7 +690,7 @@ async function runQianwenVisionCompletion<T>(
   }
 ): Promise<T> {
   if (!config.apiKey) {
-    throw new Error("QIANWEN_API_KEY is not configured.");
+    throw new Error(`${getQianwenApiCredentials(config.endpoint).apiKeyEnvironmentVariable} is not configured.`);
   }
 
   if (!input.taskImage) {

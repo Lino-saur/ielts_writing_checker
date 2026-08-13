@@ -4,6 +4,7 @@ import {
   type GuidedSuggestionTarget,
   type GuidedWritingDraft
 } from "./guided-writing";
+import { getQianwenApiCredentials } from "./qianwen-config";
 
 type ChatCompletionPayload = {
   choices?: Array<{ message?: { content?: string } }>;
@@ -15,16 +16,16 @@ export async function generateGuidedWritingSuggestion(input: {
   draft: GuidedWritingDraft;
   locale: "en" | "zh-CN";
 }) {
-  const apiKey = process.env.QIANWEN_API_KEY || process.env.DASHSCOPE_API_KEY;
-  if (!apiKey) throw new Error("QIANWEN_API_KEY is not configured.");
+  const credentials = getQianwenApiCredentials();
+  if (!credentials.apiKey) throw new Error(`${credentials.apiKeyEnvironmentVariable} is not configured.`);
 
   const response = await fetch(
-    process.env.QIANWEN_API_ENDPOINT?.trim() || "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+    credentials.endpoint,
     {
       method: "POST",
       signal: AbortSignal.timeout(30_000),
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${credentials.apiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
