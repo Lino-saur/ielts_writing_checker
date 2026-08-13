@@ -10,7 +10,11 @@ import {
   hydrateTeachingRuleReferences
 } from "@/lib/teaching-rules";
 import { previewText, cleanModelText } from "./model-text";
-import { findOptimizationIntroducedGrammarIssues } from "./revision-quality";
+import {
+  findOptimizationIntroducedGrammarIssues,
+  rejectGrammarCorrectionsFlaggedByVerification,
+  shouldSkipArticleOptimization
+} from "./revision-quality";
 import {
   SCORE_RESPONSE_JSON_SCHEMA,
   getRevisionResponseJsonSchema,
@@ -1007,7 +1011,7 @@ export async function buildAiRevisionFeedback(
     prompt: string,
     rules: typeof grammarPrompt.rules,
     stage: "grammar" | "optimization",
-    requestLabel: "grammar" | "grammar_review" | "optimization" | "final_audit" | "final_verification" | "quality_repair"
+    requestLabel: "grammar" | "grammar_review" | "grammar_verification" | "optimization" | "final_audit" | "final_verification" | "quality_repair"
   ) {
     return runJsonCompletion(revisionInput, getTextProviderConfig(), {
       kind: "revision",
@@ -1050,6 +1054,69 @@ export async function buildAiRevisionFeedback(
       fallback: "first_pass"
     });
   }
+
+  try {
+    const proposedGrammarEssay = materializeAnnotatedEssay(grammarRevision.annotatedEssay);
+    const verificationInput: CheckInput = { ...input, essay: proposedGrammarEssay };
+    const verificationPrompt = await buildRevisionPrompt(
+      verificationInput,
+      minimumWords,
+      "grammar",
+      resolvedTaskContext
+    );
+    const verification = enforceRevisionRuleReferences(
+      await runRevisionPass(
+        verificationInput,
+        `${verificationPrompt.prompt}\n\nStage 1 replacement safety gate:\nInspect only the replacements listed below and their directly adjacent sentence context. Treat every replacement as untrusted. Return an edit when a replacement is grammatically wrong, changes an originally correct construction into an error, duplicates adjacent wording, or does not fit when inserted back into the complete sentence. Do not scan untouched text for new issues and do not suggest optional style improvements. Return an empty edits array only when every replacement is safe.\n\nUntrusted Stage 1 replacements:\n${JSON.stringify(
+          grammarRevision.correctionNotes.map((note) => ({
+            id: note.id,
+            original: note.original,
+            replacement: note.corrected,
+            category: note.category,
+            ruleIds: note.ruleReferences?.map((rule) => `${rule.id}@v${rule.version ?? 1}`) ?? []
+          }))
+        )}`,
+        verificationPrompt.rules,
+        "grammar",
+        "grammar_verification"
+      ),
+      verificationPrompt.rules
+    );
+    const filtered = rejectGrammarCorrectionsFlaggedByVerification(grammarRevision, verification);
+    if (verification.correctionNotes.length > 0 && filtered.rejectedIds.length === 0) {
+      console.warn("[IELTS_CHECK][GRAMMAR_REPLACEMENT_VERIFICATION_UNATTRIBUTED]", {
+        issueCount: verification.correctionNotes.length,
+        fallback: "suppress_all_stage_1_edits"
+      });
+      grammarRevision = {
+        ...grammarRevision,
+        annotatedEssay: input.essay,
+        correctionNotes: []
+      };
+    } else {
+      grammarRevision = filtered.revision;
+      if (filtered.rejectedIds.length > 0) {
+        console.warn("[IELTS_CHECK][UNSAFE_GRAMMAR_REPLACEMENTS_DROPPED]", {
+          rejectedIds: filtered.rejectedIds,
+          rejectedCount: filtered.rejectedIds.length,
+          retainedCount: grammarRevision.correctionNotes.length
+        });
+      }
+    }
+  } catch (grammarVerificationError) {
+    console.error("[IELTS_CHECK][GRAMMAR_REPLACEMENT_VERIFICATION_SAFE_FALLBACK]", {
+      errorType: grammarVerificationError instanceof Error ? grammarVerificationError.name : typeof grammarVerificationError,
+      errorMessage: grammarVerificationError instanceof Error
+        ? grammarVerificationError.message
+        : String(grammarVerificationError),
+      fallback: "suppress_all_stage_1_edits"
+    });
+    grammarRevision = {
+      ...grammarRevision,
+      annotatedEssay: input.essay,
+      correctionNotes: []
+    };
+  }
   await onProgress?.(45, "checking_grammar");
   const grammarCleanEssay = materializeAnnotatedEssay(grammarRevision.annotatedEssay);
   const optimizationInput: CheckInput = {
@@ -1066,6 +1133,13 @@ export async function buildAiRevisionFeedback(
       taskType: input.taskType,
       locale: getLocale(input.locale),
       parentReviewId: input.priorReview.parentReviewId
+    });
+  } else if (shouldSkipArticleOptimization(input.taskType, grammarCleanEssay)) {
+    console.log("[IELTS_CHECK][INCOMPLETE_ESSAY_OPTIMIZATION_SKIPPED]", {
+      taskType: input.taskType,
+      locale: getLocale(input.locale),
+      wordCount: countWords(grammarCleanEssay),
+      minimumWords
     });
   } else {
     try {

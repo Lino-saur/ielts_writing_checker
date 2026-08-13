@@ -7,6 +7,7 @@ import {
   OPTIMIZATION_REVISION_CATEGORIES,
   getRevisionCategoryLabel
 } from "./revision-categories";
+import { isOptimizationExpansionSafe } from "./revision-quality";
 import { countWords, getLocale, getTargetBand, type CheckInput, type ProviderConfig } from "./shared";
 import type { EvaluationTaskContext } from "./task-context";
 
@@ -356,13 +357,27 @@ export function parseScoreJsonResponse(
   };
 }
 
+function isRevisionTokenCharacter(character: string | undefined) {
+  return Boolean(character && /[\p{L}\p{N}_'’\-–—]/u.test(character));
+}
+
+function hasEditAnchorBoundaries(text: string, needle: string, start: number) {
+  const end = start + needle.length;
+  if (isRevisionTokenCharacter(needle[0]) && isRevisionTokenCharacter(text[start - 1])) return false;
+  if (isRevisionTokenCharacter(needle[needle.length - 1]) && isRevisionTokenCharacter(text[end])) return false;
+  return true;
+}
+
 function findOccurrence(text: string, needle: string, occurrence: number) {
   let fromIndex = 0;
   let foundIndex = -1;
-  for (let index = 0; index < occurrence; index += 1) {
+  let matchedOccurrences = 0;
+  while (matchedOccurrences < occurrence) {
     foundIndex = text.indexOf(needle, fromIndex);
     if (foundIndex < 0) return -1;
     fromIndex = foundIndex + needle.length;
+    if (!hasEditAnchorBoundaries(text, needle, foundIndex)) continue;
+    matchedOccurrences += 1;
   }
   return foundIndex;
 }
@@ -561,7 +576,11 @@ export function parseRevisionJsonResponse(
   // request on repair. Sorting by end position is the standard interval
   // scheduling strategy: it retains the largest possible non-overlapping set;
   // the span-length tie-breaker favors the more focused edit.
-  const nonOverlappingEdits = [...expandedEdits]
+  const safeExpandedEdits = stage === "optimization"
+    ? expandedEdits.filter((edit) => isOptimizationExpansionSafe(edit.original, edit.replacement))
+    : expandedEdits;
+  const unsafeExpansionCount = expandedEdits.length - safeExpandedEdits.length;
+  const nonOverlappingEdits = [...safeExpandedEdits]
     .sort((left, right) =>
       left.end - right.end ||
       (left.end - left.start) - (right.end - right.start) ||
@@ -574,16 +593,25 @@ export function parseRevisionJsonResponse(
     }, [])
     .sort((left, right) => left.start - right.start || left.end - right.end);
   const positionedEdits = nonOverlappingEdits.slice(0, maxEdits);
-  const overlappingEditCount = expandedEdits.length - nonOverlappingEdits.length;
+  const overlappingEditCount = safeExpandedEdits.length - nonOverlappingEdits.length;
   console.log("[IELTS_CHECK][REVISION_EDIT_COUNTS]", {
     stage,
     modelEditCount: root.edits.length,
     expandedEditCount: expandedEdits.length,
+    unsafeExpansionCount,
     overlappingEditCount,
     retainedEditCount: positionedEdits.length,
     truncatedEditCount: Math.max(0, nonOverlappingEdits.length - positionedEdits.length),
     maxEdits
   });
+
+  if (unsafeExpansionCount > 0) {
+    console.warn("[IELTS_CHECK][UNSAFE_OPTIMIZATION_EXPANSIONS_DROPPED]", {
+      provider: providerName,
+      unsafeExpansionCount,
+      retainedEditCount: positionedEdits.length
+    });
+  }
 
   if (overlappingEditCount > 0) {
     console.warn("[IELTS_CHECK][REVISION_OVERLAPPING_EDITS_DROPPED]", {

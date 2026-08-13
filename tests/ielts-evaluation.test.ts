@@ -92,4 +92,38 @@ describe("IELTS regression metrics", () => {
     expect(metrics.grammarNonRegressionRate).toBe(1);
     expect(metrics.scoreChangeEvidenceRate).toBe(1);
   });
+
+  it("counts initial grammar edits when the final audit is clean", () => {
+    const initialRevision: WritingRevisionResult = {
+      ...cleanRevision,
+      grammarRevision: {
+        annotatedEssay: "The [del#1]policy lower[/del#1][add#1]policy lowers[/add#1] costs.",
+        correctionNotes: [{
+          id: "grammar-1",
+          category: "subject_verb_agreement",
+          original: "policy lower",
+          corrected: "policy lowers",
+          reason: "The singular subject requires a singular verb."
+        }]
+      },
+      finalGrammarRevision: {
+        annotatedEssay: "The policy lowers costs.",
+        correctionNotes: []
+      }
+    };
+    const metrics = evaluateRegressionRuns([regressionCase], [{
+      caseId: "case-1",
+      runId: "clean-final-audit",
+      attemptCount: 1,
+      score: score(7),
+      revision: initialRevision,
+      followup: {
+        essay: "The policy lowers costs.",
+        score: score(7),
+        revision: cleanRevision
+      }
+    }]);
+
+    expect(metrics.appliedIssueResolutionRate).toBe(1);
+  });
 });

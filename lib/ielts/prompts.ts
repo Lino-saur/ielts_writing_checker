@@ -124,6 +124,7 @@ Constraints:
 - {{revisionStageAtomicityRule}}
 - Return at most {{revisionMaxEdits}} edits. If more issues exist, prioritize the most important atomic issues; never merge unrelated errors merely to stay under the limit.
 - original must be copied character-for-character only from the current Essay inside Input data.
+- A word-level original must match a complete standalone word, never a substring inside a longer word. For example, original="student" must not target the "student" inside "students".
 - Never copy original from Previous-review context, the task Prompt, a prior model reply, or a corrected draft that is not the current Essay.
 - occurrence is one-based: use 1 for the first exact occurrence of original, 2 for the second, and so on.
 - replacement must differ from original.
@@ -134,6 +135,8 @@ Constraints:
 - For article optimization, rule support is mandatory even when the proposed wording sounds stylistically better.
 - Optimization is optional, not a rewriting quota. Preserve sentences that are already clear, natural, relevant, and appropriate for the target band.
 - Do not replace correct wording merely to produce a different version or demonstrate a more sophisticated style.
+- Do not add a new claim, reason, example, statistic, factual detail, or conclusion that the student did not already express. Identify missing development in priority feedback instead of writing it for the student.
+- Keep every replacement close to the original span in length. Improve the student's wording locally; never turn one sentence into a substantially longer model answer.
 - An empty edits array is the preferred optimization result when no material, rule-supported improvement is needed.
 - When previous-review context is present, do not repeat an accepted issue whose original wording is absent from the current essay.
 - If an accepted correction is itself defective, treat the concrete defect in the current wording as a new issue rather than pretending the old issue was never fixed.
@@ -276,6 +279,7 @@ const ZH_CN_PROMPTS = {
 - {{revisionStageAtomicityRule}}
 - 最多返回 {{revisionMaxEdits}} 项修改；问题更多时优先保留最重要的原子问题，不得为了控制数量而合并互不相关的错误。
 - original 只能从 Input data 中当前 Essay 逐字复制，必须保持英文原文。
+- 单词级 original 必须匹配完整独立单词，禁止匹配更长单词内部的子串；例如 original="student" 不得定位到 "students" 内部的 student。
 - 禁止从上一次批改信息、题目 Prompt、先前模型回复或其他草稿复制 original。
 - occurrence 从 1 开始：第一次出现填 1，第二次出现填 2，以此类推。
 - replacement 必须与 original 不同，并保持自然英文。
@@ -286,6 +290,8 @@ const ZH_CN_PROMPTS = {
 - 文章优化同样必须有规则支持，不能仅因另一种表达听起来更好就修改。
 - 优化不是改写配额；原文已经清晰、自然、切题并符合目标分数时必须保留。
 - 禁止为了制造差异或展示复杂表达而替换正确文本。
+- 禁止加入学生原文没有表达的新论点、理由、例子、数据、事实细节或结论；内容展开不足时应在重点建议中指出，不得替学生写入正文。
+- replacement 的长度必须接近 original，只能局部改善学生原有表达，不得把一个句子扩写成明显更长的范文。
 - 没有实质且有规则支持的优化时，优先返回空 edits 数组。
 - 存在上一次批改信息时，已经采纳且原表达已消失的问题不得重复提出。
 - 已采纳的修改本身存在明确缺陷时，应基于当前文本将其作为新问题处理。

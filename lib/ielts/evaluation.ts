@@ -108,9 +108,15 @@ export function materializeRecommendedEssay(revision: WritingRevisionResult) {
 }
 
 function grammarNotes(revision: WritingRevisionResult) {
-  return revision.finalGrammarRevision?.correctionNotes
-    ?? revision.grammarRevision?.correctionNotes
-    ?? revision.correctionNotes;
+  const initialNotes = revision.grammarRevision?.correctionNotes ?? revision.correctionNotes;
+  const finalNotes = revision.finalGrammarRevision?.correctionNotes ?? [];
+  const seen = new Set<string>();
+  return [...initialNotes, ...finalNotes].filter((note) => {
+    const key = `${note.category ?? "other"}\u0000${note.original}\u0000${note.corrected}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function taskChecksWorsened(before: WritingScoreResult, after: WritingScoreResult) {
@@ -165,9 +171,12 @@ export function evaluateRegressionRuns(cases: RegressionCase[], runs: Evaluation
       const initialNotes = grammarNotes(run.revision);
       const followupNotes = grammarNotes(run.followup.revision);
       appliedIssueCount += initialNotes.length;
-      resolvedAppliedIssueCount += initialNotes.filter((note) =>
-        !run.followup?.essay.includes(note.original) && (!note.corrected || run.followup?.essay.includes(note.corrected))
-      ).length;
+      resolvedAppliedIssueCount += initialNotes.filter((note) => {
+        const followupEssay = run.followup?.essay ?? "";
+        return note.corrected
+          ? followupEssay.includes(note.corrected)
+          : !followupEssay.includes(note.original);
+      }).length;
       followupIssueCount += followupNotes.length;
       const repeated = followupNotes.filter((followupNote) =>
         initialNotes.some((initialNote) =>

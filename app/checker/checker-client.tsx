@@ -29,6 +29,8 @@ import {
   type RevisionDecision,
   ScoreCard
 } from "./checker-revision";
+import { GuidedWriting } from "./guided-writing";
+import { createEmptyGuidedWritingDraft, type GuidedWritingDraft } from "@/lib/ielts/guided-writing";
 
 const TASK1_PLACEHOLDER = {
   prompt:
@@ -61,6 +63,7 @@ type ReportView = "overview" | "revise";
 type RevisionStageKey = "grammar" | "optimization";
 type RevisionDecisions = Record<RevisionStageKey, Record<string, RevisionDecision>>;
 type FeedbackChoice = "helpful" | "notHelpful";
+type WritingMode = "free" | "guided";
 type UploadedTaskImage = {
   objectKey: string;
   name: string;
@@ -74,6 +77,12 @@ type StoredCheckerDraft = {
   essay: string;
   targetBand: TargetBand;
   updatedAt: string;
+};
+
+type StoredGuidedWritingDraft = {
+  draft: GuidedWritingDraft;
+  step: number;
+  mode: WritingMode;
 };
 
 type SessionCheckerDraft = StoredCheckerDraft & {
@@ -111,7 +120,9 @@ const TASK1_MAX_IMAGE_DIMENSION = 1800;
 const TASK1_COMPRESSED_MIME_TYPE = "image/jpeg";
 const TASK1_COMPRESSED_QUALITY = 0.85;
 const DRAFT_STORAGE_PREFIX = "ielts-writing-checker:draft:v1";
+const GUIDED_DRAFT_STORAGE_SUFFIX = ":guided-writing:v1";
 const DRAFT_SAVE_DELAY_MS = 600;
+const GUIDED_WRITING_ENABLED = process.env.NEXT_PUBLIC_GUIDED_WRITING_ENABLED === "true";
 
 function getDraftStorageScope(
   taskType: TaskType,
@@ -161,6 +172,30 @@ function readStoredDraft(storageKey: string): StoredCheckerDraft | null {
       essay: draft.essay,
       targetBand: draft.targetBand,
       updatedAt: typeof draft.updatedAt === "string" ? draft.updatedAt : new Date().toISOString()
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readStoredGuidedDraft(storageKey: string): StoredGuidedWritingDraft | null {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(`${storageKey}${GUIDED_DRAFT_STORAGE_SUFFIX}`) || "null") as Partial<StoredGuidedWritingDraft> | null;
+    if (!value?.draft || typeof value.draft !== "object") return null;
+    const empty = createEmptyGuidedWritingDraft();
+    return {
+      draft: Object.fromEntries(Object.keys(empty).map((key) => [
+        key,
+        key === "stance"
+          ? value.draft?.stance === "agree" || value.draft?.stance === "partial" || value.draft?.stance === "disagree"
+            ? value.draft.stance
+            : ""
+          : typeof value.draft?.[key as keyof GuidedWritingDraft] === "string"
+            ? value.draft[key as keyof GuidedWritingDraft]
+            : ""
+      ])) as GuidedWritingDraft,
+      step: Number.isInteger(value.step) ? Math.min(4, Math.max(0, value.step ?? 0)) : 0,
+      mode: value.mode === "guided" ? "guided" : "free"
     };
   } catch {
     return null;
@@ -242,6 +277,10 @@ function CheckerPageContent() {
   const [targetBand, setTargetBand] = useState<TargetBand>(6.5);
   const [prompt, setPrompt] = useState("");
   const [essay, setEssay] = useState("");
+  const [writingMode, setWritingMode] = useState<WritingMode>("free");
+  const [guidedWritingDraft, setGuidedWritingDraft] = useState(createEmptyGuidedWritingDraft);
+  const [guidedWritingStep, setGuidedWritingStep] = useState(0);
+  const [guidedDraftReady, setGuidedDraftReady] = useState(false);
   const [taskImage, setTaskImage] = useState<UploadedTaskImage | null>(null);
   const [taskImageUploading, setTaskImageUploading] = useState(false);
   const [taskImageDragActive, setTaskImageDragActive] = useState(false);
@@ -391,6 +430,34 @@ function CheckerPageContent() {
     () => getDraftStorageKey(draftOwnerId, taskType, practiceId, historicalId),
     [draftOwnerId, historicalId, practiceId, taskType]
   );
+
+  useEffect(() => {
+    if (taskType !== "task2") {
+      setGuidedDraftReady(false);
+      return;
+    }
+    const stored = readStoredGuidedDraft(currentDraftStorageKey);
+    setGuidedWritingDraft(stored?.draft ?? createEmptyGuidedWritingDraft());
+    setGuidedWritingStep(stored?.step ?? 0);
+    setWritingMode(GUIDED_WRITING_ENABLED ? stored?.mode ?? "free" : "free");
+    setGuidedDraftReady(true);
+  }, [currentDraftStorageKey, taskType]);
+
+  useEffect(() => {
+    if (!guidedDraftReady || taskType !== "task2") return;
+    const timer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(`${currentDraftStorageKey}${GUIDED_DRAFT_STORAGE_SUFFIX}`, JSON.stringify({
+          draft: guidedWritingDraft,
+          step: guidedWritingStep,
+          mode: writingMode
+        } satisfies StoredGuidedWritingDraft));
+      } catch {
+        // The current in-memory guide remains usable when local storage is unavailable.
+      }
+    }, DRAFT_SAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [currentDraftStorageKey, guidedDraftReady, guidedWritingDraft, guidedWritingStep, taskType, writingMode]);
   draftSnapshotRef.current = {
     prompt,
     essay,
@@ -543,6 +610,7 @@ function CheckerPageContent() {
     }
     setExamHelpOpen(false);
     setExamScreenHidden(false);
+    setWritingMode("free");
     setComputerExamMode((current) => !current);
   }
 
@@ -561,6 +629,9 @@ function CheckerPageContent() {
   useEffect(() => {
     const nextTask = searchParams.get("task") === "task1" ? "task1" : "task2";
     setTaskType(nextTask);
+    if (nextTask === "task1") {
+      setWritingMode("free");
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -1762,6 +1833,26 @@ function CheckerPageContent() {
                       {draftDirty ? t.draftSaving : t.draftSaved}
                     </span>
                   ) : null}
+                  {GUIDED_WRITING_ENABLED && !isTask1 ? (
+                    <div className="checkerWritingModeSwitch" role="group" aria-label={t.writingModeLabel}>
+                      <button
+                        type="button"
+                        className={writingMode === "free" ? "is-active" : ""}
+                        aria-pressed={writingMode === "free"}
+                        onClick={() => setWritingMode("free")}
+                      >
+                        {t.freeWritingMode}
+                      </button>
+                      <button
+                        type="button"
+                        className={writingMode === "guided" ? "is-active" : ""}
+                        aria-pressed={writingMode === "guided"}
+                        onClick={() => setWritingMode("guided")}
+                      >
+                        {t.guidedMode}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="checkerTargetBandControl">
                 <div className="checkerInlineSelect">
@@ -1821,20 +1912,39 @@ function CheckerPageContent() {
               </Alert>
             ) : null}
 
-            <label className="checkerEssayField">
-              <span className="srOnly">{t.essay}</span>
-              <textarea
-                className="checkerEssayInput"
-                value={essay}
-                onChange={(event) => {
-                  setEssay(event.target.value);
+            {GUIDED_WRITING_ENABLED && writingMode === "guided" && !isTask1 && !computerExamMode ? (
+              <GuidedWriting
+                copy={t}
+                locale={locale}
+                taskPrompt={prompt}
+                draft={guidedWritingDraft}
+                step={guidedWritingStep}
+                onDraftChange={setGuidedWritingDraft}
+                onStepChange={setGuidedWritingStep}
+                onUseDraft={(guidedEssay) => {
+                  setEssay(guidedEssay);
+                  setResult(null);
+                  setWritingMode("free");
                   markDraftDirty();
                 }}
-                rows={24}
-                placeholder={computerExamMode ? "" : t.essayPlaceholder}
               />
-            </label>
+            ) : (
+              <label className="checkerEssayField">
+                <span className="srOnly">{t.essay}</span>
+                <textarea
+                  className="checkerEssayInput"
+                  value={essay}
+                  onChange={(event) => {
+                    setEssay(event.target.value);
+                    markDraftDirty();
+                  }}
+                  rows={24}
+                  placeholder={computerExamMode ? "" : t.essayPlaceholder}
+                />
+              </label>
+            )}
 
+            {!GUIDED_WRITING_ENABLED || writingMode === "free" || isTask1 || computerExamMode ? (
             <div className={`checkerDraftFooter${result ? "" : " is-mobile-sticky"}`}>
               <div className="checkerDraftMeta">
                 {draftReady && !computerExamMode ? (
@@ -1874,6 +1984,7 @@ function CheckerPageContent() {
                 </ActionButton>
               ) : null}
             </div>
+            ) : null}
             {loading && activeReviewProgress ? (
               <div className="reviewProgressPanel" role="status" aria-live="polite">
                 <LingPet

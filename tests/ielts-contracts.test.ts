@@ -138,6 +138,25 @@ describe("IELTS JSON contracts", () => {
     expect(parsed.correctionNotes[1].original).toBe("Cities");
   });
 
+  it("drops optimization edits that expand a sentence into model-written content", () => {
+    const response = JSON.stringify({
+      schemaVersion: "revision.v1",
+      edits: [{
+        original: "Cities create more opportunities.",
+        occurrence: 1,
+        replacement: "Cities create more opportunities by attracting international employers, funding advanced research centres, supporting ambitious entrepreneurs, and connecting workers with diverse high-paying careers across many rapidly growing industries.",
+        category: "idea_development",
+        reason: "The replacement develops the claim with several concrete mechanisms.",
+        ruleIds: ["optimization_clarity@v1"]
+      }]
+    });
+
+    const parsed = parseRevisionJsonResponse(response, input, "qianwen", rules, "optimization");
+
+    expect(parsed.annotatedEssay).toBe(input.essay);
+    expect(parsed.correctionNotes).toEqual([]);
+  });
+
   it("accepts an empty revision and keeps the smallest non-overlapping edits", () => {
     const empty = parseRevisionJsonResponse(
       JSON.stringify({ schemaVersion: "revision.v1", edits: [] }),
@@ -230,6 +249,59 @@ describe("IELTS JSON contracts", () => {
       ["thinks", "think"],
       ["help", "helps"]
     ]);
+  });
+
+  it("does not anchor a singular-word edit inside an existing plural word", () => {
+    const grammarInput = {
+      ...input,
+      essay: "It can helps students learn, and it can let student understand responsibility."
+    };
+    const response = JSON.stringify({
+      schemaVersion: "revision.v1",
+      edits: [
+        {
+          original: "helps",
+          occurrence: 1,
+          replacement: "help",
+          category: "verb_pattern",
+          reason: "The modal verb requires the base form.",
+          ruleIds: ["grammar_subject_verb@v2"]
+        },
+        {
+          original: "student",
+          occurrence: 1,
+          replacement: "students",
+          category: "word_form",
+          reason: "The context refers to students in general and requires the plural form.",
+          ruleIds: ["grammar_subject_verb@v2"]
+        }
+      ]
+    });
+
+    const parsed = parseRevisionJsonResponse(response, grammarInput, "qianwen", rules, "grammar");
+
+    expect(parsed.annotatedEssay).toBe(
+      "It can [del#1]helps[/del#1][add#1]help[/add#1] students learn, and it can let [del#2]student[/del#2][add#2]students[/add#2] understand responsibility."
+    );
+    expect(parsed.annotatedEssay).not.toContain("studentss");
+  });
+
+  it("rejects a word-level edit when it exists only inside a longer word", () => {
+    const grammarInput = { ...input, essay: "It can help students learn." };
+    const response = JSON.stringify({
+      schemaVersion: "revision.v1",
+      edits: [{
+        original: "student",
+        occurrence: 1,
+        replacement: "students",
+        category: "word_form",
+        reason: "The context refers to students in general and requires the plural form.",
+        ruleIds: ["grammar_subject_verb@v2"]
+      }]
+    });
+
+    expect(() => parseRevisionJsonResponse(response, grammarInput, "qianwen", rules, "grammar"))
+      .toThrow("original occurrence 1 was not found");
   });
 
   it("preserves exact whitespace anchors and accepts deletion edits", () => {
